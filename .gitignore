@@ -1,7 +1,71 @@
-/target
-Cargo.lock
+# ==============================================================================
+# TypesetOK (TOK) - .gitignore
+# מותאם לפרויקט היברידי: Rust Core + TypeScript/Electron Monorepo
+# ==============================================================================
+
+# --- Rust & Cargo ---
+/target/
+target/
 **/*.rs.bk
-*.tmp
-*.log
+*.pdb
+
+# אם הפרויקט מופץ כיישום סופי מומלץ לשמור את Cargo.lock,
+# אך אם מעוניינים להחריגו בהתאם למדיניות ספרייה ניתן להוריד את הסולמית:
+# Cargo.lock
+
+# --- Node.js & TypeScript / Electron ---
+node_modules/
+dist/
+dist-*/
+out/
+build/
+.tsbuildinfo
+
+# לוגים של מנהלי חבילות
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# תלויות מותקנות ובדיקות Electron
+.electron/
+*.app/
+
+# --- קבצי סביבה וסודות (Credentials & Env) ---
+.env
+.env.local
+.env.*.local
+
+# --- סביבות עבודה וקבצים זמניים של TypesetOK ---
+*.tok.tmp*
+*.tok.bak
+*.db-wal
+*.db-shm
+*.db
+tmp/
+temp/
+
+# קובצי פלט של בדיקות מקומיות
+demo_output.pdf
+demo_output.html
+exported_prepress.pdf
+
+# --- עורכי קוד ו-IDEs ---
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+*~
+
+# --- מערכות הפעלה ---
 .DS_Store
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
