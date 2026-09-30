@@ -1,0 +1,17 @@
+{
+  "name": "typesetok-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TypesetOK (TOK) - Professional Hebrew Desktop Publishing System",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "start": "electron packages/tok-electron/dist/main.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "electron": "^29.1.0"
+  }
+}

@@ -1,0 +1,14 @@
+[package]
+name = "tok-pdf"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tok-core = { workspace = true }
+tok-typeset = { workspace = true }
+pdf-writer = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }

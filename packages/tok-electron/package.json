@@ -1,0 +1,17 @@
+{
+  "name": "tok-electron",
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "tok-ui": "workspace:*",
+    "tok-viewer": "workspace:*",
+    "tok-canvas": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "^29.1.0",
+    "typescript": "^5.4.0"
+  }
+}

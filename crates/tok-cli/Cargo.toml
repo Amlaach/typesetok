@@ -1,0 +1,21 @@
+[package]
+name = "tok-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "tok-cli"
+path = "src/main.rs"
+
+[dependencies]
+tok-core = { workspace = true }
+tok-typeset = { workspace = true }
+tok-pdf = { workspace = true }
+tok-storage = { workspace = true }
+sha2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }

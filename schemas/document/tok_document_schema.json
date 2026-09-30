@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TOK Document Model (TDM)",
+  "type": "object",
+  "required": ["schema_version", "document_id", "metadata", "sections", "styles"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "document_id": { "type": "string", "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$" },
+    "metadata": {
+      "type": "object",
+      "required": ["title", "progression", "primary_language"],
+      "properties": {
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "progression": { "type": "string", "enum": ["rtl", "ltr"] },
+        "primary_language": { "type": "string", "enum": ["he", "en", "ar"] },
+        "created_at": { "type": "string" },
+        "modified_at": { "type": "string" }
+      }
+    },
+    "styles": {
+      "type": "object",
+      "properties": {
+        "paragraph_styles": { "type": "array" },
+        "character_styles": { "type": "array" }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "flows"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "flows": { "type": "array" }
+        }
+      }
+    }
+  }
+}
