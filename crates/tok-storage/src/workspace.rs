@@ -14,6 +14,7 @@ const TABLE_TRANSACTIONS: TableDefinition<u64, &str> = TableDefinition::new("tra
 pub struct DocumentWorkspace {
     db: Arc<Database>,
     _db_path: PathBuf,
+    _temp_guard: Option<tempfile::TempPath>,
 }
 
 impl DocumentWorkspace {
@@ -37,6 +38,7 @@ impl DocumentWorkspace {
         Ok(Self {
             db: Arc::new(db),
             _db_path: p,
+            _temp_guard: None,
         })
     }
 
@@ -48,7 +50,9 @@ impl DocumentWorkspace {
             .tempfile()?;
         let path = tmp.into_temp_path();
         let path_buf = path.to_path_buf();
-        Self::open_or_create(path_buf)
+        let mut ws = Self::open_or_create(path_buf)?;
+        ws._temp_guard = Some(path);
+        Ok(ws)
     }
 
     /// Saves a complete snapshot of the DocumentModel atomically.

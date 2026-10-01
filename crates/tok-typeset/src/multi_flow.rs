@@ -26,6 +26,8 @@ pub struct SolvedFlowAllocation {
 pub struct MultiFlowSolver;
 
 impl MultiFlowSolver {
+    pub const MAX_ITERATIONS: usize = 1000;
+
     /// Solves the geometric partitioning for a classic Talmudic page layout:
     /// Center: Main Gemara text
     /// Inner column (Right in RTL spread): Rashi commentary
@@ -38,21 +40,22 @@ impl MultiFlowSolver {
         flows: &[FlowGeometrySpec],
         _slack_ratio: f32, // typically 0.03 (3%)
     ) -> Vec<SolvedFlowAllocation> {
+        if flows.is_empty() {
+            return Vec::new();
+        }
+
         let content_width = page_width_pt - 2.0 * margin_x_pt;
         let content_height = page_height_pt - 2.0 * margin_y_pt;
 
         // If only 1 flow (standard single flow layout)
-        if flows.len() <= 1 {
-            if let Some(f) = flows.first() {
-                return vec![SolvedFlowAllocation {
-                    flow_id: f.flow_id.clone(),
-                    allocated_x_pt: margin_x_pt,
-                    allocated_y_pt: margin_y_pt,
-                    allocated_width_pt: content_width,
-                    allocated_height_pt: content_height,
-                }];
-            }
-            return Vec::new();
+        if flows.len() == 1 {
+            return vec![SolvedFlowAllocation {
+                flow_id: flows[0].flow_id.clone(),
+                allocated_x_pt: margin_x_pt,
+                allocated_y_pt: margin_y_pt,
+                allocated_width_pt: content_width,
+                allocated_height_pt: content_height,
+            }];
         }
 
         // 3-flow Talmud layout:
@@ -139,5 +142,30 @@ mod tests {
         let content_width = 595.0 - 72.0;
         let total_col_width: f32 = allocs.iter().map(|a| a.allocated_width_pt).sum();
         assert!(total_col_width <= content_width);
+    }
+
+    #[test]
+    fn test_multi_flow_empty_flows() {
+        let allocations = MultiFlowSolver::solve_talmud_page(
+            595.0, 842.0, 42.52, 56.69, &[], 0.1,
+        );
+        assert!(allocations.is_empty(), "Empty flows should produce empty allocations");
+    }
+
+    #[test]
+    fn test_multi_flow_single_flow() {
+        let flows = vec![
+            FlowGeometrySpec {
+                flow_id: FlowId::new("main"),
+                priority: 1,
+                min_width_pt: 100.0,
+                max_width_pt: 500.0,
+                target_height_pt: 700.0,
+            },
+        ];
+        let allocations = MultiFlowSolver::solve_talmud_page(
+            595.0, 842.0, 42.52, 56.69, &flows, 0.1,
+        );
+        assert_eq!(allocations.len(), 1, "Single flow should produce one allocation");
     }
 }

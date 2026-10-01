@@ -8,6 +8,8 @@
 target/
 **/*.rs.bk
 *.pdb
+# Local Cargo config may contain machine-specific paths (target-dir etc.)
+.cargo/config.toml
 
 # אם הפרויקט מופץ כיישום סופי מומלץ לשמור את Cargo.lock,
 # אך אם מעוניינים להחריגו בהתאם למדיניות ספרייה ניתן להוריד את הסולמית:

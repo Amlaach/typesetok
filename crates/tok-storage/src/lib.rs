@@ -31,7 +31,7 @@ mod tests {
         let flow = sec.main_flow_mut().unwrap();
 
         let idx1 = FractionalIndex::initial();
-        let idx2 = FractionalIndex::between(Some(&idx1), None);
+        let idx2 = FractionalIndex::between(Some(&idx1), None).unwrap();
 
         flow.paragraphs.push(ParagraphNode::new(
             idx1,
@@ -104,7 +104,7 @@ mod tests {
         book.add_volume("שבת", "shabbat.tok", 157);
         book.add_volume("עירובין", "eruvin.tok", 105);
 
-        let ranges = book.calculate_pagination_ranges();
+        let ranges = book.calculate_pagination_ranges().expect("Pagination must succeed");
         assert_eq!(ranges.len(), 3);
         // Vol 1: pages 1 to 64
         assert_eq!(ranges[0].1, 1);
@@ -115,5 +115,48 @@ mod tests {
         // Vol 3: pages 222 to 326
         assert_eq!(ranges[2].1, 222);
         assert_eq!(ranges[2].2, 326);
+    }
+
+    #[test]
+    fn test_book_zero_page_volume() {
+        let mut book = TokBook::new("Test Book");
+        book.add_volume("Vol1", "vol1.tok", 10);
+        book.add_volume("Empty", "empty.tok", 0); // 0-page volume
+        book.add_volume("Vol3", "vol3.tok", 20);
+        
+        let ranges = book.calculate_pagination_ranges().expect("Must succeed");
+        // Empty volume should be skipped
+        assert_eq!(ranges.len(), 2, "0-page volume should be skipped");
+        assert_eq!(ranges[0].1, 1);
+        assert_eq!(ranges[0].2, 10);
+        assert_eq!(ranges[1].1, 11);
+        assert_eq!(ranges[1].2, 30);
+    }
+
+    #[test]
+    fn test_book_save_load_roundtrip() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let book_path = tmp_dir.path().join("test.tokbook");
+        
+        let mut book = TokBook::new("Test Book");
+        book.add_volume("Vol 1", "v1.tok", 50);
+        book.save(&book_path).expect("Save must succeed");
+        
+        let loaded = TokBook::open(&book_path).expect("Open must succeed");
+        assert_eq!(loaded.title, "Test Book");
+        assert_eq!(loaded.volumes.len(), 1);
+        assert_eq!(loaded.volumes[0].title, "Vol 1");
+    }
+
+    #[test]
+    fn test_migration_invalid_version() {
+        let result = MigrationPipeline::validate_version("invalid");
+        assert!(result.is_err(), "Invalid version string must return error");
+    }
+
+    #[test]
+    fn test_migration_future_major_version() {
+        let result = MigrationPipeline::validate_version("2.0.0");
+        assert!(result.is_err(), "Future major version must be rejected");
     }
 }

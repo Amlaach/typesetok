@@ -3,6 +3,7 @@ use crate::id::NodeId;
 use crate::model::{DocumentRoot, FlowId, ParagraphNode};
 use crate::normalizer::HebrewNormalizer;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AtomicOperation {
@@ -81,11 +82,7 @@ impl AtomicOperation {
                 let norm_deleted = HebrewNormalizer::normalize(deleted_text);
                 let del_len = norm_deleted.chars().count();
                 let total_len = rope.len_chars();
-                let start = if *char_offset + del_len > total_len {
-                    total_len.saturating_sub(del_len)
-                } else {
-                    *char_offset
-                };
+                let start = (*char_offset).min(total_len.saturating_sub(del_len));
                 let end = (start + del_len).min(total_len);
                 if start < end {
                     rope.remove(start..end);
@@ -146,9 +143,18 @@ impl CompoundTransaction {
         }
     }
 
+    /// Applies all operations atomically. If operation N fails, rolls back
+    /// operations 0..N-1 by applying their inverses in reverse order.
     pub fn apply(&self, doc: &mut DocumentRoot) -> Result<(), ModelError> {
-        for op in &self.operations {
-            op.apply(doc)?;
+        for (i, op) in self.operations.iter().enumerate() {
+            if let Err(e) = op.apply(doc) {
+                // Rollback: invert all previously applied operations in reverse
+                for prev_op in self.operations[..i].iter().rev() {
+                    let inverse = prev_op.invert();
+                    let _ = inverse.apply(doc); // best-effort rollback
+                }
+                return Err(e);
+            }
         }
         Ok(())
     }
@@ -157,16 +163,17 @@ impl CompoundTransaction {
 /// Robust Undo/Redo stack for the document.
 #[derive(Debug, Clone, Default)]
 pub struct TransactionStack {
-    undo_stack: Vec<CompoundTransaction>,
-    redo_stack: Vec<CompoundTransaction>,
+    undo_stack: VecDeque<CompoundTransaction>,
+    redo_stack: VecDeque<CompoundTransaction>,
+    /// Maximum number of undo entries. 0 = unlimited.
     max_history: usize,
 }
 
 impl TransactionStack {
     pub fn new(max_history: usize) -> Self {
         Self {
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
+            undo_stack: VecDeque::new(),
+            redo_stack: VecDeque::new(),
             max_history,
         }
     }
@@ -182,27 +189,32 @@ impl TransactionStack {
     pub fn apply(&mut self, tx: CompoundTransaction, doc: &mut DocumentRoot) -> Result<(), ModelError> {
         tx.apply(doc)?;
         let inverse = tx.invert();
-        self.undo_stack.push(inverse);
-        if self.undo_stack.len() > self.max_history && self.max_history > 0 {
-            self.undo_stack.remove(0);
+        self.undo_stack.push_back(inverse);
+        // Evict oldest entries when exceeding max_history (0 = unlimited)
+        if self.max_history > 0 && self.undo_stack.len() > self.max_history {
+            self.undo_stack.pop_front(); // O(1) eviction with VecDeque
         }
         self.redo_stack.clear();
         Ok(())
     }
 
+    /// Undo the last transaction. Transaction is only removed from stack after successful apply.
     pub fn undo(&mut self, doc: &mut DocumentRoot) -> Result<(), ModelError> {
-        let inverse = self.undo_stack.pop().ok_or(ModelError::UndoStackEmpty)?;
+        let inverse = self.undo_stack.back().ok_or(ModelError::UndoStackEmpty)?.clone();
         inverse.apply(doc)?;
+        self.undo_stack.pop_back(); // Only remove after successful apply
         let redo_tx = inverse.invert();
-        self.redo_stack.push(redo_tx);
+        self.redo_stack.push_back(redo_tx);
         Ok(())
     }
 
+    /// Redo the last undone transaction. Transaction is only removed from stack after successful apply.
     pub fn redo(&mut self, doc: &mut DocumentRoot) -> Result<(), ModelError> {
-        let redo_tx = self.redo_stack.pop().ok_or(ModelError::RedoStackEmpty)?;
+        let redo_tx = self.redo_stack.back().ok_or(ModelError::RedoStackEmpty)?.clone();
         redo_tx.apply(doc)?;
+        self.redo_stack.pop_back(); // Only remove after successful apply
         let inverse = redo_tx.invert();
-        self.undo_stack.push(inverse);
+        self.undo_stack.push_back(inverse);
         Ok(())
     }
 }
@@ -266,5 +278,21 @@ mod tests {
         // Redo paragraph creation
         stack.redo(&mut doc).unwrap();
         assert_eq!(doc.sections[0].flows[0].paragraphs.len(), 1);
+    }
+
+    #[test]
+    fn test_transaction_undo_empty_stack() {
+        let mut root = DocumentRoot::new("test");
+        let mut stack = TransactionStack::new(100);
+        let result = stack.undo(&mut root);
+        assert!(result.is_err(), "Undo on empty stack must return error");
+    }
+
+    #[test]
+    fn test_transaction_redo_empty_stack() {
+        let mut root = DocumentRoot::new("test");
+        let mut stack = TransactionStack::new(100);
+        let result = stack.redo(&mut root);
+        assert!(result.is_err(), "Redo on empty stack must return error");
     }
 }

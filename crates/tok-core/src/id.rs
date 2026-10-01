@@ -24,7 +24,7 @@ impl Ulid {
         let c2 = (c1 ^ (c1 >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
         let entropy = ((c1 as u128) << 16) | ((c2 as u128) & 0xFFFF);
 
-        let value = ((now_millis as u128) << 80) | (entropy & 0xFFFFFFFFFFFFFFFFFFFF);
+        let value = ((now_millis as u128) << 80) | (entropy & ((1u128 << 80) - 1));
         Self(value)
     }
 
@@ -126,6 +126,8 @@ impl fmt::Display for NodeId {
     }
 }
 
+use crate::error::ModelError;
+
 /// Fractional index key for O(1) ordering without rewriting all sibling indices.
 /// Lexicographically sorted string key.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -145,34 +147,39 @@ impl FractionalIndex {
     /// If `prev` is None, generate a key before `next`.
     /// If `next` is None, generate a key after `prev`.
     /// If both are None, generate initial key.
-    pub fn between(prev: Option<&Self>, next: Option<&Self>) -> Self {
+    pub fn between(prev: Option<&Self>, next: Option<&Self>) -> Result<Self, ModelError> {
         match (prev, next) {
-            (None, None) => Self::initial(),
+            (None, None) => Ok(Self::initial()),
             (None, Some(b)) => {
                 let b_str = &b.0;
                 let first_char = b_str.chars().next().unwrap_or('m');
                 if first_char > 'a' {
                     let mid = ((b'a' + first_char as u8) / 2) as char;
-                    Self(mid.to_string())
+                    Ok(Self(mid.to_string()))
                 } else {
                     // Prepend smaller prefix
-                    Self(format!("a{}", b_str))
+                    Ok(Self(format!("Z{}", b_str)))
                 }
             }
             (Some(a), None) => {
                 let a_str = &a.0;
+                if a_str.is_empty() {
+                    return Err(ModelError::InvalidRange);
+                }
                 let last_char = a_str.chars().last().unwrap_or('m');
                 if last_char < 'z' {
                     let next_char = (last_char as u8 + 1) as char;
                     let mut s = a_str[..a_str.len() - 1].to_string();
                     s.push(next_char);
-                    Self(s)
+                    Ok(Self(s))
                 } else {
-                    Self(format!("{}m", a_str))
+                    Ok(Self(format!("{}m", a_str)))
                 }
             }
             (Some(a), Some(b)) => {
-                assert!(a < b, "prev must be strictly less than next");
+                if a >= b {
+                    return Err(ModelError::InvalidRange);
+                }
                 let a_bytes = a.0.as_bytes();
                 let b_bytes = b.0.as_bytes();
                 let mut result = Vec::new();
@@ -185,6 +192,15 @@ impl FractionalIndex {
                     if byte_a == byte_b {
                         result.push(byte_a);
                         i += 1;
+                        if i >= a_bytes.len() && i < b_bytes.len() {
+                            let next_b = b_bytes[i];
+                            if next_b > b'a' {
+                                result.push(b'a');
+                            } else {
+                                result.push(b'Z');
+                            }
+                            break;
+                        }
                         continue;
                     }
 
@@ -204,7 +220,7 @@ impl FractionalIndex {
                                 let mid = (next_a + b'z') / 2;
                                 if mid > next_a {
                                     result.push(mid);
-                                    return Self(String::from_utf8(result).unwrap());
+                                    return Ok(Self(String::from_utf8(result).unwrap()));
                                 }
                                 result.push(next_a);
                             } else {
@@ -217,7 +233,7 @@ impl FractionalIndex {
                     }
                 }
 
-                Self(String::from_utf8(result).unwrap_or_else(|_| format!("{}m", a.0)))
+                Ok(Self(String::from_utf8(result).unwrap_or_else(|_| format!("{}m", a.0))))
             }
         }
     }
@@ -252,18 +268,25 @@ mod tests {
     #[test]
     fn test_fractional_indexing() {
         let k1 = FractionalIndex::initial(); // "m"
-        let k2 = FractionalIndex::between(Some(&k1), None);
+        let k2 = FractionalIndex::between(Some(&k1), None).unwrap();
         assert!(k1 < k2);
 
-        let k0 = FractionalIndex::between(None, Some(&k1));
+        let k0 = FractionalIndex::between(None, Some(&k1)).unwrap();
         assert!(k0 < k1);
 
-        let k_mid = FractionalIndex::between(Some(&k1), Some(&k2));
+        let k_mid = FractionalIndex::between(Some(&k1), Some(&k2)).unwrap();
         assert!(k1 < k_mid);
         assert!(k_mid < k2);
 
-        let k_mid2 = FractionalIndex::between(Some(&k0), Some(&k1));
+        let k_mid2 = FractionalIndex::between(Some(&k0), Some(&k1)).unwrap();
         assert!(k0 < k_mid2);
         assert!(k_mid2 < k1);
+        
+        // Test prefix collision
+        let a = FractionalIndex::new("b");
+        let b = FractionalIndex::new("ba");
+        let mid_prefix = FractionalIndex::between(Some(&a), Some(&b)).unwrap();
+        assert!(a < mid_prefix);
+        assert!(mid_prefix < b);
     }
 }

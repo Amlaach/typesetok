@@ -71,4 +71,13 @@ mod tests {
         assert!(s.contains("<0002> <0002> <05D1>"));
         assert!(s.contains("endcmap"));
     }
+
+    #[test]
+    fn test_tounicode_empty_mapping() {
+        let mapping = std::collections::BTreeMap::new();
+        let bytes = ToUnicodeCMap::generate(&mapping);
+        let s = String::from_utf8(bytes).unwrap();
+        assert!(s.contains("begincmap"), "Must contain CMap header");
+        assert!(s.contains("endcmap"), "Must contain CMap footer");
+    }
 }

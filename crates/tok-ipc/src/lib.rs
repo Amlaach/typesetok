@@ -54,4 +54,31 @@ mod tests {
             _ => panic!("Decoded wrong event type"),
         }
     }
+
+    #[test]
+    fn test_framing_truncated_message() {
+        // Claims 255 bytes payload but only 1 byte present
+        let bytes = vec![0xFF, 0x00, 0x00, 0x00, 0x01];
+        let result = MessageFramer::decode_command(&bytes);
+        assert!(result.is_err(), "Truncated message must return error");
+    }
+
+    #[test]
+    fn test_all_command_delete_range_roundtrip() {
+        let start_node = NodeId::new();
+        let end_node = start_node;
+        let cmd = IpcCommand::DeleteRange {
+            start: TextAnchor::start_of(start_node),
+            end: TextAnchor::end_of(end_node),
+        };
+        let encoded = MessageFramer::encode_command(&cmd).expect("Encode must succeed");
+        let decoded = MessageFramer::decode_command(&encoded).expect("Decode must succeed");
+        match decoded {
+            IpcCommand::DeleteRange { start, end } => {
+                assert_eq!(start.node_id, start_node);
+                assert_eq!(end.node_id, end_node);
+            }
+            _ => panic!("Decoded wrong command type"),
+        }
+    }
 }

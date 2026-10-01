@@ -91,41 +91,100 @@ pub enum IpcEvent {
     },
 }
 
+use std::fmt;
+
+#[derive(Debug)]
+pub enum IpcError {
+    Serialization(serde_json::Error),
+    MessageTooLarge,
+    PayloadTooLarge,
+    InvalidLength,
+}
+
+impl fmt::Display for IpcError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Serialization(e) => write!(f, "Serialization error: {}", e),
+            Self::MessageTooLarge => write!(f, "Message exceeds MAX_MESSAGE_SIZE"),
+            Self::PayloadTooLarge => write!(f, "Payload length exceeds u32::MAX"),
+            Self::InvalidLength => write!(f, "Invalid message length or incomplete payload"),
+        }
+    }
+}
+
+impl std::error::Error for IpcError {}
+
+impl From<serde_json::Error> for IpcError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::Serialization(e)
+    }
+}
+
+pub const MAX_MESSAGE_SIZE: u32 = 64 * 1024 * 1024;
+
 /// Binary message framing (4-byte length prefix + payload).
 pub struct MessageFramer;
 
 impl MessageFramer {
-    pub fn encode_command(cmd: &IpcCommand) -> Result<Vec<u8>, serde_json::Error> {
+    pub fn encode_command(cmd: &IpcCommand) -> Result<Vec<u8>, IpcError> {
         let payload = serde_json::to_vec(cmd)?;
-        let len = (payload.len() as u32).to_le_bytes();
+        if payload.len() > u32::MAX as usize {
+            return Err(IpcError::PayloadTooLarge);
+        }
+        let len = payload.len() as u32;
+        if len > MAX_MESSAGE_SIZE {
+            return Err(IpcError::MessageTooLarge);
+        }
         let mut framed = Vec::with_capacity(4 + payload.len());
-        framed.extend_from_slice(&len);
+        framed.extend_from_slice(&len.to_le_bytes());
         framed.extend_from_slice(&payload);
         Ok(framed)
     }
 
-    pub fn decode_command(bytes: &[u8]) -> Result<IpcCommand, serde_json::Error> {
-        if bytes.len() >= 4 {
-            serde_json::from_slice(&bytes[4..])
-        } else {
-            serde_json::from_slice(bytes)
+    pub fn decode_command(bytes: &[u8]) -> Result<IpcCommand, IpcError> {
+        if bytes.len() < 4 {
+            return Err(IpcError::InvalidLength);
         }
+        let mut len_bytes = [0u8; 4];
+        len_bytes.copy_from_slice(&bytes[0..4]);
+        let len = u32::from_le_bytes(len_bytes);
+        if len > MAX_MESSAGE_SIZE {
+            return Err(IpcError::MessageTooLarge);
+        }
+        if bytes.len() - 4 < len as usize {
+            return Err(IpcError::InvalidLength);
+        }
+        Ok(serde_json::from_slice(&bytes[4..4 + len as usize])?)
     }
 
-    pub fn encode_event(evt: &IpcEvent) -> Result<Vec<u8>, serde_json::Error> {
+    pub fn encode_event(evt: &IpcEvent) -> Result<Vec<u8>, IpcError> {
         let payload = serde_json::to_vec(evt)?;
-        let len = (payload.len() as u32).to_le_bytes();
+        if payload.len() > u32::MAX as usize {
+            return Err(IpcError::PayloadTooLarge);
+        }
+        let len = payload.len() as u32;
+        if len > MAX_MESSAGE_SIZE {
+            return Err(IpcError::MessageTooLarge);
+        }
         let mut framed = Vec::with_capacity(4 + payload.len());
-        framed.extend_from_slice(&len);
+        framed.extend_from_slice(&len.to_le_bytes());
         framed.extend_from_slice(&payload);
         Ok(framed)
     }
 
-    pub fn decode_event(bytes: &[u8]) -> Result<IpcEvent, serde_json::Error> {
-        if bytes.len() >= 4 {
-            serde_json::from_slice(&bytes[4..])
-        } else {
-            serde_json::from_slice(bytes)
+    pub fn decode_event(bytes: &[u8]) -> Result<IpcEvent, IpcError> {
+        if bytes.len() < 4 {
+            return Err(IpcError::InvalidLength);
         }
+        let mut len_bytes = [0u8; 4];
+        len_bytes.copy_from_slice(&bytes[0..4]);
+        let len = u32::from_le_bytes(len_bytes);
+        if len > MAX_MESSAGE_SIZE {
+            return Err(IpcError::MessageTooLarge);
+        }
+        if bytes.len() - 4 < len as usize {
+            return Err(IpcError::InvalidLength);
+        }
+        Ok(serde_json::from_slice(&bytes[4..4 + len as usize])?)
     }
 }

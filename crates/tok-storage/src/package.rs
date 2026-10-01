@@ -9,6 +9,8 @@ use tok_core::model::{DocumentModel, DocumentRoot};
 use zip::write::SimpleFileOptions;
 use zip::{ZipArchive, ZipWriter};
 
+const MAX_ENTRY_SIZE: u64 = 100 * 1024 * 1024; // 100 MB
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokManifest {
     pub schema_version: String,
@@ -96,7 +98,7 @@ impl TokPackage {
         self.manifest.document_id = root.id.to_string();
 
         // 1. Write archive to temporary file
-        {
+        let write_result = (|| -> Result<(), StorageError> {
             let file = File::create(&tmp_path)?;
             let mut zip = ZipWriter::new(file);
             let options = SimpleFileOptions::default()
@@ -130,19 +132,26 @@ impl TokPackage {
             // 2. Full hardware flush to disk
             finished_file.flush()?;
             finished_file.sync_all()?;
+            Ok(())
+        })();
+
+        if write_result.is_err() {
+            let _ = fs::remove_file(&tmp_path);
+            return write_result;
         }
 
         // 3. Atomic replacement
         if dest_path.exists() {
             #[cfg(windows)]
             {
-                let backup_path = parent.join(format!("{}.bak", dest_path.file_name().unwrap().to_str().unwrap()));
+                let backup_path = dest_path.with_extension("bak");
                 if backup_path.exists() {
                     let _ = fs::remove_file(&backup_path);
                 }
                 fs::rename(dest_path, &backup_path)?;
                 if let Err(e) = fs::rename(&tmp_path, dest_path) {
                     let _ = fs::rename(&backup_path, dest_path);
+                    let _ = fs::remove_file(&tmp_path);
                     return Err(StorageError::AtomicSaveFailed(e.to_string()));
                 }
                 let _ = fs::remove_file(backup_path);
@@ -197,6 +206,14 @@ impl TokPackage {
         for i in 0..num_files {
             let mut file = archive.by_index(i)?;
             let name = file.name().to_string();
+            
+            if name.contains("..") || name.starts_with('/') || name.starts_with('\\') {
+                return Err(StorageError::CorruptedPackage(format!("Invalid path in zip: {}", name)));
+            }
+            if file.size() > MAX_ENTRY_SIZE {
+                return Err(StorageError::CorruptedPackage(format!("Entry {} exceeds max size limit", name)));
+            }
+
             if name.starts_with("assets/") && !name.ends_with('/') {
                 let asset_key = name.trim_start_matches("assets/").to_string();
                 let mut data = Vec::new();

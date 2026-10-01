@@ -103,9 +103,33 @@ impl PluginHost {
         doc: &DocumentRoot,
     ) -> Result<CompoundTransaction, PluginError> {
         let plugin = self.plugins.get(plugin_id).ok_or_else(|| PluginError::NotFound(plugin_id.to_string()))?;
-        let mut ctx = PluginContext::new(doc, format!("Plugin: {}", plugin.metadata().name));
-        plugin.execute(&mut ctx)?;
-        Ok(ctx.transaction)
+        
+        // Enforce capability check
+        let meta = plugin.metadata();
+        if !meta.capabilities.contains(&PluginCapability::ReadDocument) {
+            return Err(PluginError::PermissionDenied {
+                plugin_id: plugin_id.to_string(),
+                capability: "ReadDocument".to_string(),
+            });
+        }
+
+        let doc_clone = doc.clone();
+        let plugin_name = meta.name.clone();
+
+        // Wrap execution in catch_unwind to prevent plugin panics from crashing host
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut ctx = PluginContext::new(&doc_clone, format!("Plugin: {}", plugin_name));
+            plugin.execute(&mut ctx)?;
+            Ok(ctx.transaction)
+        }));
+
+        match result {
+            Ok(res) => res,
+            Err(_) => Err(PluginError::ExecutionFailed(format!(
+                "Plugin '{}' panicked during execution",
+                plugin_id
+            ))),
+        }
     }
 
     pub fn list_plugins(&self) -> Vec<PluginMetadata> {
@@ -220,5 +244,13 @@ mod tests {
             .expect("Plugin execution must succeed");
 
         assert_eq!(tx.description, "Plugin: מגן שמות קדושים (Divine Name Shield)");
+    }
+
+    #[test]
+    fn test_plugin_not_found() {
+        let host = PluginHost::new();
+        let doc = DocumentRoot::new("test");
+        let result = host.execute_plugin("nonexistent_plugin", &doc);
+        assert!(result.is_err(), "Non-existent plugin must return error");
     }
 }

@@ -57,6 +57,10 @@ impl KnuthPlassBreaker {
             return Vec::new();
         }
 
+        if target_width <= 0.0 || target_width.is_nan() || target_width.is_infinite() {
+            return Vec::new();
+        }
+
         // Node in DP: (index in items, line_number, total_demerits, prev_node_index, adjustment_ratio)
         #[derive(Clone, Debug)]
         struct ActiveNode {
@@ -197,40 +201,93 @@ impl KnuthPlassBreaker {
         let end_node = best_nodes
             .iter()
             .filter(|n| n.item_idx == items.len())
-            .min_by(|a, b| a.total_demerits.partial_cmp(&b.total_demerits).unwrap())
-            .or_else(|| best_nodes.last());
+            .min_by(|a, b| a.total_demerits.partial_cmp(&b.total_demerits).unwrap_or(std::cmp::Ordering::Equal));
 
-        let mut current = end_node;
-        let mut path = Vec::new();
-        while let Some(node) = current {
-            path.push(node.clone());
-            current = node.prev.map(|idx| &best_nodes[idx]);
-        }
-        path.reverse();
-
-        // Convert path to BrokenLines
         let mut lines = Vec::new();
-        for w in path.windows(2) {
-            let start = w[0].item_idx;
-            let end = w[1].item_idx;
-            let line_items = items[start..end].to_vec();
 
-            let mut width = 0.0;
-            for it in &line_items {
-                match it {
-                    LayoutItem::Box { width: w, .. } => width += *w,
-                    LayoutItem::Glue { width: w, .. } => width += *w,
-                    LayoutItem::Penalty { width: w, .. } => width += *w,
+        if let Some(end) = end_node {
+            let mut current = Some(end);
+            let mut path = Vec::new();
+            while let Some(node) = current {
+                path.push(node.clone());
+                current = node.prev.map(|idx| &best_nodes[idx]);
+            }
+            path.reverse();
+
+            // Convert path to BrokenLines
+            for w in path.windows(2) {
+                let start = w[0].item_idx;
+                let end = w[1].item_idx;
+                let line_items = items[start..end].to_vec();
+
+                let mut width = 0.0;
+                for it in &line_items {
+                    match it {
+                        LayoutItem::Box { width: w, .. } => width += *w,
+                        LayoutItem::Glue { width: w, .. } => width += *w,
+                        LayoutItem::Penalty { width: w, .. } => width += *w,
+                    }
+                }
+
+                lines.push(BrokenLine {
+                    line_number: lines.len() + 1,
+                    items: line_items,
+                    width,
+                    target_width,
+                    adjustment_ratio: w[1].ratio,
+                });
+            }
+        } else {
+            // Emergency greedy fallback
+            let mut current_line_items = Vec::new();
+            let mut current_width = 0.0;
+            
+            for item in items {
+                match item {
+                    LayoutItem::Box { width, .. } => {
+                        current_width += width;
+                        current_line_items.push(item.clone());
+                    }
+                    LayoutItem::Glue { width, .. } => {
+                        // Break if adding this glue exceeds target width and we have items
+                        if current_width + width > target_width && !current_line_items.is_empty() {
+                            lines.push(BrokenLine {
+                                line_number: lines.len() + 1,
+                                items: std::mem::take(&mut current_line_items),
+                                width: current_width,
+                                target_width,
+                                adjustment_ratio: 0.0,
+                            });
+                            current_width = 0.0;
+                        }
+                        current_width += width;
+                        current_line_items.push(item.clone());
+                    }
+                    LayoutItem::Penalty { width, penalty, .. } => {
+                        current_width += width;
+                        current_line_items.push(item.clone());
+                        if *penalty <= Self::FORCED_BREAK_PENALTY {
+                            lines.push(BrokenLine {
+                                line_number: lines.len() + 1,
+                                items: std::mem::take(&mut current_line_items),
+                                width: current_width,
+                                target_width,
+                                adjustment_ratio: 0.0,
+                            });
+                            current_width = 0.0;
+                        }
+                    }
                 }
             }
-
-            lines.push(BrokenLine {
-                line_number: lines.len() + 1,
-                items: line_items,
-                width,
-                target_width,
-                adjustment_ratio: w[1].ratio,
-            });
+            if !current_line_items.is_empty() {
+                lines.push(BrokenLine {
+                    line_number: lines.len() + 1,
+                    items: current_line_items,
+                    width: current_width,
+                    target_width,
+                    adjustment_ratio: 0.0,
+                });
+            }
         }
 
         lines
@@ -258,5 +315,44 @@ mod tests {
         // Target width 120 pt -> should break into 2 balanced lines of 2 words each
         let lines = KnuthPlassBreaker::break_paragraph(&items, 120.0, 2.0);
         assert_eq!(lines.len(), 2);
+    }
+    #[test]
+    fn test_knuth_plass_empty_paragraph() {
+        let items: Vec<LayoutItem> = vec![];
+        let lines = KnuthPlassBreaker::break_paragraph(&items, 300.0, 2.0);
+        assert!(lines.is_empty(), "Empty items should produce empty lines");
+    }
+
+    #[test]
+    fn test_knuth_plass_single_word() {
+        let items = vec![
+            LayoutItem::Box { width: 50.0, text: "word".to_string(), glyphs: Vec::new() },
+        ];
+        let lines = KnuthPlassBreaker::break_paragraph(&items, 300.0, 2.0);
+        assert_eq!(lines.len(), 1, "Single word should produce one line");
+        let has_word = lines[0].items.iter().any(|item| {
+            if let LayoutItem::Box { text, .. } = item {
+                text.contains("word")
+            } else {
+                false
+            }
+        });
+        assert!(has_word);
+    }
+
+    #[test]
+    fn test_knuth_plass_zero_width() {
+        let items = vec![
+            LayoutItem::Box { width: 50.0, text: "word".to_string(), glyphs: Vec::new() },
+        ];
+        let _lines = KnuthPlassBreaker::break_paragraph(&items, 0.0, 2.0);
+    }
+
+    #[test]
+    fn test_knuth_plass_nan_width() {
+        let items = vec![
+            LayoutItem::Box { width: 50.0, text: "word".to_string(), glyphs: Vec::new() },
+        ];
+        let _lines = KnuthPlassBreaker::break_paragraph(&items, f32::NAN, 2.0);
     }
 }

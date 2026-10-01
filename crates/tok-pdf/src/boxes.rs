@@ -14,18 +14,27 @@ impl PrePressPageBoxes {
     /// Computes PDF page boxes given trimmed dimensions, bleed (default 3mm = 8.504 pt),
     /// and slug margin for crop marks (default 10mm = 28.346 pt).
     pub fn new(page_width_pt: f32, page_height_pt: f32, bleed_pt: f32, slug_pt: f32) -> Self {
-        let trim_llx = slug_pt;
-        let trim_lly = slug_pt;
-        let trim_urx = slug_pt + page_width_pt;
-        let trim_ury = slug_pt + page_height_pt;
+        let w = if page_width_pt.is_finite() && page_width_pt > 0.0 { page_width_pt } else { 595.28 };
+        let h = if page_height_pt.is_finite() && page_height_pt > 0.0 { page_height_pt } else { 841.89 };
+        let b = if bleed_pt.is_finite() && bleed_pt >= 0.0 { bleed_pt } else { 0.0 };
+        let mut s = if slug_pt.is_finite() && slug_pt >= 0.0 { slug_pt } else { 0.0 };
+        
+        if s < b {
+            s = b;
+        }
 
-        let bleed_llx = trim_llx - bleed_pt;
-        let bleed_lly = trim_lly - bleed_pt;
-        let bleed_urx = trim_urx + bleed_pt;
-        let bleed_ury = trim_ury + bleed_pt;
+        let trim_llx = s;
+        let trim_lly = s;
+        let trim_urx = s + w;
+        let trim_ury = s + h;
 
-        let media_width = page_width_pt + 2.0 * slug_pt;
-        let media_height = page_height_pt + 2.0 * slug_pt;
+        let bleed_llx = trim_llx - b;
+        let bleed_lly = trim_lly - b;
+        let bleed_urx = trim_urx + b;
+        let bleed_ury = trim_ury + b;
+
+        let media_width = w + 2.0 * s;
+        let media_height = h + 2.0 * s;
 
         Self {
             trim_box: [trim_llx, trim_lly, trim_urx, trim_ury],

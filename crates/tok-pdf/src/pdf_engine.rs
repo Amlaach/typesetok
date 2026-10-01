@@ -89,7 +89,21 @@ impl PdfPrePressEngine {
         // 3. Pages and Content Streams
         let mut page_ids = Vec::new();
 
-        for p_box in pages {
+        let dummy_page;
+        let iter_pages: &[PageLayoutBox] = if pages.is_empty() {
+            dummy_page = [PageLayoutBox {
+                page_index: 0,
+                page_number_gematria: String::new(),
+                dimensions: tok_typeset::geometry::PhysicalRect::a4_portrait(),
+                frames: Vec::new(),
+                break_token: None,
+            }];
+            &dummy_page
+        } else {
+            pages
+        };
+
+        for p_box in iter_pages {
             let page_id = alloc();
             let content_id = alloc();
             page_ids.push(page_id);

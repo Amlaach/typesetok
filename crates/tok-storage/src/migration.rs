@@ -59,11 +59,23 @@ impl MigrationPipeline {
     fn parse_semver(v: &str) -> Result<(u32, u32, u32), StorageError> {
         let parts: Vec<&str> = v.split('.').collect();
         if parts.len() < 3 {
-            return Ok((1, 0, 0));
+            return Err(StorageError::SchemaVersionMismatch {
+                expected: "x.y.z format".to_string(),
+                found: v.to_string(),
+            });
         }
-        let major = parts[0].parse().unwrap_or(1);
-        let minor = parts[1].parse().unwrap_or(0);
-        let patch = parts[2].parse().unwrap_or(0);
+        let major = parts[0].parse().map_err(|_| StorageError::SchemaVersionMismatch {
+            expected: "valid integer".to_string(),
+            found: parts[0].to_string(),
+        })?;
+        let minor = parts[1].parse().map_err(|_| StorageError::SchemaVersionMismatch {
+            expected: "valid integer".to_string(),
+            found: parts[1].to_string(),
+        })?;
+        let patch = parts[2].parse().map_err(|_| StorageError::SchemaVersionMismatch {
+            expected: "valid integer".to_string(),
+            found: parts[2].to_string(),
+        })?;
         Ok((major, minor, patch))
     }
 }

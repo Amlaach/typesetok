@@ -51,7 +51,7 @@ fn create_sample_hebrew_document(num_paragraphs: usize) -> DocumentModel {
     let mut prev_idx = FractionalIndex::initial();
     for i in 0..num_paragraphs {
         let text = sample_texts[i % sample_texts.len()];
-        let idx = FractionalIndex::between(Some(&prev_idx), None);
+        let idx = FractionalIndex::between(Some(&prev_idx), None).unwrap();
         flow.paragraphs.push(ParagraphNode::new(idx.clone(), "normal", text));
         prev_idx = idx;
     }

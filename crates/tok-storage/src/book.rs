@@ -1,7 +1,7 @@
 use crate::error::StorageError;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tok_core::id::Ulid;
 use tok_core::styles::ParagraphStyle;
@@ -61,43 +61,44 @@ impl TokBook {
 
     /// Calculates continuous page ranges for each volume in the book.
     /// Returns: Vec<(volume_id, start_page, end_page)>
-    pub fn calculate_pagination_ranges(&self) -> Vec<(Ulid, u32, u32)> {
+    pub fn calculate_pagination_ranges(&self) -> Result<Vec<(Ulid, u32, u32)>, StorageError> {
         let mut ranges = Vec::new();
         let mut current_page = 1u32;
 
-        let mut sorted_vols = self.volumes.clone();
+        let mut sorted_vols: Vec<&BookVolumeEntry> = self.volumes.iter().collect();
         sorted_vols.sort_by_key(|v| v.order);
 
-        for vol in &sorted_vols {
+        for vol in sorted_vols {
+            if vol.page_count == 0 {
+                continue;
+            }
             let start = current_page;
-            let end = if vol.page_count > 0 {
-                current_page + vol.page_count - 1
-            } else {
-                start
-            };
+            let end = current_page
+                .checked_add(vol.page_count)
+                .and_then(|sum| sum.checked_sub(1))
+                .ok_or_else(|| StorageError::DocumentModel(format!("Page count overflow in volume {}", vol.id)))?;
+                
             ranges.push((vol.id, start, end));
-            current_page = end + 1;
+            current_page = end.checked_add(1).ok_or_else(|| StorageError::DocumentModel("Page count overflow".into()))?;
         }
 
-        ranges
+        Ok(ranges)
     }
 
     /// Saves the `.tokbook` project coordinator to disk.
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), StorageError> {
         let file = File::create(path)?;
         let mut writer = std::io::BufWriter::new(file);
-        let json_bytes = serde_json::to_vec_pretty(self)?;
-        writer.write_all(&json_bytes)?;
+        serde_json::to_writer_pretty(&mut writer, self)?;
         writer.flush()?;
         Ok(())
     }
 
     /// Opens a `.tokbook` project from disk.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let mut file = File::open(path)?;
-        let mut content = String::new();
-        file.read_to_string(&mut content)?;
-        let book: Self = serde_json::from_str(&content)?;
+        let file = File::open(path)?;
+        let reader = std::io::BufReader::new(file);
+        let book: Self = serde_json::from_reader(reader)?;
         Ok(book)
     }
 }

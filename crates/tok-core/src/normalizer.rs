@@ -48,10 +48,20 @@ impl HebrewNormalizer {
         }
     }
 
-    /// Decomposes legacy Hebrew presentation forms (U+FB1D..U+FB4F).
+    /// Decomposes legacy Hebrew presentation forms (U+FB1D..U+FB4F) only.
+    /// Unlike global NFKD, this preserves non-breaking spaces, ligatures, and other characters.
     pub fn decompose_presentation_forms(input: &str) -> String {
-        // Unicode NFKD decomposes presentation forms into base characters + combining marks
-        input.nfkd().collect()
+        let mut result = String::with_capacity(input.len());
+        for ch in input.chars() {
+            if ('\u{FB1D}'..='\u{FB4F}').contains(&ch) {
+                // Decompose only Hebrew Presentation Forms via NFKD
+                let s: String = ch.to_string().nfkd().collect();
+                result.push_str(&s);
+            } else {
+                result.push(ch);
+            }
+        }
+        result
     }
 
     /// Normalizes Hebrew text strictly according to SI 6100.
@@ -135,5 +145,34 @@ mod tests {
         // Decomposes and normalizes to: Shin, Shin Dot, Dagesh, Qamats
         let expected = "\u{05E9}\u{05C1}\u{05BC}\u{05B8}";
         assert_eq!(normalized, expected);
+    }
+
+    #[test]
+    fn test_normalizer_preserves_nbsp() {
+        // Non-breaking space (U+00A0) must survive normalization
+        let input = "\u{05E9}\u{05C1}\u{05B8}\u{00A0}\u{05DC}\u{05B9}\u{05DD}";
+        let result = HebrewNormalizer::normalize(input);
+        assert!(result.contains('\u{00A0}'), "NBSP must be preserved, got: {:?}", result);
+    }
+
+    #[test]
+    fn test_normalizer_empty_string() {
+        let result = HebrewNormalizer::normalize("");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_normalizer_idempotent() {
+        let input = "\u{05E9}\u{05B8}\u{05C1}\u{05DC}\u{05D5}\u{05B9}\u{05DD}";
+        let once = HebrewNormalizer::normalize(input);
+        let twice = HebrewNormalizer::normalize(&once);
+        assert_eq!(once, twice, "Normalization must be idempotent");
+    }
+
+    #[test]
+    fn test_normalizer_plain_ascii() {
+        let input = "Hello World 123";
+        let result = HebrewNormalizer::normalize(input);
+        assert_eq!(result, input, "ASCII text must pass through unchanged");
     }
 }

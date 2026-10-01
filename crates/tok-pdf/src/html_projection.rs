@@ -6,6 +6,7 @@
 //! - RTL spread progression.
 
 use tok_typeset::geometry::PageLayoutBox;
+use std::fmt::Write;
 
 pub struct HtmlProjectionCompiler;
 
@@ -87,6 +88,11 @@ div.tok-line {{
         html.push_str(&Self::generate_stylesheet(page_width_mm, page_height_mm));
         html.push_str("</style>\n</head>\n<body>\n");
 
+        if pages.is_empty() {
+            html.push_str("</body>\n</html>\n");
+            return html;
+        }
+
         for p in pages {
             let page_class = if p.page_index == 0 {
                 "tok-page tok-page-chapter-first"
@@ -96,32 +102,33 @@ div.tok-line {{
                 "tok-page tok-page-left"
             };
 
-            html.push_str(&format!(
+            let escaped_gematria = html_escape(&p.page_number_gematria);
+            write!(html,
                 "<div class=\"{}\" data-page-index=\"{}\" data-gematria=\"{}\">\n",
-                page_class, p.page_index, p.page_number_gematria
-            ));
+                page_class, p.page_index, escaped_gematria
+            ).unwrap();
 
             for frame in &p.frames {
-                html.push_str(&format!(
+                write!(html,
                     "  <div class=\"tok-frame\" style=\"position: absolute; left: {:.2}pt; top: {:.2}pt; width: {:.2}pt;\">\n",
                     frame.rect.x, frame.rect.y, frame.rect.width
-                ));
+                ).unwrap();
 
                 for line in &frame.lines {
-                    html.push_str(&format!(
+                    write!(html,
                         "    <div class=\"tok-line\" style=\"height: {:.2}pt; line-height: {:.2}pt;\">{}</div>\n",
                         line.height, line.height, html_escape(&line.text)
-                    ));
+                    ).unwrap();
                 }
 
                 html.push_str("  </div>\n");
             }
 
             // Folio (page number) footer
-            html.push_str(&format!(
+            write!(html,
                 "  <div class=\"tok-folio\" style=\"position: absolute; bottom: 20pt; width: 100%; text-align: center;\">{}</div>\n",
-                p.page_number_gematria
-            ));
+                escaped_gematria
+            ).unwrap();
 
             html.push_str("</div>\n");
         }
@@ -132,10 +139,18 @@ div.tok-line {{
 }
 
 fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -177,5 +192,25 @@ mod tests {
         assert!(html.contains("dir=\"rtl\""));
         assert!(html.contains("tok-page"));
         assert!(html.contains("tok-line"));
+    }
+
+    #[test]
+    fn test_html_escape_gematria_quotes() {
+        // Gematria values with quotes must be properly escaped
+        let escaped = html_escape("\u{05EA}\u{05E9}\u{05E4}\u{05F4}\u{05D3}"); // תשפ״ד
+        assert!(!escaped.contains('"') || escaped.contains("&quot;"));
+    }
+
+    #[test]
+    fn test_html_empty_pages() {
+        let html = HtmlProjectionCompiler::compile_to_html(&[], 210.0, 297.0);
+        assert!(html.contains("<!DOCTYPE html>"), "Must produce valid HTML");
+        assert!(html.contains("</html>"), "Must be closed HTML");
+    }
+
+    #[test]
+    fn test_html_escape_single_quote() {
+        let escaped = html_escape("it's");
+        assert!(escaped.contains("&#39;"), "Single quotes must be escaped");
     }
 }

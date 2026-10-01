@@ -212,3 +212,44 @@ impl DocumentModel {
         &self.root
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::id::FractionalIndex;
+
+    #[test]
+    fn test_add_paragraph_maintains_order() {
+        let mut flow = Flow::new(FlowId::main(), FlowType::Main);
+        let p3 = ParagraphNode::new(FractionalIndex::new("p"), "normal", "third");
+        let p1 = ParagraphNode::new(FractionalIndex::new("b"), "normal", "first");
+        let p2 = ParagraphNode::new(FractionalIndex::new("m"), "normal", "second");
+        
+        // Add in shuffled order
+        flow.add_paragraph(p3);
+        flow.add_paragraph(p1);
+        flow.add_paragraph(p2);
+        
+        // They should be sorted by index
+        assert_eq!(flow.paragraphs[0].text, "first");
+        assert_eq!(flow.paragraphs[1].text, "second");
+        assert_eq!(flow.paragraphs[2].text, "third");
+    }
+    
+    #[test]
+    fn test_document_to_json_and_back() {
+        let mut root = DocumentRoot::new("Test Doc");
+        let sec = &mut root.sections[0];
+        let flow = sec.main_flow_mut().unwrap();
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::initial(),
+            "normal",
+            "Hello World",
+        ));
+        
+        let json = root.to_json().expect("Serialization must succeed");
+        let loaded = DocumentRoot::from_json(&json).expect("Deserialization must succeed");
+        assert_eq!(loaded.metadata.title, "Test Doc");
+        assert_eq!(loaded.sections[0].main_flow().unwrap().paragraphs.len(), 1);
+    }
+}
