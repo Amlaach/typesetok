@@ -10,7 +10,9 @@ pub mod shaper;
 pub use bidi::{BidiEngine, BidiRun};
 pub use engine::{TypesettingEngine, TypesettingEngineConfig};
 pub use gematria::{GematriaEngine, HEBREW_GERESH, HEBREW_GERSHAYIM};
-pub use geometry::{BreakToken, GlyphBox, LineBox, PageLayoutBox, PhysicalPoint, PhysicalRect, TextFrameBox};
+pub use geometry::{
+    BreakToken, GlyphBox, LineBox, PageLayoutBox, PhysicalPoint, PhysicalRect, TextFrameBox,
+};
 pub use hebrew_justify::{HebrewJustifier, JustificationTier, JustifiedLine, AHALTERM_LETTERS};
 pub use knuth_plass::{BrokenLine, KnuthPlassBreaker, LayoutItem, LineBreak};
 pub use multi_flow::{FlowGeometrySpec, MultiFlowSolver, SolvedFlowAllocation};

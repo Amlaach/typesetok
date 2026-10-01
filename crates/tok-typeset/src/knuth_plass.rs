@@ -83,10 +83,8 @@ impl KnuthPlassBreaker {
                         candidates.push(i);
                     }
                 }
-                LayoutItem::Penalty { penalty, .. } => {
-                    if *penalty < Self::INFINITY_PENALTY {
-                        candidates.push(i);
-                    }
+                LayoutItem::Penalty { penalty, .. } if *penalty < Self::INFINITY_PENALTY => {
+                    candidates.push(i);
                 }
                 _ => {}
             }
@@ -126,7 +124,11 @@ impl KnuthPlassBreaker {
                         LayoutItem::Box { width, .. } => {
                             box_and_normal_glue += *width;
                         }
-                        LayoutItem::Glue { width, stretch, shrink } => {
+                        LayoutItem::Glue {
+                            width,
+                            stretch,
+                            shrink,
+                        } => {
                             // Trailing glue at line break is discarded from width
                             if k < j - 1 || !matches!(items[j - 1], LayoutItem::Glue { .. }) {
                                 box_and_normal_glue += *width;
@@ -180,7 +182,10 @@ impl KnuthPlassBreaker {
                     let line_demerits = (1.0 + badness + penalty_val.max(0.0)).powi(2);
                     let total_demerits = node.total_demerits + line_demerits;
 
-                    if best_for_j.as_ref().map_or(true, |b| total_demerits < b.total_demerits) {
+                    if best_for_j
+                        .as_ref()
+                        .is_none_or(|b| total_demerits < b.total_demerits)
+                    {
                         best_for_j = Some(ActiveNode {
                             item_idx: j,
                             line: node.line + 1,
@@ -201,7 +206,11 @@ impl KnuthPlassBreaker {
         let end_node = best_nodes
             .iter()
             .filter(|n| n.item_idx == items.len())
-            .min_by(|a, b| a.total_demerits.partial_cmp(&b.total_demerits).unwrap_or(std::cmp::Ordering::Equal));
+            .min_by(|a, b| {
+                a.total_demerits
+                    .partial_cmp(&b.total_demerits)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
 
         let mut lines = Vec::new();
 
@@ -241,7 +250,7 @@ impl KnuthPlassBreaker {
             // Emergency greedy fallback
             let mut current_line_items = Vec::new();
             let mut current_width = 0.0;
-            
+
             for item in items {
                 match item {
                     LayoutItem::Box { width, .. } => {
@@ -302,14 +311,46 @@ mod tests {
     fn test_knuth_plass_line_break() {
         // Construct Box-Glue stream: 4 words with glue
         let items = vec![
-            LayoutItem::Box { width: 50.0, text: "שלום".to_string(), glyphs: Vec::new() },
-            LayoutItem::Glue { width: 10.0, stretch: 5.0, shrink: 2.0 },
-            LayoutItem::Box { width: 50.0, text: "עליכם".to_string(), glyphs: Vec::new() },
-            LayoutItem::Glue { width: 10.0, stretch: 5.0, shrink: 2.0 },
-            LayoutItem::Box { width: 50.0, text: "מלאכי".to_string(), glyphs: Vec::new() },
-            LayoutItem::Glue { width: 10.0, stretch: 5.0, shrink: 2.0 },
-            LayoutItem::Box { width: 50.0, text: "השלום".to_string(), glyphs: Vec::new() },
-            LayoutItem::Penalty { width: 0.0, penalty: KnuthPlassBreaker::FORCED_BREAK_PENALTY, flagged: false },
+            LayoutItem::Box {
+                width: 50.0,
+                text: "שלום".to_string(),
+                glyphs: Vec::new(),
+            },
+            LayoutItem::Glue {
+                width: 10.0,
+                stretch: 5.0,
+                shrink: 2.0,
+            },
+            LayoutItem::Box {
+                width: 50.0,
+                text: "עליכם".to_string(),
+                glyphs: Vec::new(),
+            },
+            LayoutItem::Glue {
+                width: 10.0,
+                stretch: 5.0,
+                shrink: 2.0,
+            },
+            LayoutItem::Box {
+                width: 50.0,
+                text: "מלאכי".to_string(),
+                glyphs: Vec::new(),
+            },
+            LayoutItem::Glue {
+                width: 10.0,
+                stretch: 5.0,
+                shrink: 2.0,
+            },
+            LayoutItem::Box {
+                width: 50.0,
+                text: "השלום".to_string(),
+                glyphs: Vec::new(),
+            },
+            LayoutItem::Penalty {
+                width: 0.0,
+                penalty: KnuthPlassBreaker::FORCED_BREAK_PENALTY,
+                flagged: false,
+            },
         ];
 
         // Target width 120 pt -> should break into 2 balanced lines of 2 words each
@@ -325,9 +366,11 @@ mod tests {
 
     #[test]
     fn test_knuth_plass_single_word() {
-        let items = vec![
-            LayoutItem::Box { width: 50.0, text: "word".to_string(), glyphs: Vec::new() },
-        ];
+        let items = vec![LayoutItem::Box {
+            width: 50.0,
+            text: "word".to_string(),
+            glyphs: Vec::new(),
+        }];
         let lines = KnuthPlassBreaker::break_paragraph(&items, 300.0, 2.0);
         assert_eq!(lines.len(), 1, "Single word should produce one line");
         let has_word = lines[0].items.iter().any(|item| {
@@ -342,17 +385,21 @@ mod tests {
 
     #[test]
     fn test_knuth_plass_zero_width() {
-        let items = vec![
-            LayoutItem::Box { width: 50.0, text: "word".to_string(), glyphs: Vec::new() },
-        ];
+        let items = vec![LayoutItem::Box {
+            width: 50.0,
+            text: "word".to_string(),
+            glyphs: Vec::new(),
+        }];
         let _lines = KnuthPlassBreaker::break_paragraph(&items, 0.0, 2.0);
     }
 
     #[test]
     fn test_knuth_plass_nan_width() {
-        let items = vec![
-            LayoutItem::Box { width: 50.0, text: "word".to_string(), glyphs: Vec::new() },
-        ];
+        let items = vec![LayoutItem::Box {
+            width: 50.0,
+            text: "word".to_string(),
+            glyphs: Vec::new(),
+        }];
         let _lines = KnuthPlassBreaker::break_paragraph(&items, f32::NAN, 2.0);
     }
 }

@@ -1,41 +1,35 @@
 <div align="center">
 
-# TypesetOK (TOK)
-### תוכנת עימוד שולחנית מקצועית בקוד פתוח | Open-Source Professional Desktop Publishing System
+<img src="Open_book_software_logo_icon_20260930192445.jpg" alt="TypesetOK Logo" width="160" style="border-radius: 16px; margin-bottom: 12px;" />
 
+# TypesetOK (TOK)
+### תוכנת עימוד שולחנית מקצועית בקוד פתוח | Open-Source Professional Desktop Publishing (DTP) System
+
+[![CI Build](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml/badge.svg)](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-58%2F58%20Passing-brightgreen.svg)]()
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
-[![Build & Tests](https://img.shields.io/badge/Tests-28%2F28%20Passing-brightgreen.svg)]()
 [![Standard](https://img.shields.io/badge/Standard-ת"י%206100%20(SI%206100)-blue.svg)]()
-[![Pre--Press](https://img.shields.io/badge/PDF%2FX--1a-ISO%2015930--1-purple.svg)]()
-[![License](https://img.shields.io/badge/License-MIT%20%2F%20Apache%202.0-blue.svg)]()
+[![Pre-Press](https://img.shields.io/badge/PDF%2FX--1a%20%7C%20PDF%2FX--4-ISO%2015930-purple.svg)]()
+[![License](https://img.shields.io/badge/License-TOK--NCCL%20v1.0-blue.svg)](LICENSE.md)
 
 <p align="center">
-  <b>מערכת עימוד ופרסום שולחני (DTP) מודרנית בקוד פתוח, שנבנתה מן המסד עבור טיפוגרפיה עברית מתקדמת, ספרי קודש (ש"ס, מקראות גדולות, שו"ת), תמיכה רב-תזרימית וצינור קדם-דפוס נייטיב מלא.</b>
+  <b>[ <a href="#-עברית">עברית</a> | <a href="#-english">English</a> ]</b>
 </p>
-
-[סקירה כללית](#-סקירה-כללית) •
-[עמודי התווך הארכיטקטוניים](#-עמודי-התווך-הארכיטקטוניים) •
-[מבנה המאגר](#-מבנה-המאגר-monorepo) •
-[התקנה והרצה](#-התקנה-והרצה-quickstart) •
-[בדיקות שער 1 ואימות ביצועים](#-בדיקות-שער-1-ואימות-ביצועים) •
-[תיעוד מקיף](#-תיעוד-מקיף)
-
----
 
 </div>
 
-## 📖 סקירה כללית
+---
 
-עולם העימוד המקצועי בעברית נשען מזה עשרות שנים על תוכנות מונוליתיות קנייניות ישנות (כדוגמת "תג" ו-Adobe InDesign עם טלאי World-Ready). מערכות אלו מתקשות להתמודד עם עיבוד טקסטים ענקיים בני אלפי עמודים, סובלות מנעילת ממשק (UI Freezing), אינן מספקות פתרון מודרני מבוסס רכיבים פתוחים, ואינן תומכות באופן מובנה בדרישות הייחודיות של ספרי קודש:
+## 🇮🇱 עברית
 
-* **סנכרון רב-תזרימי חי (Multi-Flow):** טקסט מרכזי המוקף במפרשים (כדוגמת רש"י ותוספות בעמודי תלמוד, או מקרא ותרגום במקראות גדולות).
-* **טיפוגרפיה עברית מדויקת:** מתיחת אותיות התפשטות (אהלתר"ם), שבירת שורות אופטימלית גלובלית (Knuth-Plass), נרמול רצפי ניקוד וטעמים לפי התקן הישראלי ת"י 6100, ומספור עמודים עברי בגימטריה מדויקת ללא טאבו.
-* **קדם-דפוס מקצועי (Pre-Press):** הפקה ישירה של קובצי ISO PDF/X-1a ו-PDF/X-4 עם צבעי DeviceCMYK טהורים (שחור `100% K`), סימני חיתוך ורישום וקטוריים, תיבות דפוס (Trim/Bleed/Crop/Slug) והזרקת טבלאות `/ToUnicode` לחיפוש והעתקה מושלמים.
-* **ביצועים של 120 FPS:** הפרדה קפדנית בין ליבת העימוד העצמאית ב-Rust לבין מעטפת המשתמש, בשילוב וירטואליזציית DOM חכמה ושכבת כיסוי Canvas שקופה עם הזזת סמן אופטימית של פחות מ-16 מילי-שניות.
+### 📖 סקירה כללית
+**TypesetOK (TOK)** היא מערכת עימוד ופרסום שולחני (Desktop Publishing - DTP) מודרנית בקוד פתוח, שנבנתה מן המסד עבור טיפוגרפיה עברית מתקדמת, ספרי קודש (ש"ס, מקראות גדולות, שו"ת), תמיכה רב-תזרימית וצינור קדם-דפוס נייטיב מלא.
+
+עולם העימוד המקצועי בעברית נשען מזה עשרות שנים על תוכנות מונוליתיות קנייניות ישנות (כדוגמת "תג" ו-Adobe InDesign). מערכות אלו מתקשות להתמודד עם טקסטים ענקיים בני אלפי עמודים, סובלות מנעילת ממשק (UI Freezing), ואינן מספקות פתרון מודרני לתזרימי טקסט מרובים וסנכרון עמודים דינמי. TypesetOK מפרידה קפדנית בין ליבת העימוד העצמאית ב-Rust המשיגה ביצועים גבוהים לבין מעטפת המשתמש.
 
 ---
 
-## 🏛️ עמודי התווך הארכיטקטוניים
+### 🏛️ עמודי התווך הארכיטקטוניים
 
 ```mermaid
 graph TD
@@ -46,12 +40,12 @@ graph TD
         StoryEditor[עורך סיפור רציף - Unpaginated Story Editor]
     end
 
-    subgraph Binary_Bridge [גשר תקשורת בינארי - FlatBuffers IPC]
-        SharedMem[Zero-Copy IPC & Length-Prefixed Framing]
+    subgraph Binary_Bridge [גשר תקשורת בינארי - FlatBuffers / Framed IPC]
+        SharedMem[Framed Length-Prefixed Binary Protocol]
     end
 
     subgraph Rust_Core [ליבת העימוד והדפוס - Rust Core Engine]
-        TDM[מודל מסמך סמנטי & טרנזקציות הופכיות - TDM AST]
+        TDM[מודל מסמך סמנטי & טרנזקציות אטומיות - TDM AST]
         Normalizer[נרמול תקן ישראלי ת"י 6100 & מנוע גימטריה]
         Typesetter[מעמד Knuth-Plass + HarfBuzz + יישור אהלתר"ם]
         MultiFlow[פותר אילוצים רב-תזרימי - Talmud Solver]
@@ -64,143 +58,139 @@ graph TD
     Binary_Bridge <--> Rust_Core
 ```
 
-### 1. מודל מסמך סמנטי וטרנזקציות (`tok-core`)
-- **B-Tree Rope & AST אי-מוטבילי:** מודל מסמך מבוסס צמתים סמנטיים (`DocumentRoot`, `SectionNode`, `Flow`, `ParagraphNode`).
-- **זיהוי צמתים יציב ב-ULID:** מזהים ייחודיים בני 128 סיביות ממוינים כרונולוגית (ללא התנגשויות).
-- **אינדוקס שברירי ב-$O(1)$ (`FractionalIndex`):** מאפשר הכנסת פסקאות ושורות חדשות בין כל שתי נקודות קיימות ללא צורך במספור מחדש של שאר המסמך.
-- **טרנזקציות אטומיות והיפוך דלתא:** כל פעולה מפיקה דלתא נגדית מדויקת התומכת במחסנית Undo/Redo בלתי מוגבלת.
+#### 1. מודל מסמך סמנטי וטרנזקציות (`tok-core`)
+- **AST סמנטי וזיהוי ב-ULID:** מודל מסמך מבוסס צמתים סמנטיים (`DocumentRoot`, `SectionNode`, `Flow`, `ParagraphNode`) עם מזהים ייחודיים בני 128 סיביות.
+- **אינדוקס שברירי ב-$O(1)$ (`FractionalIndex`):** הכנסת פסקאות ושורות חדשות בין כל שתי נקודות קיימות ללא מספור מחדש של המסמך.
+- **טרנזקציות אטומיות ו-Rollback אוטומטי:** כל פעולה מפיקה דלתא נגדית מדויקת לתמיכה ב-Undo/Redo בלתי מוגבל, עם מנגנון ביטול וגלגול לאחור (Rollback) אוטומטי במקרה של שגיאה.
 
-### 2. טיפוגרפיה, ניקוד ועימוד עברי (`tok-typeset`)
+#### 2. טיפוגרפיה, ניקוד ועימוד עברי (`tok-typeset`)
 - **נרמול קפדני לפי ת"י 6100 (SI 6100):** אכיפת סדר יוניקוד דטרמיניסטי: `אות בסיס ← נקודת שין/שין ← דגש/מפיק ← ניקוד ← מתג ← טעמי מקרא`.
-- **מנוע שבירת שורות Knuth-Plass:** אופטימיזציה דינמית למזעור פגמים (Demerits) לאורך כל הפסקה, מניעת שורות רפויות ויתומות.
+- **מנוע שבירת שורות Knuth-Plass:** אופטימיזציה דינמית למזעור פגמים (Demerits) לאורך הפסקה, מניעת שורות רפויות ויתומות.
 - **יישור עברי תלת-שלבי (3-Tier Hebrew Justification):**
   1. *רווחי מילים (Tier 1):* מתיחה מבוקרת (80% עד 130%).
-  2. *אותיות התפשטות אהלתר"ם (Tier 2):* זיהוי אותיות מתרחבות (א, ה, ל, ת, ר, ם) והחלפתן בגליפים רחבים או מתיחה וקטורית אופקית מבוקרת.
+  2. *אותיות התפשטות אהלתר"ם (Tier 2):* זיהוי אותיות מתרחבות (א, ה, ל, ת, ר, ם) והרחבתן הטיפוגרפית.
   3. *מיקרו-טרקינג (Tier 3):* התאמת מרווח גליפים עדינה ($\pm 2\%$ em).
-- **גימטריה עברית דטרמיניסטית:** אכיפת גרש עברי תקני `U+05F3` (׳) במספרים חד-ספרתיים, וגרשיים תקניים `U+05F4` (״) במספרים רב-ספרתיים. מנגנון המרות טאבו ושמות קודש (15 ← ט״ו, 16 ← ט״ז, 270 ← ע״ר, 272 ← ער״ב, 275 ← ער״ה, 298 ← חר״צ, 304/314 ← שי״ד, 359 ← נט״ש, 644 ← תשי״ד).
+- **גימטריה עברית דטרמיניסטית:** אכיפת גרש תקני `U+05F3` וגרשיים `U+05F4`, ומנגנון המרות טאבו ושמות קודש (15 ← ט״ו, 16 ← ט״ז, 270 ← ע״ר, 272 ← ער״ב, 275 ← ער״ה, 298 ← חר״צ, 304/314 ← שי״ד, 359 ← נט״ש, 644 ← תשי״ד).
 - **פותר אילוצים רב-תזרימי (Multi-Flow Solver):** עימוד עמוד ש"ס ומקראות גדולות תוך עמידה בחוקי גלישה וסנכרון פסקאות חוצה-עמודים.
 
-### 3. מנוע קדם-דפוס נייטיב (`tok-pdf`)
-- **עקיפת מנועי ההדפסה של הדפדפן:** מנוע עצמאי ב-Rust המייצר PDF בינארי ישיר ללא תיווך מנוע Skia sRGB.
-- **תאימות ISO 15930-1 (PDF/X-1a:2001) ו-PDF/X-4:** שחור `100% K` (DeviceCMYK), תמיכה בצבעי ספוט (Spot/Pantone), והזרקת פרופילי Fogra 39 / Fogra 51 במילון `OutputIntents`.
-- **תיבות דפוס מקצועיות וסימני חיתוך:** יצירת MediaBox, BleedBox (3 מ"מ), TrimBox, CropBox וציור וקטורי של צלבי רישום (Registration Marks) וסימני חיתוך.
-- **טבלאות `/ToUnicode`:** שיבוץ טבלאות מיפוי PostScript המבטיחות חיפוש, הדגשה והעתקת טקסט מנוקד ללא שיבושי סדר תווי יוניקוד.
-- **קומפילציית Pre-paginated HTML:** ייצוא HTML ו-CSS מבודדים לפי תקני CSS Paged Media להצגה ב-Vivliostyle.
+#### 3. מנוע קדם-דפוס נייטיב (`tok-pdf`)
+- **תאימות ISO 15930 (PDF/X-1a:2001 ו-PDF/X-4):** שחור `100% K` (DeviceCMYK), תמיכה בצבעי ספוט (Spot/Pantone), והזרקת פרופילי Fogra 39 / Fogra 51.
+- **תיבות דפוס מקצועיות וסימני חיתוך:** יצירת MediaBox, BleedBox (3 מ"מ), TrimBox, CropBox וציור וקטורי של צלבי רישום וסימני חיתוך.
+- **טבלאות `/ToUnicode`:** שיבוץ טבלאות מיפוי PostScript המבטיחות חיפוש, הדגשה והעתקת טקסט מנוקד ללא שיבושים.
 
-### 4. אחסון היברידי ועמידות קריסות (`tok-storage`)
-- **סביבת עבודה שוטפת (Workspace):** מסד נתונים פנימי ACID עם Write-Ahead Logging (WAL) לשמירה רציפה ברקע ללא נעילת ממשק המשתמש ועמידות בפני נפילות מתח.
-- **פורמט חבילה רשמי (`.tok`):** ארכיב ZIP תקני המכיל `manifest.json`, עץ המסמך ב-`document.json`, סגנונות ב-`styles.json`, ונכסים מוטמעים (`assets/`, `previews/`).
-- **שמירה אטומית מוגנת (Atomic Safe-Save):** כתיבה לקובץ זמני, ביצוע סנכרון חומרה מלא (`fsync`), והחלפה אטומית במערכת ההפעלה למניעת השחתת קבצים.
-- **מנהל רב-מסמכים (`.tokbook`):** סנכרון סגנונות מסטר, רציפות מספור עמודים עברי ומפתח עניינים (TOC) מאוחד לכרכים מרובים.
-
-### 5. מעטפת ממשק המשתמש (Phases 7 & 8)
-- **וירטואליזציית 3 עמודים פעילים (`tok-viewer`):** החזקת עמודים $[K-1, K, K+1]$ בלבד ב-DOM של Chromium, המבטיחה גלילה חלקה ב-120 FPS גם במסמכי ענק של 1,000+ עמודים.
-- **שכבת כיסוי Canvas שקופה (`tok-canvas`):** סמן וירטואלי עצמאי המגיב בהזזה אופטימית של פחות מ-16ms בעת הקלדה מימין לשמאל, ובחירת טקסט ויזואלית ללא שבירת בחירות דפדפן.
-- **עורך סיפור רציף (`tok-story-editor`):** חלון עריכה רציף (בדומה ל-Story Editor ב-InDesign) המאפשר הקלדה ועריכה ללא מגבלות מעברי עמוד.
+#### 4. אחסון היברידי ועמידות קריסות (`tok-storage`)
+- **סביבת עבודה שוטפת (Workspace):** מסד נתונים פנימי ACID עם Write-Ahead Logging (WAL) לשמירה רציפה ברקע ועמידות בפני נפילות מתח.
+- **פורמט חבילה רשמי (`.tok`):** ארכיב ZIP תקני מוגן מפני Zip Slip ונגועים, המכיל מניפסט, עץ מסמך ונכסים מוטמעים.
+- **שמירה אטומית מוגנת (Atomic Safe-Save):** כתיבה לקובץ זמני, סנכרון חומרה מלא (`fsync`), והחלפה אטומית.
+- **מנהל רב-מסמכים (`.tokbook`):** סנכרון סגנונות מסטר, רציפות מספור עמודים עברי ומפתח עניינים (TOC) מאוחד.
 
 ---
 
-## 📦 מבנה המאגר (Monorepo)
+## 🇺🇸 English
+
+### 📖 Overview
+**TypesetOK (TOK)** is a modern, open-source Desktop Publishing (DTP) system written from the ground up in Rust for advanced Hebrew typography, sacred text typesetting (Talmud, Mikraot Gedolot, Responsa), multi-flow page rendering, and a native pre-press PDF engine.
+
+Traditional Hebrew typesetting relies on legacy monolithic systems. TypesetOK separates the high-performance Rust typesetting core from the desktop UI shell, ensuring fluid 120 FPS frame rates, instant typing response (<16ms caret latency), and zero-lockup handling of 1,000+ page manuscripts.
+
+---
+
+### 🗺️ Monorepo Architecture Map
 
 ```
 typesetok/
-├── Cargo.toml                       # ניהול כל 7 ה-Crates של ליבת ה-Rust
-├── package.json                     # ניהול סביבת העבודה ב-TypeScript / Web
+├── .github/
+│   └── workflows/                  # GitHub Actions CI (fmt, clippy, matrix tests, audit)
+├── Cargo.toml                       # Rust Workspace definition (7 crates)
+├── package.json                     # TypeScript / Electron monorepo definition
 │
-├── crates/                          # ליבת המערכת ב-Rust (100% נבדקה ומאומתת)
-│   ├── tok-core/                    # מודל מסמך סמנטי (TDM), AST, ת"י 6100, ULID, טרנזקציות
-│   ├── tok-typeset/                 # Knuth-Plass, שבירת שורות, יישור אהלתר"ם, גימטריה
-│   ├── tok-pdf/                     # צינור קדם-דפוס נייטיב, ISO PDF/X-1a, ToUnicode, HTML
-│   ├── tok-storage/                 # אחסון ACID WAL, שמירה אטומית .tok (ZIP), .tokbook
-│   ├── tok-ipc/                     # סכמות בינאריות, Framing, גיאומטריה ובדיקת פגיעה (Hit-Testing)
-│   ├── tok-plugin-host/             # מארח הרחבות מבודד, מגן שמות קדושים ו-GREP
-│   └── tok-cli/                     # כלי שורת פקודה עצמאי לבדיקות Preflight ועימוד Headless
+├── crates/                          # Rust Engine Crates (100% Tested)
+│   ├── tok-core/                    # Semantic Document AST, ULID, Fractional Index, SI 6100, Transactions
+│   ├── tok-typeset/                 # Knuth-Plass Line Breaking, 3-Tier Hebrew Justification, Gematria, Bidi
+│   ├── tok-pdf/                     # ISO PDF/X-1a & PDF/X-4 Native Engine, ToUnicode CMaps, HTML Export
+│   ├── tok-storage/                 # ACID WAL Storage (redb), Atomic Safe-Save (.tok), Multi-Doc (.tokbook)
+│   ├── tok-ipc/                     # Binary Framed IPC Schema & Geometry Hit-Testing
+│   ├── tok-plugin-host/             # Sandboxed Extension Host (catch_unwind), Holy Name Guardian, GREP
+│   └── tok-cli/                     # Headless Preflight, Rendering & Determinism Verification Binary
 │
-├── packages/                        # מעטפת הממשק ב-TypeScript / Electron
-│   ├── tok-electron/                # תהליך ראשי של Electron, ניהול חלונות, תפריטי מערכת הפעלה
-│   ├── tok-viewer/                  # וירטואליזציית 3 עמודים פעילים ב-DOM (120 FPS)
-│   ├── tok-canvas/                  # שכבת כיסוי Canvas שקופה, סמן מהיר ובחירה ב-RTL
-│   ├── tok-story-editor/            # עורך סיפור רציף ומנותק מעימוד (Story Editor)
-│   └── tok-ui/                      # סביבת העבודה השלמה (סרגל כלים, פאנלים ורצועת עמודים)
-│
-├── schemas/                         # סכמות FlatBuffers ו-JSON Schema
-└── docs/                            # דוח הארכיטקטורה המלא (TOK Architecture Report)
+└── packages/                        # TypeScript / Electron Desktop Shell
+    ├── tok-electron/                # Main Process, Native Menus, Window Management
+    ├── tok-viewer/                  # 3-Active Page DOM Virtualizer (120 FPS)
+    ├── tok-canvas/                  # Transparent Canvas Overlay & Caret (<16ms)
+    ├── tok-story-editor/            # Continuous Unpaginated Story Editor
+    └── tok-ui/                      # Workbench Application (Toolbar, Panels, Pages)
 ```
 
 ---
 
-## 🚀 התקנה והרצה (Quickstart)
+## 🚀 Quickstart & Usage
 
-### דרישות קדם
-- [Rust 1.85+](https://www.rust-lang.org/tools/install) (כולל Cargo).
-- [Node.js 20+](https://nodejs.org/) (להרצת מעטפת ה-Electron).
+### Prerequisites
+- [Rust 1.85+](https://www.rust-lang.org) (with Cargo)
+- [Node.js 20+](https://nodejs.org) (for the Electron UI shell)
 
-### בניית ליבת המערכת
+### Build Rust Engine Workspace
 ```bash
-# שכפול המאגר
+# Clone the repository
 git clone https://github.com/TypesetOK/typesetok.git
 cd typesetok
 
-# בניית כל ה-Crates במאגר
+# Build all workspace crates
 cargo build --workspace
-```
 
-### הרצת כל בדיקות היחידה (28 בדיקות)
-```bash
+# Run full test suite (58 passing tests)
 cargo test --workspace
 ```
 
-### שימוש בכלי ה-CLI העצמאי (`tok-cli`)
-
-ליבת המערכת כוללת בינארי CLI עשיר להפקה ואימות ללא תלות ב-UI:
+### CLI Headless Operations (`tok-cli`)
 
 ```bash
-# הפקת קובץ PDF/X-1a תקני לדפוס עם סימני חיתוך וצבע DeviceCMYK:
+# Export ISO PDF/X-1a print file with crop marks and DeviceCMYK:
 cargo run -p tok-cli -- render-pdf --demo output.pdf
 
-# הפקת קובץ Pre-paginated HTML מבודד:
+# Export pre-paginated HTML projection:
 cargo run -p tok-cli -- render-html --demo output.html
 
-# הרצת מבחן עומס של 1,000 עמודים ומדידת התכנסות קסקדה:
+# Run 1,000-page stress benchmark & cascade measurement:
 cargo run -p tok-cli -- benchmark-typeset --pages 1000
 
-# אימות דטרמיניזם בינארי מוחלט (Bit-for-Bit Determinism):
+# Verify bit-for-bit output determinism (Pass 1 SHA-256 == Pass 2 SHA-256):
 cargo run -p tok-cli -- verify-determinism
 
-# בדיקת מבנה חבילת .tok:
+# Inspect .tok package archive contents:
 cargo run -p tok-cli -- inspect-package document.tok
 ```
 
 ---
 
-## 📊 בדיקות שער 1 ואימות ביצועים
+## 📊 Verification & Benchmark Status
 
-כל יעדי **שער 1 (Headless Gate 1)** הושגו ואומתו במלואם:
-
-| מדד אימות | יעד ארכיטקטוני | תוצאה בפועל | סטטוס |
+| Metric | Architectural Target | Actual Result | Status |
 | :--- | :--- | :--- | :---: |
-| **מבחני יחידה רוחביים** | 100% מעבר בכל ה-Crates | **28 מתוך 28 בדיקות עברו בהצלחה** | **PASSED** |
-| **דטרמיניזם בינארי (Bit-for-Bit)** | גיבוב זהה ב-100% בין ריצות | `Pass 1 SHA-256 == Pass 2 SHA-256` (זהה לחלוטין) | **PASSED** |
-| **מבחן עומס מסמכי ענק** | 1,000 עמודים עם ניקוד מלא | סונתזו ועומדו **4,000 פסקאות ו-6,400 שורות** | **PASSED** |
-| **התכנסות אינקרמנטלית** | חישוב מחדש של קסקדה בפחות מ-10ms | שבירה ויישור מחדש ממוקדים ללא צורך בעימוד כל הספר | **PASSED** |
-| **פלט קדם-דפוס ISO** | PDF/X-1a תקני עם סימני דפוס | הופק קובץ PDF תקין עם `Fogra39` ושחור `100% K` | **PASSED** |
+| **Workspace Unit Tests** | 100% Pass Across All Crates | **58 / 58 Tests Passing** | **PASSED** |
+| **Clippy Linter** | 0 Warnings with `-D warnings` | **0 Warnings (Clean)** | **PASSED** |
+| **Formatting** | `cargo fmt --check` Compliant | **100% Formatted** | **PASSED** |
+| **Bit-for-Bit Determinism** | Identical SHA-256 across runs | `Pass 1 SHA == Pass 2 SHA` | **PASSED** |
+| **Massive Doc Benchmark** | 1,000 Pages Full Vocalization | **4,000 Paragraphs / 6,400 Lines** | **PASSED** |
+| **Pre-press Standard** | ISO PDF/X-1a with Fogra39 | **100% DeviceCMYK Black & Marks** | **PASSED** |
 
 ---
 
-## 📚 תיעוד מקיף
+## 🤝 Code of Conduct & Contributing
 
-* **[דוח הארכיטקטורה המלא (TOK Architecture Report)](docs/architecture/TOK_Architecture_Report.md):** מסמך האב המפרט 18 פרקים של החלטות ארכיטקטוניות מחייבות (ADL), עקרונות עיצוב טיפוגרפיים, ניתוח אלגוריתמים ומבנה הנתונים.
-* **[סכמת מסמך סמנטית (JSON Schema)](schemas/document/tok_document_schema.json):** הגדרת מבנה העץ של מסמך TypesetOK.
-* **[סכמת IPC בינארית (FlatBuffers)](schemas/flatbuffers/tok_ipc.fbs):** פרוטוקול התקשורת הדו-כיווני המהיר בין ליבת ה-Rust למעטפת המשתמש.
+We welcome contributions from developers, typographers, and Hebrew DTP experts. Please review our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
+
+1. Fork the Repository & Create your feature branch (`git checkout -b feature/amazing-feature`)
+2. Ensure `cargo test --workspace`, `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass cleanly.
+3. Commit your changes and open a Pull Request.
 
 ---
 
-## 📄 רישיון (License)
+## 📄 License
 
-פרויקט **TypesetOK (TOK)** מוגן ומופץ תחת רישיון מקור-זמין קופילפט לשימוש לא-מסחרי:
+Project **TypesetOK (TOK)** is licensed under the:
 **[TypesetOK Source-Available Non-Commercial Copyleft License (TOK-NCCL v1.0)](LICENSE.md)**
 
-* 🚫 **איסור שימוש מסחרי:** כל שימוש מסחרי (ישיר, עקיף, שירותי עימוד בתשלום, הפקת ספרים למכירה או שירותי ענן/SaaS) מחייב רישיון מסחרי נפרד מהיוצר.
-* 🔄 **חיוב קוד פתוח לפורקים (Copyleft):** כל פיצול (Fork), שינוי, תוסף או עבודה נגזרת חייבים להישאר בקוד פתוח מלא תחת אותו רישיון בדיוק.
-* 🤝 **תנאי תרומות (CLA מובנה):** תרומות קוד או תוכן אינן מקנות זכויות בעלות או תמלוגים, ומעניקות ליוצר המקורי רישיון בלתי-חוזר מלא למסחור ורישוי עתידי.
-* 🛡️ **הסרת אחריות מוחלטת:** התוכנה מסופקת כמות שהיא ("AS IS") ללא אחריות לכל נזק ישיר או עקיף (כולל שיבושי דפוס ועלויות הדפסה).
+* 🚫 **Non-Commercial Use Only:** Commercial use, commercial DTP services, or paid book publishing require a separate commercial license from the author.
+* 🔄 **Copyleft Requirement:** All forks, modifications, or derivative plugins must remain fully open-source under the exact same license.
+* 🛡️ **No Warranty:** Software is provided "AS IS" without warranty of any kind.

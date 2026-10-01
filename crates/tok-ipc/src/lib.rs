@@ -47,7 +47,10 @@ mod tests {
         let decoded = MessageFramer::decode_event(&encoded).expect("Decoding must succeed");
 
         match decoded {
-            IpcEvent::TransactionApplied { revision, affected_pages } => {
+            IpcEvent::TransactionApplied {
+                revision,
+                affected_pages,
+            } => {
                 assert_eq!(revision, 42);
                 assert_eq!(affected_pages, vec![1, 2, 3]);
             }

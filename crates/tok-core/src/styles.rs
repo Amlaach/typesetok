@@ -2,55 +2,58 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Color {
-    Rgb { r: f32, g: f32, b: f32 },
-    DeviceCmyk { c: f32, m: f32, y: f32, k: f32 },
-    Spot { name: String, tint: f32, fallback_cmyk: (f32, f32, f32, f32) },
+    Rgb {
+        r: f32,
+        g: f32,
+        b: f32,
+    },
+    DeviceCmyk {
+        c: f32,
+        m: f32,
+        y: f32,
+        k: f32,
+    },
+    Spot {
+        name: String,
+        tint: f32,
+        fallback_cmyk: (f32, f32, f32, f32),
+    },
 }
 
 impl Default for Color {
     fn default() -> Self {
         // Standard DTP 100% black in CMYK
-        Color::DeviceCmyk { c: 0.0, m: 0.0, y: 0.0, k: 1.0 }
+        Color::DeviceCmyk {
+            c: 0.0,
+            m: 0.0,
+            y: 0.0,
+            k: 1.0,
+        }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Progression {
+    #[default]
     Rtl,
     Ltr,
 }
 
-impl Default for Progression {
-    fn default() -> Self {
-        Progression::Rtl
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum TextAlignment {
     Right,
     Left,
     Center,
+    #[default]
     Justified,
 }
 
-impl Default for TextAlignment {
-    fn default() -> Self {
-        TextAlignment::Justified
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum AhaltermStretchMode {
     Off,
+    #[default]
     AutoVariable,
     StaticSwash,
-}
-
-impl Default for AhaltermStretchMode {
-    fn default() -> Self {
-        AhaltermStretchMode::AutoVariable
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

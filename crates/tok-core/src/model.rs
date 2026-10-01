@@ -179,7 +179,8 @@ impl DocumentRoot {
     }
 
     pub fn to_json(&self) -> Result<String, ModelError> {
-        serde_json::to_string_pretty(self).map_err(|e| ModelError::SerializationError(e.to_string()))
+        serde_json::to_string_pretty(self)
+            .map_err(|e| ModelError::SerializationError(e.to_string()))
     }
 
     pub fn from_json(json_str: &str) -> Result<Self, ModelError> {
@@ -224,18 +225,18 @@ mod tests {
         let p3 = ParagraphNode::new(FractionalIndex::new("p"), "normal", "third");
         let p1 = ParagraphNode::new(FractionalIndex::new("b"), "normal", "first");
         let p2 = ParagraphNode::new(FractionalIndex::new("m"), "normal", "second");
-        
+
         // Add in shuffled order
         flow.add_paragraph(p3);
         flow.add_paragraph(p1);
         flow.add_paragraph(p2);
-        
+
         // They should be sorted by index
         assert_eq!(flow.paragraphs[0].text, "first");
         assert_eq!(flow.paragraphs[1].text, "second");
         assert_eq!(flow.paragraphs[2].text, "third");
     }
-    
+
     #[test]
     fn test_document_to_json_and_back() {
         let mut root = DocumentRoot::new("Test Doc");
@@ -246,7 +247,7 @@ mod tests {
             "normal",
             "Hello World",
         ));
-        
+
         let json = root.to_json().expect("Serialization must succeed");
         let loaded = DocumentRoot::from_json(&json).expect("Deserialization must succeed");
         assert_eq!(loaded.metadata.title, "Test Doc");

@@ -152,7 +152,11 @@ mod tests {
         // Non-breaking space (U+00A0) must survive normalization
         let input = "\u{05E9}\u{05C1}\u{05B8}\u{00A0}\u{05DC}\u{05B9}\u{05DD}";
         let result = HebrewNormalizer::normalize(input);
-        assert!(result.contains('\u{00A0}'), "NBSP must be preserved, got: {:?}", result);
+        assert!(
+            result.contains('\u{00A0}'),
+            "NBSP must be preserved, got: {:?}",
+            result
+        );
     }
 
     #[test]

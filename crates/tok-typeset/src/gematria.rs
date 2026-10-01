@@ -16,8 +16,8 @@
 //!    - 359 -> נט״ש (avoid "שָׂטָן")
 //!    - 644 -> תשי״ד (avoid "תשדד")
 
-pub const HEBREW_GERESH: char = '\u{05F3}';     // ׳
-pub const HEBREW_GERSHAYIM: char = '\u{05F4}';  // ״
+pub const HEBREW_GERESH: char = '\u{05F3}'; // ׳
+pub const HEBREW_GERSHAYIM: char = '\u{05F4}'; // ״
 
 pub struct GematriaEngine;
 
@@ -135,43 +135,97 @@ mod tests {
 
     #[test]
     fn test_single_letter_geresh() {
-        assert_eq!(GematriaEngine::to_hebrew_numeral(1), format!("א{}", HEBREW_GERESH));
-        assert_eq!(GematriaEngine::to_hebrew_numeral(5), format!("ה{}", HEBREW_GERESH));
-        assert_eq!(GematriaEngine::to_hebrew_numeral(10), format!("י{}", HEBREW_GERESH));
-        assert_eq!(GematriaEngine::to_hebrew_numeral(100), format!("ק{}", HEBREW_GERESH));
-        assert_eq!(GematriaEngine::to_hebrew_numeral(400), format!("ת{}", HEBREW_GERESH));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(1),
+            format!("א{}", HEBREW_GERESH)
+        );
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(5),
+            format!("ה{}", HEBREW_GERESH)
+        );
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(10),
+            format!("י{}", HEBREW_GERESH)
+        );
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(100),
+            format!("ק{}", HEBREW_GERESH)
+        );
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(400),
+            format!("ת{}", HEBREW_GERESH)
+        );
     }
 
     #[test]
     fn test_multi_letter_gershayim() {
-        assert_eq!(GematriaEngine::to_hebrew_numeral(11), format!("י{}א", HEBREW_GERSHAYIM));
-        assert_eq!(GematriaEngine::to_hebrew_numeral(24), format!("כ{}ד", HEBREW_GERSHAYIM));
-        assert_eq!(GematriaEngine::to_hebrew_numeral(586), format!("תקפ{}ו", HEBREW_GERSHAYIM));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(11),
+            format!("י{}א", HEBREW_GERSHAYIM)
+        );
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(24),
+            format!("כ{}ד", HEBREW_GERSHAYIM)
+        );
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(586),
+            format!("תקפ{}ו", HEBREW_GERSHAYIM)
+        );
     }
 
     #[test]
     fn test_taboo_substitutions() {
         // 15 -> ט״ו
-        assert_eq!(GematriaEngine::to_hebrew_numeral(15), format!("ט{}ו", HEBREW_GERSHAYIM));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(15),
+            format!("ט{}ו", HEBREW_GERSHAYIM)
+        );
         // 16 -> ט״ז
-        assert_eq!(GematriaEngine::to_hebrew_numeral(16), format!("ט{}ז", HEBREW_GERSHAYIM));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(16),
+            format!("ט{}ז", HEBREW_GERSHAYIM)
+        );
         // 115 -> קט״ו
-        assert_eq!(GematriaEngine::to_hebrew_numeral(115), format!("קט{}ו", HEBREW_GERSHAYIM));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(115),
+            format!("קט{}ו", HEBREW_GERSHAYIM)
+        );
         // 216 -> רט״ז
-        assert_eq!(GematriaEngine::to_hebrew_numeral(216), format!("רט{}ז", HEBREW_GERSHAYIM));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(216),
+            format!("רט{}ז", HEBREW_GERSHAYIM)
+        );
 
         // 270 -> ע״ר
-        assert_eq!(GematriaEngine::to_hebrew_numeral(270), format!("ע{}ר", HEBREW_GERSHAYIM));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(270),
+            format!("ע{}ר", HEBREW_GERSHAYIM)
+        );
         // 272 -> ער״ב
-        assert_eq!(GematriaEngine::to_hebrew_numeral(272), format!("ער{}ב", HEBREW_GERSHAYIM));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(272),
+            format!("ער{}ב", HEBREW_GERSHAYIM)
+        );
         // 275 -> ער״ה
-        assert_eq!(GematriaEngine::to_hebrew_numeral(275), format!("ער{}ה", HEBREW_GERSHAYIM));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(275),
+            format!("ער{}ה", HEBREW_GERSHAYIM)
+        );
         // 298 -> חר״צ
-        assert_eq!(GematriaEngine::to_hebrew_numeral(298), format!("חר{}צ", HEBREW_GERSHAYIM));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(298),
+            format!("חר{}צ", HEBREW_GERSHAYIM)
+        );
         // 359 -> נט״ש
-        assert_eq!(GematriaEngine::to_hebrew_numeral(359), format!("נט{}ש", HEBREW_GERSHAYIM));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(359),
+            format!("נט{}ש", HEBREW_GERSHAYIM)
+        );
         // 644 -> תשי״ד
-        assert_eq!(GematriaEngine::to_hebrew_numeral(644), format!("תשי{}ד", HEBREW_GERSHAYIM));
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(644),
+            format!("תשי{}ד", HEBREW_GERSHAYIM)
+        );
     }
 
     #[test]

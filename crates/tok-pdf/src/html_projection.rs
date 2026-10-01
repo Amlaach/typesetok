@@ -5,8 +5,8 @@
 //! - Named page definitions (@page :right, @page :left, @page chapter-first) for Vivliostyle.
 //! - RTL spread progression.
 
-use tok_typeset::geometry::PageLayoutBox;
 use std::fmt::Write;
+use tok_typeset::geometry::PageLayoutBox;
 
 pub struct HtmlProjectionCompiler;
 
@@ -79,7 +79,11 @@ div.tok-line {{
     }
 
     /// Compiles a list of PageLayoutBoxes into pre-fragmented HTML for Vivliostyle.
-    pub fn compile_to_html(pages: &[PageLayoutBox], page_width_mm: f32, page_height_mm: f32) -> String {
+    pub fn compile_to_html(
+        pages: &[PageLayoutBox],
+        page_width_mm: f32,
+        page_height_mm: f32,
+    ) -> String {
         let mut html = String::new();
         html.push_str("<!DOCTYPE html>\n<html dir=\"rtl\" lang=\"he\">\n<head>\n");
         html.push_str("<meta charset=\"utf-8\">\n");
@@ -103,20 +107,22 @@ div.tok-line {{
             };
 
             let escaped_gematria = html_escape(&p.page_number_gematria);
-            write!(html,
-                "<div class=\"{}\" data-page-index=\"{}\" data-gematria=\"{}\">\n",
+            writeln!(
+                html,
+                "<div class=\"{}\" data-page-index=\"{}\" data-gematria=\"{}\">",
                 page_class, p.page_index, escaped_gematria
-            ).unwrap();
+            )
+            .unwrap();
 
             for frame in &p.frames {
-                write!(html,
-                    "  <div class=\"tok-frame\" style=\"position: absolute; left: {:.2}pt; top: {:.2}pt; width: {:.2}pt;\">\n",
+                writeln!(html,
+                    "  <div class=\"tok-frame\" style=\"position: absolute; left: {:.2}pt; top: {:.2}pt; width: {:.2}pt;\">",
                     frame.rect.x, frame.rect.y, frame.rect.width
                 ).unwrap();
 
                 for line in &frame.lines {
-                    write!(html,
-                        "    <div class=\"tok-line\" style=\"height: {:.2}pt; line-height: {:.2}pt;\">{}</div>\n",
+                    writeln!(html,
+                        "    <div class=\"tok-line\" style=\"height: {:.2}pt; line-height: {:.2}pt;\">{}</div>",
                         line.height, line.height, html_escape(&line.text)
                     ).unwrap();
                 }
@@ -125,8 +131,8 @@ div.tok-line {{
             }
 
             // Folio (page number) footer
-            write!(html,
-                "  <div class=\"tok-folio\" style=\"position: absolute; bottom: 20pt; width: 100%; text-align: center;\">{}</div>\n",
+            writeln!(html,
+                "  <div class=\"tok-folio\" style=\"position: absolute; bottom: 20pt; width: 100%; text-align: center;\">{}</div>",
                 escaped_gematria
             ).unwrap();
 

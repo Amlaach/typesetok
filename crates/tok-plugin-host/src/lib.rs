@@ -102,8 +102,11 @@ impl PluginHost {
         plugin_id: &str,
         doc: &DocumentRoot,
     ) -> Result<CompoundTransaction, PluginError> {
-        let plugin = self.plugins.get(plugin_id).ok_or_else(|| PluginError::NotFound(plugin_id.to_string()))?;
-        
+        let plugin = self
+            .plugins
+            .get(plugin_id)
+            .ok_or_else(|| PluginError::NotFound(plugin_id.to_string()))?;
+
         // Enforce capability check
         let meta = plugin.metadata();
         if !meta.capabilities.contains(&PluginCapability::ReadDocument) {
@@ -133,7 +136,10 @@ impl PluginHost {
     }
 
     pub fn list_plugins(&self) -> Vec<PluginMetadata> {
-        self.plugins.values().map(|p| p.metadata().clone()).collect()
+        self.plugins
+            .values()
+            .map(|p| p.metadata().clone())
+            .collect()
     }
 }
 
@@ -153,8 +159,13 @@ impl TokPlugin for DivineNameShieldPlugin {
             name: "מגן שמות קדושים (Divine Name Shield)".to_string(),
             version: "1.0.0".to_string(),
             author: "TypesetOK Core Team".to_string(),
-            description: "מזהה שמות קדושים ומחיל עליהם הגנת אי-פיצול ואי-מיקוף (No-Break / No-Hyphenation)".to_string(),
-            capabilities: vec![PluginCapability::ReadDocument, PluginCapability::ApplyStyles],
+            description:
+                "מזהה שמות קדושים ומחיל עליהם הגנת אי-פיצול ואי-מיקוף (No-Break / No-Hyphenation)"
+                    .to_string(),
+            capabilities: vec![
+                PluginCapability::ReadDocument,
+                PluginCapability::ApplyStyles,
+            ],
         })
     }
 
@@ -174,7 +185,12 @@ impl TokPlugin for DivineNameShieldPlugin {
                             };
                             let _ = patch;
                             // We record this finding as a transaction note
-                            log::info!("Shielded holy name '{}' in paragraph {} at char {}", holy, para.id, char_offset);
+                            log::info!(
+                                "Shielded holy name '{}' in paragraph {} at char {}",
+                                holy,
+                                para.id,
+                                char_offset
+                            );
                         }
                     }
                 }
@@ -196,8 +212,12 @@ impl TokPlugin for HebrewGrepAcronymPlugin {
             name: "מעצב ראשי תיבות וציטוטים (GREP Acronym Styler)".to_string(),
             version: "1.0.0".to_string(),
             author: "TypesetOK Core Team".to_string(),
-            description: "מזהה ראשי תיבות בעלי גרשיים תקניים (U+05F4) ומחיל עליהם סגנון תו ייעודי".to_string(),
-            capabilities: vec![PluginCapability::ReadDocument, PluginCapability::ApplyStyles],
+            description: "מזהה ראשי תיבות בעלי גרשיים תקניים (U+05F4) ומחיל עליהם סגנון תו ייעודי"
+                .to_string(),
+            capabilities: vec![
+                PluginCapability::ReadDocument,
+                PluginCapability::ApplyStyles,
+            ],
         })
     }
 
@@ -227,7 +247,11 @@ mod tests {
     fn test_plugin_host_registration_and_execution() {
         let host = PluginHost::default();
         let plugins = host.list_plugins();
-        assert_eq!(plugins.len(), 2, "Default host must have 2 built-in plugins");
+        assert_eq!(
+            plugins.len(),
+            2,
+            "Default host must have 2 built-in plugins"
+        );
 
         let mut root = DocumentRoot::new("ספר קודש");
         let sec = &mut root.sections[0];
@@ -243,7 +267,10 @@ mod tests {
             .execute_plugin("tok.builtin.divine-shield", &root)
             .expect("Plugin execution must succeed");
 
-        assert_eq!(tx.description, "Plugin: מגן שמות קדושים (Divine Name Shield)");
+        assert_eq!(
+            tx.description,
+            "Plugin: מגן שמות קדושים (Divine Name Shield)"
+        );
     }
 
     #[test]

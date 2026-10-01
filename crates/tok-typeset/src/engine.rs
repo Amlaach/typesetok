@@ -126,12 +126,8 @@ impl TypesettingEngine {
                 }
             }
 
-            let justified = HebrewJustifier::justify_line(
-                line_glyphs,
-                column_width_pt,
-                font_size_pt,
-                is_last,
-            );
+            let justified =
+                HebrewJustifier::justify_line(line_glyphs, column_width_pt, font_size_pt, is_last);
 
             // Map PositionedGlyphs to GlyphBoxes
             let mut glyph_boxes = Vec::new();
@@ -165,8 +161,10 @@ impl TypesettingEngine {
 
     /// Typesets an entire DocumentRoot into multi-page layout boxes.
     pub fn typeset_document(&self, doc: &DocumentRoot) -> Vec<PageLayoutBox> {
-        let content_width = self.config.page_width_pt - self.config.margin_inner_pt - self.config.margin_outer_pt;
-        let content_height = self.config.page_height_pt - self.config.margin_top_pt - self.config.margin_bottom_pt;
+        let content_width =
+            self.config.page_width_pt - self.config.margin_inner_pt - self.config.margin_outer_pt;
+        let content_height =
+            self.config.page_height_pt - self.config.margin_top_pt - self.config.margin_bottom_pt;
 
         let mut pages = Vec::new();
         let mut current_page_lines = Vec::new();
@@ -177,10 +175,13 @@ impl TypesettingEngine {
         for (sec_idx, sec) in doc.sections.iter().enumerate() {
             if let Some(main_flow) = sec.main_flow() {
                 for (p_idx, p) in main_flow.paragraphs.iter().enumerate() {
-                    let p_lines = self.typeset_paragraph(p, content_width, font_size_pt, line_height_pt);
+                    let p_lines =
+                        self.typeset_paragraph(p, content_width, font_size_pt, line_height_pt);
 
                     for line in p_lines {
-                        if current_height + line.height > content_height && !current_page_lines.is_empty() {
+                        if current_height + line.height > content_height
+                            && !current_page_lines.is_empty()
+                        {
                             // Page is full: commit page
                             let page_num = pages.len() + 1;
                             let frame = TextFrameBox {
@@ -271,7 +272,11 @@ mod tests {
             let text = "בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ. \
                         וְהָאָרֶץ הָיְתָה תֹהוּ וָבֹהוּ וְחֹשֶׁךְ עַל פְּנֵי תְהוֹם וְרוּחַ אֱלֹהִים מְרַחֶפֶת עַל פְּנֵי הַמָּיִם. \
                         וַיֹּאמֶר אֱלֹהִים יְהִי אוֹר וַיְהִי אוֹר. וַיַּרְא אֱלֹהִים אֶת הָאוֹר כִּי טוֹב וַיַּבְדֵּל אֱלֹהִים בֵּין הָאוֹר וּבֵין הַחֹשֶׁךְ.";
-            let p = ParagraphNode::new(FractionalIndex::new(format!("p{}", i)), "default-body", text);
+            let p = ParagraphNode::new(
+                FractionalIndex::new(format!("p{}", i)),
+                "default-body",
+                text,
+            );
             flow.add_paragraph(p);
         }
 
@@ -279,7 +284,10 @@ mod tests {
         let pages = engine.typeset_document(&doc);
 
         assert!(!pages.is_empty());
-        assert_eq!(pages[0].page_number_gematria, format!("א{}", crate::gematria::HEBREW_GERESH));
+        assert_eq!(
+            pages[0].page_number_gematria,
+            format!("א{}", crate::gematria::HEBREW_GERESH)
+        );
         assert!(!pages[0].frames[0].lines.is_empty());
     }
 }

@@ -80,14 +80,21 @@ impl TokPackage {
 
     /// Saves the DocumentModel and package assets atomically to a `.tok` file.
     /// Implements Section 11.2: write to `.tmp`, flush to disk, atomic rename/replace.
-    pub fn save_atomic(&mut self, doc: &DocumentModel, path: impl AsRef<Path>) -> Result<(), StorageError> {
+    pub fn save_atomic(
+        &mut self,
+        doc: &DocumentModel,
+        path: impl AsRef<Path>,
+    ) -> Result<(), StorageError> {
         let dest_path = path.as_ref();
         let parent = dest_path.parent().unwrap_or_else(|| Path::new("."));
         fs::create_dir_all(parent)?;
 
         let tmp_path = parent.join(format!(
             "{}.tmp_{}",
-            dest_path.file_name().and_then(|n| n.to_str()).unwrap_or("doc"),
+            dest_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("doc"),
             tok_core::id::Ulid::new()
         ));
 
@@ -101,8 +108,8 @@ impl TokPackage {
         let write_result = (|| -> Result<(), StorageError> {
             let file = File::create(&tmp_path)?;
             let mut zip = ZipWriter::new(file);
-            let options = SimpleFileOptions::default()
-                .compression_method(zip::CompressionMethod::Deflated);
+            let options =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
             // Write manifest.json
             zip.start_file("manifest.json", options)?;
@@ -206,12 +213,18 @@ impl TokPackage {
         for i in 0..num_files {
             let mut file = archive.by_index(i)?;
             let name = file.name().to_string();
-            
+
             if name.contains("..") || name.starts_with('/') || name.starts_with('\\') {
-                return Err(StorageError::CorruptedPackage(format!("Invalid path in zip: {}", name)));
+                return Err(StorageError::CorruptedPackage(format!(
+                    "Invalid path in zip: {}",
+                    name
+                )));
             }
             if file.size() > MAX_ENTRY_SIZE {
-                return Err(StorageError::CorruptedPackage(format!("Entry {} exceeds max size limit", name)));
+                return Err(StorageError::CorruptedPackage(format!(
+                    "Entry {} exceeds max size limit",
+                    name
+                )));
             }
 
             if name.starts_with("assets/") && !name.ends_with('/') {

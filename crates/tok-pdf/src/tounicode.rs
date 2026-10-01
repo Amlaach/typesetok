@@ -29,12 +29,18 @@ impl ToUnicodeCMap {
                 for (gid, ch) in chunk {
                     let utf16_val = **ch as u32;
                     if utf16_val <= 0xFFFF {
-                        cmap.push_str(&format!("<{:04X}> <{:04X}> <{:04X}>\n", gid, gid, utf16_val));
+                        cmap.push_str(&format!(
+                            "<{:04X}> <{:04X}> <{:04X}>\n",
+                            gid, gid, utf16_val
+                        ));
                     } else {
                         // Surrogate pair
                         let high = 0xD800 + ((utf16_val - 0x10000) >> 10);
                         let low = 0xDC00 + ((utf16_val - 0x10000) & 0x3FF);
-                        cmap.push_str(&format!("<{:04X}> <{:04X}> <{:04X}{:04X}>\n", gid, gid, high, low));
+                        cmap.push_str(&format!(
+                            "<{:04X}> <{:04X}> <{:04X}{:04X}>\n",
+                            gid, gid, high, low
+                        ));
                     }
                 }
                 cmap.push_str("endbfrange\n");

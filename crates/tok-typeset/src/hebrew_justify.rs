@@ -90,7 +90,7 @@ impl HebrewJustifier {
                 1.0
             };
 
-            if ratio >= 0.80 && ratio <= 1.30 {
+            if (0.80..=1.30).contains(&ratio) {
                 // Tier 1 succeeds: adjust spaces
                 let added_per_space = deficit / (space_count as f32);
                 for g in &mut glyphs {
@@ -114,7 +114,8 @@ impl HebrewJustifier {
         // First set spaces to max Tier 1 expansion (120%)
         let mut remaining_deficit = deficit;
         if space_count > 0 {
-            let added_per_space = (font_size_pt * 0.28 * 0.20).min(remaining_deficit / (space_count as f32));
+            let added_per_space =
+                (font_size_pt * 0.28 * 0.20).min(remaining_deficit / (space_count as f32));
             for g in &mut glyphs {
                 if g.character == Some(' ') {
                     g.x_advance += added_per_space;
@@ -125,13 +126,13 @@ impl HebrewJustifier {
 
         let ahalterm_count = glyphs
             .iter()
-            .filter(|g| g.character.map_or(false, Self::is_ahalterm_letter))
+            .filter(|g| g.character.is_some_and(Self::is_ahalterm_letter))
             .count();
 
         if ahalterm_count > 0 && remaining_deficit > 0.0 {
             let stretch_per_letter = remaining_deficit / (ahalterm_count as f32);
             for g in &mut glyphs {
-                if g.character.map_or(false, Self::is_ahalterm_letter) {
+                if g.character.is_some_and(Self::is_ahalterm_letter) {
                     g.x_advance += stretch_per_letter;
                 }
             }

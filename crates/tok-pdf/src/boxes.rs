@@ -4,7 +4,7 @@ use pdf_writer::Content;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PrePressPageBoxes {
-    pub trim_box: [f32; 4],  // [llx, lly, urx, ury]
+    pub trim_box: [f32; 4], // [llx, lly, urx, ury]
     pub bleed_box: [f32; 4],
     pub media_box: [f32; 4],
     pub crop_box: [f32; 4],
@@ -14,11 +14,27 @@ impl PrePressPageBoxes {
     /// Computes PDF page boxes given trimmed dimensions, bleed (default 3mm = 8.504 pt),
     /// and slug margin for crop marks (default 10mm = 28.346 pt).
     pub fn new(page_width_pt: f32, page_height_pt: f32, bleed_pt: f32, slug_pt: f32) -> Self {
-        let w = if page_width_pt.is_finite() && page_width_pt > 0.0 { page_width_pt } else { 595.28 };
-        let h = if page_height_pt.is_finite() && page_height_pt > 0.0 { page_height_pt } else { 841.89 };
-        let b = if bleed_pt.is_finite() && bleed_pt >= 0.0 { bleed_pt } else { 0.0 };
-        let mut s = if slug_pt.is_finite() && slug_pt >= 0.0 { slug_pt } else { 0.0 };
-        
+        let w = if page_width_pt.is_finite() && page_width_pt > 0.0 {
+            page_width_pt
+        } else {
+            595.28
+        };
+        let h = if page_height_pt.is_finite() && page_height_pt > 0.0 {
+            page_height_pt
+        } else {
+            841.89
+        };
+        let b = if bleed_pt.is_finite() && bleed_pt >= 0.0 {
+            bleed_pt
+        } else {
+            0.0
+        };
+        let mut s = if slug_pt.is_finite() && slug_pt >= 0.0 {
+            slug_pt
+        } else {
+            0.0
+        };
+
         if s < b {
             s = b;
         }

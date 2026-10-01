@@ -52,17 +52,6 @@ impl Ulid {
         }
         Ok(Self(value))
     }
-
-    pub fn to_string(&self) -> String {
-        let mut chars = [0u8; 26];
-        let mut val = self.0;
-        for i in (0..26).rev() {
-            chars[i] = CROCKFORD_ALPHABET[(val & 0x1F) as usize];
-            val >>= 5;
-        }
-        // Crockford alphabet contains only valid ASCII characters
-        String::from_utf8(chars.to_vec()).unwrap()
-    }
 }
 
 impl Default for Ulid {
@@ -73,7 +62,14 @@ impl Default for Ulid {
 
 impl fmt::Display for Ulid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        let mut chars = [0u8; 26];
+        let mut val = self.0;
+        for i in (0..26).rev() {
+            chars[i] = CROCKFORD_ALPHABET[(val & 0x1F) as usize];
+            val >>= 5;
+        }
+        let s = std::str::from_utf8(&chars).map_err(|_| fmt::Error)?;
+        f.write_str(s)
     }
 }
 
@@ -107,10 +103,6 @@ impl NodeId {
 
     pub fn from_string(s: &str) -> Result<Self, &'static str> {
         Ok(Self(Ulid::from_string(s)?))
-    }
-
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
     }
 }
 
@@ -233,7 +225,9 @@ impl FractionalIndex {
                     }
                 }
 
-                Ok(Self(String::from_utf8(result).unwrap_or_else(|_| format!("{}m", a.0))))
+                Ok(Self(
+                    String::from_utf8(result).unwrap_or_else(|_| format!("{}m", a.0)),
+                ))
             }
         }
     }
@@ -281,7 +275,7 @@ mod tests {
         let k_mid2 = FractionalIndex::between(Some(&k0), Some(&k1)).unwrap();
         assert!(k0 < k_mid2);
         assert!(k_mid2 < k1);
-        
+
         // Test prefix collision
         let a = FractionalIndex::new("b");
         let b = FractionalIndex::new("ba");

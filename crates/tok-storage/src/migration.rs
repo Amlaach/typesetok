@@ -38,7 +38,9 @@ impl MigrationPipeline {
         Ok(())
     }
 
-    pub fn migrate_document_json(mut json_val: serde_json::Value) -> Result<serde_json::Value, StorageError> {
+    pub fn migrate_document_json(
+        mut json_val: serde_json::Value,
+    ) -> Result<serde_json::Value, StorageError> {
         let version_str = json_val
             .get("schema_version")
             .and_then(|v| v.as_str())
@@ -49,7 +51,10 @@ impl MigrationPipeline {
         // If from older future migrations (e.g. 0.9.0 -> 1.0.0), apply steps here.
         if version_str != CURRENT_SCHEMA_VERSION {
             if let Some(obj) = json_val.as_object_mut() {
-                obj.insert("schema_version".to_string(), serde_json::json!(CURRENT_SCHEMA_VERSION));
+                obj.insert(
+                    "schema_version".to_string(),
+                    serde_json::json!(CURRENT_SCHEMA_VERSION),
+                );
             }
         }
 
@@ -64,18 +69,24 @@ impl MigrationPipeline {
                 found: v.to_string(),
             });
         }
-        let major = parts[0].parse().map_err(|_| StorageError::SchemaVersionMismatch {
-            expected: "valid integer".to_string(),
-            found: parts[0].to_string(),
-        })?;
-        let minor = parts[1].parse().map_err(|_| StorageError::SchemaVersionMismatch {
-            expected: "valid integer".to_string(),
-            found: parts[1].to_string(),
-        })?;
-        let patch = parts[2].parse().map_err(|_| StorageError::SchemaVersionMismatch {
-            expected: "valid integer".to_string(),
-            found: parts[2].to_string(),
-        })?;
+        let major = parts[0]
+            .parse()
+            .map_err(|_| StorageError::SchemaVersionMismatch {
+                expected: "valid integer".to_string(),
+                found: parts[0].to_string(),
+            })?;
+        let minor = parts[1]
+            .parse()
+            .map_err(|_| StorageError::SchemaVersionMismatch {
+                expected: "valid integer".to_string(),
+                found: parts[1].to_string(),
+            })?;
+        let patch = parts[2]
+            .parse()
+            .map_err(|_| StorageError::SchemaVersionMismatch {
+                expected: "valid integer".to_string(),
+                found: parts[2].to_string(),
+            })?;
         Ok((major, minor, patch))
     }
 }

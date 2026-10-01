@@ -52,7 +52,8 @@ fn create_sample_hebrew_document(num_paragraphs: usize) -> DocumentModel {
     for i in 0..num_paragraphs {
         let text = sample_texts[i % sample_texts.len()];
         let idx = FractionalIndex::between(Some(&prev_idx), None).unwrap();
-        flow.paragraphs.push(ParagraphNode::new(idx.clone(), "normal", text));
+        flow.paragraphs
+            .push(ParagraphNode::new(idx.clone(), "normal", text));
         prev_idx = idx;
     }
 
@@ -89,13 +90,20 @@ fn handle_render_pdf(input: &str, output: &str) -> Result<(), Box<dyn std::error
     let pdf_bytes = PdfPrePressEngine::export_pdf(&pages, &options);
     fs::write(output, &pdf_bytes)?;
     let pdf_dur = start_pdf.elapsed();
-    println!("  - Emitted ISO PDF/X-1a ({} bytes) in {:.2?}", pdf_bytes.len(), pdf_dur);
+    println!(
+        "  - Emitted ISO PDF/X-1a ({} bytes) in {:.2?}",
+        pdf_bytes.len(),
+        pdf_dur
+    );
     println!("  [SUCCESS] Written PDF to: {}", output);
     Ok(())
 }
 
 fn handle_render_html(input: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
-    println!("[TOK-CLI] Rendering document to Pre-Paginated HTML: {}", output);
+    println!(
+        "[TOK-CLI] Rendering document to Pre-Paginated HTML: {}",
+        output
+    );
     let doc = if input == "--demo" {
         println!("  - Generating demo Hebrew document...");
         create_sample_hebrew_document(20)
@@ -111,7 +119,11 @@ fn handle_render_html(input: &str, output: &str) -> Result<(), Box<dyn std::erro
 
     let html = HtmlProjectionCompiler::compile_to_html(&pages, 210.0, 297.0);
     fs::write(output, &html)?;
-    println!("  [SUCCESS] Written Pre-paginated HTML ({} bytes) to: {}", html.len(), output);
+    println!(
+        "  [SUCCESS] Written Pre-paginated HTML ({} bytes) to: {}",
+        html.len(),
+        output
+    );
     Ok(())
 }
 
@@ -123,7 +135,10 @@ fn handle_benchmark(pages_target: usize) -> Result<(), Box<dyn std::error::Error
 
     // Estimate paragraphs needed: ~3-4 paragraphs per page
     let total_paragraphs = pages_target * 4;
-    println!("Generating synthetic holy text corpus ({} paragraphs with full Niqqud)...", total_paragraphs);
+    println!(
+        "Generating synthetic holy text corpus ({} paragraphs with full Niqqud)...",
+        total_paragraphs
+    );
     let gen_start = Instant::now();
     let doc = create_sample_hebrew_document(total_paragraphs);
     println!("Corpus generated in {:.2?}", gen_start.elapsed());
@@ -137,23 +152,38 @@ fn handle_benchmark(pages_target: usize) -> Result<(), Box<dyn std::error::Error
     let typeset_dur = typeset_start.elapsed();
 
     let actual_pages = pages.len();
-    let total_lines: usize = pages.iter().map(|p| p.frames.iter().map(|f| f.lines.len()).sum::<usize>()).sum();
+    let total_lines: usize = pages
+        .iter()
+        .map(|p| p.frames.iter().map(|f| f.lines.len()).sum::<usize>())
+        .sum();
     let pages_per_sec = (actual_pages as f64) / typeset_dur.as_secs_f64();
 
     println!("  - Total Pages Emitted:     {}", actual_pages);
     println!("  - Total Lines Justified:   {}", total_lines);
     println!("  - Total Typesetting Time:  {:.2?}", typeset_dur);
-    println!("  - Throughput:              {:.1} pages/sec", pages_per_sec);
-    println!("  - Average Per Page:        {:.3} ms/page", (typeset_dur.as_secs_f64() * 1000.0) / actual_pages as f64);
+    println!(
+        "  - Throughput:              {:.1} pages/sec",
+        pages_per_sec
+    );
+    println!(
+        "  - Average Per Page:        {:.3} ms/page",
+        (typeset_dur.as_secs_f64() * 1000.0) / actual_pages as f64
+    );
 
     // 2. Incremental Cascade Convergence Benchmark (Gate 1 Requirement)
     println!("\n[Benchmark 2: Incremental Cascade & Convergence Principle]");
-    println!("Simulating user editing a paragraph on Page 10 of {} pages...", actual_pages);
+    println!(
+        "Simulating user editing a paragraph on Page 10 of {} pages...",
+        actual_pages
+    );
 
     let cascade_start = Instant::now();
     // In TOK's architecture, editing a paragraph requires re-breaking only until line count converges
     let mut modified_root = (*doc.root()).clone();
-    let target_para = &mut modified_root.sections[0].main_flow_mut().unwrap().paragraphs[40];
+    let target_para = &mut modified_root.sections[0]
+        .main_flow_mut()
+        .unwrap()
+        .paragraphs[40];
     target_para.text.push_str(" הֶסְבֵּר נוֹסָף לְפֵרוּשׁ רַשִׁ\"י הַקָּדוֹשׁ.");
 
     // Typeset modified single paragraph
@@ -161,9 +191,14 @@ fn handle_benchmark(pages_target: usize) -> Result<(), Box<dyn std::error::Error
     let cascade_dur = cascade_start.elapsed();
 
     println!("  - Re-breaking & Justification Time: {:.3?}", cascade_dur);
-    println!("  - Cascade Convergence Latency:      {:.3} ms (< 10 ms requirement: {})",
+    println!(
+        "  - Cascade Convergence Latency:      {:.3} ms (< 10 ms requirement: {})",
         cascade_dur.as_secs_f64() * 1000.0,
-        if cascade_dur.as_millis() < 10 { "PASSED [120 FPS READY]" } else { "CHECK" }
+        if cascade_dur.as_millis() < 10 {
+            "PASSED [120 FPS READY]"
+        } else {
+            "CHECK"
+        }
     );
 
     println!("\n================================================================================");
@@ -210,8 +245,14 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Pass 1 HTML SHA-256: {}", html_hash1);
     println!("  Pass 2 HTML SHA-256: {}", html_hash2);
 
-    assert_eq!(pdf_hash1, pdf_hash2, "PDF outputs must be bit-for-bit identical");
-    assert_eq!(html_hash1, html_hash2, "HTML outputs must be bit-for-bit identical");
+    assert_eq!(
+        pdf_hash1, pdf_hash2,
+        "PDF outputs must be bit-for-bit identical"
+    );
+    assert_eq!(
+        html_hash1, html_hash2,
+        "HTML outputs must be bit-for-bit identical"
+    );
     assert_eq!(pages1.len(), pages2.len(), "Page counts must be identical");
 
     println!("  [SUCCESS] Bit-for-bit absolute determinism verified across all pipelines!");
@@ -227,7 +268,10 @@ fn handle_inspect_package(input: &str) -> Result<(), Box<dyn std::error::Error>>
     println!("  Document ID:      {}", pkg.manifest.document_id);
     println!("  Schema Version:   {}", pkg.manifest.schema_version);
     println!("  Sections:         {}", model.root().sections.len());
-    let total_paras: usize = model.root().sections.iter()
+    let total_paras: usize = model
+        .root()
+        .sections
+        .iter()
         .map(|s| s.flows.iter().map(|f| f.paragraphs.len()).sum::<usize>())
         .sum();
     println!("  Total Paragraphs: {}", total_paras);

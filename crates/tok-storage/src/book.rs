@@ -48,7 +48,12 @@ impl TokBook {
         }
     }
 
-    pub fn add_volume(&mut self, title: impl Into<String>, file_path: impl Into<PathBuf>, page_count: u32) {
+    pub fn add_volume(
+        &mut self,
+        title: impl Into<String>,
+        file_path: impl Into<PathBuf>,
+        page_count: u32,
+    ) {
         let order = self.volumes.len() as u32;
         self.volumes.push(BookVolumeEntry {
             id: Ulid::new(),
@@ -76,10 +81,14 @@ impl TokBook {
             let end = current_page
                 .checked_add(vol.page_count)
                 .and_then(|sum| sum.checked_sub(1))
-                .ok_or_else(|| StorageError::DocumentModel(format!("Page count overflow in volume {}", vol.id)))?;
-                
+                .ok_or_else(|| {
+                    StorageError::DocumentModel(format!("Page count overflow in volume {}", vol.id))
+                })?;
+
             ranges.push((vol.id, start, end));
-            current_page = end.checked_add(1).ok_or_else(|| StorageError::DocumentModel("Page count overflow".into()))?;
+            current_page = end
+                .checked_add(1)
+                .ok_or_else(|| StorageError::DocumentModel("Page count overflow".into()))?;
         }
 
         Ok(ranges)

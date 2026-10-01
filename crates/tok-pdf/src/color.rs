@@ -13,8 +13,18 @@ pub struct CmykColor {
 }
 
 impl CmykColor {
-    pub const BLACK: Self = Self { c: 0.0, m: 0.0, y: 0.0, k: 1.0 };
-    pub const WHITE: Self = Self { c: 0.0, m: 0.0, y: 0.0, k: 0.0 };
+    pub const BLACK: Self = Self {
+        c: 0.0,
+        m: 0.0,
+        y: 0.0,
+        k: 1.0,
+    };
+    pub const WHITE: Self = Self {
+        c: 0.0,
+        m: 0.0,
+        y: 0.0,
+        k: 0.0,
+    };
 
     pub fn new(c: f32, m: f32, y: f32, k: f32) -> Self {
         Self {
@@ -44,24 +54,32 @@ impl CmykColor {
                     Self::new(c, m, y, k)
                 }
             }
-            Color::Spot { tint, fallback_cmyk, .. } => {
-                Self::new(
-                    fallback_cmyk.0 * tint,
-                    fallback_cmyk.1 * tint,
-                    fallback_cmyk.2 * tint,
-                    fallback_cmyk.3 * tint,
-                )
-            }
+            Color::Spot {
+                tint,
+                fallback_cmyk,
+                ..
+            } => Self::new(
+                fallback_cmyk.0 * tint,
+                fallback_cmyk.1 * tint,
+                fallback_cmyk.2 * tint,
+                fallback_cmyk.3 * tint,
+            ),
         }
     }
 
     /// PDF operator for setting non-stroking (fill) color in DeviceCMYK.
     pub fn to_pdf_fill_op(&self) -> String {
-        format!("{:.3} {:.3} {:.3} {:.3} k\n", self.c, self.m, self.y, self.k)
+        format!(
+            "{:.3} {:.3} {:.3} {:.3} k\n",
+            self.c, self.m, self.y, self.k
+        )
     }
 
     /// PDF operator for setting stroking color in DeviceCMYK.
     pub fn to_pdf_stroke_op(&self) -> String {
-        format!("{:.3} {:.3} {:.3} {:.3} K\n", self.c, self.m, self.y, self.k)
+        format!(
+            "{:.3} {:.3} {:.3} {:.3} K\n",
+            self.c, self.m, self.y, self.k
+        )
     }
 }

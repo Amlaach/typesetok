@@ -146,26 +146,28 @@ mod tests {
 
     #[test]
     fn test_multi_flow_empty_flows() {
-        let allocations = MultiFlowSolver::solve_talmud_page(
-            595.0, 842.0, 42.52, 56.69, &[], 0.1,
+        let allocations = MultiFlowSolver::solve_talmud_page(595.0, 842.0, 42.52, 56.69, &[], 0.1);
+        assert!(
+            allocations.is_empty(),
+            "Empty flows should produce empty allocations"
         );
-        assert!(allocations.is_empty(), "Empty flows should produce empty allocations");
     }
 
     #[test]
     fn test_multi_flow_single_flow() {
-        let flows = vec![
-            FlowGeometrySpec {
-                flow_id: FlowId::new("main"),
-                priority: 1,
-                min_width_pt: 100.0,
-                max_width_pt: 500.0,
-                target_height_pt: 700.0,
-            },
-        ];
-        let allocations = MultiFlowSolver::solve_talmud_page(
-            595.0, 842.0, 42.52, 56.69, &flows, 0.1,
+        let flows = vec![FlowGeometrySpec {
+            flow_id: FlowId::new("main"),
+            priority: 1,
+            min_width_pt: 100.0,
+            max_width_pt: 500.0,
+            target_height_pt: 700.0,
+        }];
+        let allocations =
+            MultiFlowSolver::solve_talmud_page(595.0, 842.0, 42.52, 56.69, &flows, 0.1);
+        assert_eq!(
+            allocations.len(),
+            1,
+            "Single flow should produce one allocation"
         );
-        assert_eq!(allocations.len(), 1, "Single flow should produce one allocation");
     }
 }

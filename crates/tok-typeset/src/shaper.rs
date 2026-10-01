@@ -31,12 +31,7 @@ pub struct TextShaper;
 
 impl TextShaper {
     /// Shapes text using an OpenType/TrueType font face.
-    pub fn shape_with_face(
-        face: &Face,
-        text: &str,
-        font_size_pt: f32,
-        is_rtl: bool,
-    ) -> ShapedRun {
+    pub fn shape_with_face(face: &Face, text: &str, font_size_pt: f32, is_rtl: bool) -> ShapedRun {
         let mut buffer = UnicodeBuffer::new();
         buffer.set_cluster_level(BufferClusterLevel::MonotoneGraphemes);
         buffer.set_direction(if is_rtl {
@@ -106,8 +101,8 @@ impl TextShaper {
         for (i, ch) in text.chars().enumerate() {
             // Niqqud, Dagesh, Te'amim have 0 advance width in fallback
             let width_ratio = match ch as u32 {
-                0x0591..=0x05C7 => 0.0, // Combining marks: zero width
-                0x0020 => 0.28,         // Space
+                0x0591..=0x05C7 => 0.0,  // Combining marks: zero width
+                0x0020 => 0.28,          // Space
                 0x05D0..=0x05EA => 0.55, // Standard Hebrew letter
                 0x0061..=0x007A => 0.45, // 'a'..='z'
                 0x0041..=0x005A => 0.60, // 'A'..='Z'

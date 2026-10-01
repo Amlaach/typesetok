@@ -16,11 +16,19 @@ pub struct PhysicalRect {
 
 impl PhysicalRect {
     pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     pub fn contains_point(&self, pt: PhysicalPoint) -> bool {
-        pt.x >= self.x && pt.x <= self.x + self.width && pt.y >= self.y && pt.y <= self.y + self.height
+        pt.x >= self.x
+            && pt.x <= self.x + self.width
+            && pt.y >= self.y
+            && pt.y <= self.y + self.height
     }
 
     pub fn a4_portrait() -> Self {

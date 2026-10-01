@@ -9,9 +9,13 @@ pub mod transaction;
 pub use anchor::{AnchorBias, SemanticRange, TextAnchor};
 pub use error::ModelError;
 pub use id::{FractionalIndex, NodeId, Ulid};
-pub use model::{DocumentMetadata, DocumentModel, DocumentRoot, Flow, FlowId, FlowType, ParagraphNode, SectionNode};
+pub use model::{
+    DocumentMetadata, DocumentModel, DocumentRoot, Flow, FlowId, FlowType, ParagraphNode,
+    SectionNode,
+};
 pub use normalizer::{HebrewMarkCategory, HebrewNormalizer};
 pub use styles::{
-    AhaltermStretchMode, CharacterStyle, Color, ParagraphStyle, Progression, StylePatch, TextAlignment,
+    AhaltermStretchMode, CharacterStyle, Color, ParagraphStyle, Progression, StylePatch,
+    TextAlignment,
 };
 pub use transaction::{AtomicOperation, CompoundTransaction, TransactionStack};

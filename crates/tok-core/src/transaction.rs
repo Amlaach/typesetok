@@ -32,41 +32,54 @@ pub enum AtomicOperation {
 impl AtomicOperation {
     pub fn invert(&self) -> Self {
         match self {
-            AtomicOperation::InsertText { node_id, char_offset, text } => {
-                AtomicOperation::DeleteText {
-                    node_id: *node_id,
-                    char_offset: *char_offset,
-                    deleted_text: text.clone(),
-                }
-            }
-            AtomicOperation::DeleteText { node_id, char_offset, deleted_text } => {
-                AtomicOperation::InsertText {
-                    node_id: *node_id,
-                    char_offset: *char_offset,
-                    text: deleted_text.clone(),
-                }
-            }
-            AtomicOperation::InsertParagraph { section_id, flow_id, paragraph } => {
-                AtomicOperation::DeleteParagraph {
-                    section_id: *section_id,
-                    flow_id: flow_id.clone(),
-                    paragraph: paragraph.clone(),
-                }
-            }
-            AtomicOperation::DeleteParagraph { section_id, flow_id, paragraph } => {
-                AtomicOperation::InsertParagraph {
-                    section_id: *section_id,
-                    flow_id: flow_id.clone(),
-                    paragraph: paragraph.clone(),
-                }
-            }
+            AtomicOperation::InsertText {
+                node_id,
+                char_offset,
+                text,
+            } => AtomicOperation::DeleteText {
+                node_id: *node_id,
+                char_offset: *char_offset,
+                deleted_text: text.clone(),
+            },
+            AtomicOperation::DeleteText {
+                node_id,
+                char_offset,
+                deleted_text,
+            } => AtomicOperation::InsertText {
+                node_id: *node_id,
+                char_offset: *char_offset,
+                text: deleted_text.clone(),
+            },
+            AtomicOperation::InsertParagraph {
+                section_id,
+                flow_id,
+                paragraph,
+            } => AtomicOperation::DeleteParagraph {
+                section_id: *section_id,
+                flow_id: flow_id.clone(),
+                paragraph: paragraph.clone(),
+            },
+            AtomicOperation::DeleteParagraph {
+                section_id,
+                flow_id,
+                paragraph,
+            } => AtomicOperation::InsertParagraph {
+                section_id: *section_id,
+                flow_id: flow_id.clone(),
+                paragraph: paragraph.clone(),
+            },
         }
     }
 
     pub fn apply(&self, doc: &mut DocumentRoot) -> Result<(), ModelError> {
         match self {
-            AtomicOperation::InsertText { node_id, char_offset, text } => {
-                let p = doc.find_paragraph_mut(*node_id)
+            AtomicOperation::InsertText {
+                node_id,
+                char_offset,
+                text,
+            } => {
+                let p = doc
+                    .find_paragraph_mut(*node_id)
                     .ok_or_else(|| ModelError::NodeNotFound(node_id.to_string()))?;
                 let mut rope = p.rope();
                 let norm_text = HebrewNormalizer::normalize(text);
@@ -75,8 +88,13 @@ impl AtomicOperation {
                 p.text = rope.to_string();
                 Ok(())
             }
-            AtomicOperation::DeleteText { node_id, char_offset, deleted_text } => {
-                let p = doc.find_paragraph_mut(*node_id)
+            AtomicOperation::DeleteText {
+                node_id,
+                char_offset,
+                deleted_text,
+            } => {
+                let p = doc
+                    .find_paragraph_mut(*node_id)
                     .ok_or_else(|| ModelError::NodeNotFound(node_id.to_string()))?;
                 let mut rope = p.rope();
                 let norm_deleted = HebrewNormalizer::normalize(deleted_text);
@@ -90,18 +108,38 @@ impl AtomicOperation {
                 }
                 Ok(())
             }
-            AtomicOperation::InsertParagraph { section_id, flow_id, paragraph } => {
-                let sec = doc.sections.iter_mut().find(|s| s.id == *section_id)
+            AtomicOperation::InsertParagraph {
+                section_id,
+                flow_id,
+                paragraph,
+            } => {
+                let sec = doc
+                    .sections
+                    .iter_mut()
+                    .find(|s| s.id == *section_id)
                     .ok_or_else(|| ModelError::NodeNotFound(section_id.to_string()))?;
-                let flow = sec.flows.iter_mut().find(|f| f.id == *flow_id)
+                let flow = sec
+                    .flows
+                    .iter_mut()
+                    .find(|f| f.id == *flow_id)
                     .ok_or_else(|| ModelError::FlowNotFound(flow_id.0.clone()))?;
                 flow.add_paragraph(paragraph.clone());
                 Ok(())
             }
-            AtomicOperation::DeleteParagraph { section_id, flow_id, paragraph } => {
-                let sec = doc.sections.iter_mut().find(|s| s.id == *section_id)
+            AtomicOperation::DeleteParagraph {
+                section_id,
+                flow_id,
+                paragraph,
+            } => {
+                let sec = doc
+                    .sections
+                    .iter_mut()
+                    .find(|s| s.id == *section_id)
                     .ok_or_else(|| ModelError::NodeNotFound(section_id.to_string()))?;
-                let flow = sec.flows.iter_mut().find(|f| f.id == *flow_id)
+                let flow = sec
+                    .flows
+                    .iter_mut()
+                    .find(|f| f.id == *flow_id)
                     .ok_or_else(|| ModelError::FlowNotFound(flow_id.0.clone()))?;
                 flow.paragraphs.retain(|p| p.id != paragraph.id);
                 Ok(())
@@ -130,12 +168,8 @@ impl CompoundTransaction {
     }
 
     pub fn invert(&self) -> Self {
-        let inverted_ops: Vec<AtomicOperation> = self
-            .operations
-            .iter()
-            .rev()
-            .map(|op| op.invert())
-            .collect();
+        let inverted_ops: Vec<AtomicOperation> =
+            self.operations.iter().rev().map(|op| op.invert()).collect();
 
         Self {
             description: format!("Undo: {}", self.description),
@@ -186,7 +220,11 @@ impl TransactionStack {
         !self.redo_stack.is_empty()
     }
 
-    pub fn apply(&mut self, tx: CompoundTransaction, doc: &mut DocumentRoot) -> Result<(), ModelError> {
+    pub fn apply(
+        &mut self,
+        tx: CompoundTransaction,
+        doc: &mut DocumentRoot,
+    ) -> Result<(), ModelError> {
         tx.apply(doc)?;
         let inverse = tx.invert();
         self.undo_stack.push_back(inverse);
@@ -200,7 +238,11 @@ impl TransactionStack {
 
     /// Undo the last transaction. Transaction is only removed from stack after successful apply.
     pub fn undo(&mut self, doc: &mut DocumentRoot) -> Result<(), ModelError> {
-        let inverse = self.undo_stack.back().ok_or(ModelError::UndoStackEmpty)?.clone();
+        let inverse = self
+            .undo_stack
+            .back()
+            .ok_or(ModelError::UndoStackEmpty)?
+            .clone();
         inverse.apply(doc)?;
         self.undo_stack.pop_back(); // Only remove after successful apply
         let redo_tx = inverse.invert();
@@ -210,7 +252,11 @@ impl TransactionStack {
 
     /// Redo the last undone transaction. Transaction is only removed from stack after successful apply.
     pub fn redo(&mut self, doc: &mut DocumentRoot) -> Result<(), ModelError> {
-        let redo_tx = self.redo_stack.back().ok_or(ModelError::RedoStackEmpty)?.clone();
+        let redo_tx = self
+            .redo_stack
+            .back()
+            .ok_or(ModelError::RedoStackEmpty)?
+            .clone();
         redo_tx.apply(doc)?;
         self.redo_stack.pop_back(); // Only remove after successful apply
         let inverse = redo_tx.invert();
@@ -229,7 +275,11 @@ mod tests {
         let mut doc = DocumentRoot::new("ספר בדיקה");
         let sec_id = doc.sections[0].id;
 
-        let p1 = ParagraphNode::new(FractionalIndex::initial(), "default-body", "בראשית ברא אלהים");
+        let p1 = ParagraphNode::new(
+            FractionalIndex::initial(),
+            "default-body",
+            "בראשית ברא אלהים",
+        );
         let p1_id = p1.id;
 
         let mut tx1 = CompoundTransaction::new("הוספת פסקה");

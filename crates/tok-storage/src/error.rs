@@ -15,10 +15,7 @@ pub enum StorageError {
     Database(String),
 
     #[error("Schema version mismatch: expected {expected}, found {found}")]
-    SchemaVersionMismatch {
-        expected: String,
-        found: String,
-    },
+    SchemaVersionMismatch { expected: String, found: String },
 
     #[error("Package corrupted or missing required file: {0}")]
     CorruptedPackage(String),
