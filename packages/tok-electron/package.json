@@ -6,9 +6,9 @@
     "build": "tsc"
   },
   "dependencies": {
-    "tok-ui": "workspace:*",
-    "tok-viewer": "workspace:*",
-    "tok-canvas": "workspace:*"
+    "tok-ui": "*",
+    "tok-viewer": "*",
+    "tok-canvas": "*"
   },
   "devDependencies": {
     "electron": "^29.1.0",

@@ -7,11 +7,15 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build:ts": "tsc --build",
+    "bundle:ui": "esbuild packages/tok-ui/src/renderer.ts --bundle --outfile=packages/tok-ui/dist/renderer.js --platform=browser --target=es2022 && node -e \"fs.copyFileSync('packages/tok-ui/src/index.html', 'packages/tok-ui/dist/index.html')\"",
+    "build": "npm run build:ts && npm run bundle:ui",
+    "test": "node --test test/frontend.test.mjs",
     "start": "electron packages/tok-electron/dist/main.js"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
-    "electron": "^29.1.0"
+    "electron": "^29.1.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.4.0"
   }
 }

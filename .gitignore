@@ -22,6 +22,8 @@ dist-*/
 out/
 build/
 .tsbuildinfo
+*.tsbuildinfo
+**/*.tsbuildinfo
 
 # לוגים של מנהלי חבילות
 npm-debug.log*

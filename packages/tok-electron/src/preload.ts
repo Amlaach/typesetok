@@ -12,9 +12,18 @@ const tokIpc: TokIpcBridge = {
     return await ipcRenderer.invoke('tok:send-command', cmd);
   },
   onEvent: (callback: (event: unknown) => void) => {
-    const handler = (_: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
-    ipcRenderer.on('tok:event', handler);
-    return () => ipcRenderer.removeListener('tok:event', handler);
+    const eventHandler = (_: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    const menuHandler = (_: Electron.IpcRendererEvent, action: string, data?: unknown) => {
+      callback({ action, data });
+    };
+
+    ipcRenderer.on('tok:event', eventHandler);
+    ipcRenderer.on('menu:action', menuHandler);
+
+    return () => {
+      ipcRenderer.removeListener('tok:event', eventHandler);
+      ipcRenderer.removeListener('menu:action', menuHandler);
+    };
   },
   renderPdf: async (inputPath: string, outputPath: string) => {
     return await ipcRenderer.invoke('tok:render-pdf', { inputPath, outputPath });

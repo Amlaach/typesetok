@@ -7,9 +7,9 @@
     "build": "tsc"
   },
   "dependencies": {
-    "tok-viewer": "workspace:*",
-    "tok-canvas": "workspace:*",
-    "tok-story-editor": "workspace:*"
+    "tok-viewer": "*",
+    "tok-canvas": "*",
+    "tok-story-editor": "*"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

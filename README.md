@@ -6,7 +6,8 @@
 ### תוכנת עימוד שולחנית מקצועית בקוד פתוח | Open-Source Professional Desktop Publishing (DTP) System
 
 [![CI Build](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml/badge.svg)](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-58%2F58%20Passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-71%2F71%20Passing-brightgreen.svg)]()
+[![Electron](https://img.shields.io/badge/Electron-29.4%2B-blue.svg?logo=electron)](https://www.electronjs.org)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
 [![Standard](https://img.shields.io/badge/Standard-ת"י%206100%20(SI%206100)-blue.svg)]()
 [![Pre-Press](https://img.shields.io/badge/PDF%2FX--1a%20%7C%20PDF%2FX--4-ISO%2015930-purple.svg)]()
@@ -142,6 +143,21 @@ cargo build --workspace
 cargo test --workspace
 ```
 
+### Launch Desktop Workbench (Electron + UI Shell)
+```bash
+# Install frontend dependencies
+npm install
+
+# Build all TypeScript packages and bundle UI
+npm run build
+
+# Run frontend test suite (13 passing tests)
+npm test
+
+# Launch TypesetOK Desktop Application
+npm start
+```
+
 ### CLI Headless Operations (`tok-cli`)
 
 ```bash
@@ -167,12 +183,16 @@ cargo run -p tok-cli -- inspect-package document.tok
 
 | Metric | Architectural Target | Actual Result | Status |
 | :--- | :--- | :--- | :---: |
-| **Workspace Unit Tests** | 100% Pass Across All Crates | **58 / 58 Tests Passing** | **PASSED** |
+| **Rust Engine Tests** | 100% Pass Across All Crates | **58 / 58 Tests Passing** | **PASSED** |
+| **Frontend Shell Tests** | Gematria, Virtualizer, Caret & Artifacts | **13 / 13 Tests Passing** | **PASSED** |
+| **Total Automated Tests** | Rust + TypeScript CI Matrix | **71 / 71 Tests Passing** | **PASSED** |
 | **Clippy Linter** | 0 Warnings with `-D warnings` | **0 Warnings (Clean)** | **PASSED** |
 | **Formatting** | `cargo fmt --check` Compliant | **100% Formatted** | **PASSED** |
 | **Bit-for-Bit Determinism** | Identical SHA-256 across runs | `Pass 1 SHA == Pass 2 SHA` | **PASSED** |
 | **Massive Doc Benchmark** | 1,000 Pages Full Vocalization | **4,000 Paragraphs / 6,400 Lines** | **PASSED** |
 | **Pre-press Standard** | ISO PDF/X-1a with Fogra39 | **100% DeviceCMYK Black & Marks** | **PASSED** |
+| **DOM Virtualizer** | 3-Page Active Window `[K-1,K,K+1]` | **Active Window Verified** | **PASSED** |
+| **Electron Shell** | Native Menus, Preload IPC Bridge | **Verified & Running** | **PASSED** |
 
 ---
 

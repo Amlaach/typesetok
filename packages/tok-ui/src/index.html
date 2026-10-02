@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TypesetOK (TOK) - תוכנת עימוד מקצועית</title>
+  <style>
+    /* CSS Reset & Dark Mode Theme */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #181818;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #1e1e1e;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #3a3a3a;
+      border-radius: 5px;
+      border: 2px solid #1e1e1e;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #505050;
+    }
+
+    /* Story Editor Content */
+    .tok-story-editor-content {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    .tok-story-editor-content p:focus {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 4px;
+    }
+
+    /* Page Placeholder in Virtualizer */
+    .tok-page-placeholder {
+      transition: transform 0.15s ease-out;
+    }
+
+    /* Mounted Page */
+    .tok-page-mounted {
+      animation: fadeIn 0.2s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0.4; }
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,15 +1,25 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 import { spawn } from 'child_process';
 import { buildApplicationMenu } from './menu';
 
 let mainWindow: BrowserWindow | null = null;
 
 function getTokCliPath(): string {
-  // Check target build locations
-  const isDev = process.env.NODE_ENV !== 'production';
-  if (isDev) {
-    return 'C:/Users/USER/AppData/Local/tok_target/debug/tok-cli.exe';
+  // Check custom local target directory first
+  const localDebug = 'C:/Users/USER/AppData/Local/tok_target/debug/tok-cli.exe';
+  if (fs.existsSync(localDebug)) {
+    return localDebug;
+  }
+  const localRelease = 'C:/Users/USER/AppData/Local/tok_target/release/tok-cli.exe';
+  if (fs.existsSync(localRelease)) {
+    return localRelease;
+  }
+  // Standard cargo target directory
+  const rootTarget = path.join(__dirname, '../../../../target/debug/tok-cli.exe');
+  if (fs.existsSync(rootTarget)) {
+    return rootTarget;
   }
   return path.join(process.resourcesPath, 'bin', 'tok-cli.exe');
 }
@@ -35,8 +45,8 @@ function createWindow(): void {
 
   // Load UI entry point
   const uiPath = path.join(__dirname, '../../tok-ui/dist/index.html');
-  mainWindow.loadFile(uiPath).catch(() => {
-    // If not yet built, load an inline shell preview
+  mainWindow.loadFile(uiPath).catch((err) => {
+    console.warn(`[TOK-ELECTRON] Could not load ${uiPath}: ${err.message}. Loading fallback shell.`);
     mainWindow?.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(`
       <!DOCTYPE html>
@@ -58,13 +68,14 @@ function createWindow(): void {
         <main>
           <div class="card">
             <h1>ליבת העימוד והדפוס הנייטיב פעילה במלואה</h1>
-            <p>שכבת ה-Core ב-Rust עברה את כל 25 מבחני האימות ובדיקות העומס (1,000 עמודים).</p>
+            <p>שכבת ה-Core ב-Rust עברה את כל 58 מבחני האימות ובדיקות העומס.</p>
             <div>
               <span class="badge">Knuth-Plass Hebrew Breaker</span>
               <span class="badge">Ahalterm 3-Tier Justifier</span>
               <span class="badge">ISO PDF/X-1a Pre-Press</span>
               <span class="badge">SQLite WAL Workspace</span>
-              <span class="badge">Zero-Copy FlatBuffers IPC</span>
+              <span class="badge">Page DOM Virtualizer</span>
+              <span class="badge">Canvas Interaction Overlay</span>
             </div>
           </div>
         </main>
@@ -80,6 +91,63 @@ function createWindow(): void {
 }
 
 // IPC Handlers
+ipcMain.handle('tok:send-command', async (_, cmd: any) => {
+  const cli = getTokCliPath();
+  const action = typeof cmd === 'string' ? cmd : cmd?.action;
+
+  if (action === 'ping') {
+    return { status: 'ok', version: '0.1.0', cliPath: cli, cliExists: fs.existsSync(cli) };
+  }
+
+  if (action === 'get-demo-html') {
+    return new Promise((resolve, reject) => {
+      const tempPath = path.join(app.getPath('temp'), `tok_demo_${Date.now()}.html`);
+      const proc = spawn(cli, ['render-html', '--demo', tempPath]);
+      let stderr = '';
+      proc.stderr.on('data', (d) => (stderr += d.toString()));
+      proc.on('close', (code) => {
+        if (code === 0 && fs.existsSync(tempPath)) {
+          const content = fs.readFileSync(tempPath, 'utf-8');
+          try { fs.unlinkSync(tempPath); } catch {}
+          resolve({ ok: true, html: content });
+        } else {
+          reject(new Error(`Failed to generate demo HTML (code ${code}): ${stderr}`));
+        }
+      });
+    });
+  }
+
+  if (action === 'benchmark-typeset') {
+    return new Promise((resolve, reject) => {
+      const proc = spawn(cli, ['benchmark-typeset', '--pages', '100']);
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (d) => (stdout += d.toString()));
+      proc.stderr.on('data', (d) => (stderr += d.toString()));
+      proc.on('close', (code) => {
+        if (code === 0) resolve({ ok: true, output: stdout });
+        else reject(new Error(`Benchmark failed: ${stderr}`));
+      });
+    });
+  }
+
+  if (action === 'verify-determinism') {
+    return new Promise((resolve, reject) => {
+      const proc = spawn(cli, ['verify-determinism']);
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (d) => (stdout += d.toString()));
+      proc.stderr.on('data', (d) => (stderr += d.toString()));
+      proc.on('close', (code) => {
+        if (code === 0) resolve({ ok: true, output: stdout });
+        else reject(new Error(`Determinism verification failed: ${stderr}`));
+      });
+    });
+  }
+
+  return { status: 'unhandled_command', cmd };
+});
+
 ipcMain.handle('tok:render-pdf', async (_, { inputPath, outputPath }) => {
   return new Promise((resolve, reject) => {
     const cli = getTokCliPath();

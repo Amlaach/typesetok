@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "files": [],
+  "references": [
+    { "path": "packages/tok-viewer" },
+    { "path": "packages/tok-canvas" },
+    { "path": "packages/tok-story-editor" },
+    { "path": "packages/tok-ui" },
+    { "path": "packages/tok-electron" }
+  ]
+}
