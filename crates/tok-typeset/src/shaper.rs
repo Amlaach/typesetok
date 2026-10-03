@@ -27,6 +27,11 @@ pub struct ShapedRun {
     pub is_rtl: bool,
 }
 
+fn cluster_character(text: &str, byte_offset: u32) -> Option<char> {
+    text.get(byte_offset as usize..)
+        .and_then(|s| s.chars().next())
+}
+
 pub struct TextShaper;
 
 impl TextShaper {
@@ -60,8 +65,6 @@ impl TextShaper {
         let mut glyphs = Vec::with_capacity(infos.len());
         let mut total_width_pt = 0.0;
 
-        let chars: Vec<char> = text.chars().collect();
-
         for (info, pos) in infos.iter().zip(positions.iter()) {
             let x_adv = pos.x_advance as f32 * scale;
             let y_adv = pos.y_advance as f32 * scale;
@@ -70,8 +73,8 @@ impl TextShaper {
 
             total_width_pt += x_adv;
 
-            let char_idx = info.cluster as usize;
-            let character = chars.get(char_idx).copied();
+            // rustybuzz clusters are UTF-8 byte offsets, not Unicode scalar indices.
+            let character = cluster_character(text, info.cluster);
 
             glyphs.push(PositionedGlyph {
                 glyph_id: info.glyph_id,
@@ -98,7 +101,7 @@ impl TextShaper {
         let mut glyphs = Vec::new();
         let mut total_width_pt = 0.0;
 
-        for (i, ch) in text.chars().enumerate() {
+        for (i, ch) in text.char_indices() {
             // Niqqud, Dagesh, Te'amim have 0 advance width in fallback
             let width_ratio = match ch as u32 {
                 0x0591..=0x05C7 => 0.0,  // Combining marks: zero width
@@ -136,6 +139,18 @@ impl TextShaper {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clusters_are_utf8_byte_offsets() {
+        let text = "aבּ😀ג";
+        let run = TextShaper::shape_fallback(text, 12.0, true);
+        for ((offset, ch), glyph) in text.char_indices().zip(&run.glyphs) {
+            assert_eq!(glyph.cluster, offset as u32);
+            assert_eq!(cluster_character(text, glyph.cluster), Some(ch));
+        }
+        assert_eq!(cluster_character(text, 2), None);
+        assert_eq!(cluster_character(text, text.len() as u32), None);
+    }
 
     #[test]
     fn test_shape_fallback_hebrew() {

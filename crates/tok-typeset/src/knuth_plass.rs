@@ -41,6 +41,63 @@ pub struct BrokenLine {
     pub adjustment_ratio: f32,
 }
 
+// f64 accumulation reduces cancellation when subtracting long paragraph prefixes.
+// Preserve the existing breaker's trailing-glue and penalty accounting here;
+// changing line-breaking policy belongs in a separate change.
+struct PrefixMetrics {
+    width: Vec<f64>,
+    stretch: Vec<f64>,
+    shrink: Vec<f64>,
+}
+
+impl PrefixMetrics {
+    fn new(items: &[LayoutItem]) -> Self {
+        let mut sums = Self {
+            width: Vec::with_capacity(items.len() + 1),
+            stretch: Vec::with_capacity(items.len() + 1),
+            shrink: Vec::with_capacity(items.len() + 1),
+        };
+        sums.width.push(0.0);
+        sums.stretch.push(0.0);
+        sums.shrink.push(0.0);
+        for item in items {
+            let (width, stretch, shrink) = match item {
+                LayoutItem::Box { width, .. } | LayoutItem::Penalty { width, .. } => {
+                    (*width, 0.0, 0.0)
+                }
+                LayoutItem::Glue {
+                    width,
+                    stretch,
+                    shrink,
+                } => (*width, *stretch, *shrink),
+            };
+            sums.width
+                .push(sums.width.last().unwrap() + f64::from(width));
+            sums.stretch
+                .push(sums.stretch.last().unwrap() + f64::from(stretch));
+            sums.shrink
+                .push(sums.shrink.last().unwrap() + f64::from(shrink));
+        }
+        sums
+    }
+
+    fn range(&self, start: usize, end: usize, items: &[LayoutItem]) -> (f32, f32, f32) {
+        let trailing = if end > start {
+            match items[end - 1] {
+                LayoutItem::Glue { width, .. } => f64::from(width),
+                _ => 0.0,
+            }
+        } else {
+            0.0
+        };
+        (
+            (self.width[end] - self.width[start] - trailing) as f32,
+            (self.stretch[end] - self.stretch[start]) as f32,
+            (self.shrink[end] - self.shrink[start]) as f32,
+        )
+    }
+}
+
 pub struct KnuthPlassBreaker;
 
 impl KnuthPlassBreaker {
@@ -58,6 +115,23 @@ impl KnuthPlassBreaker {
         }
 
         if target_width <= 0.0 || target_width.is_nan() || target_width.is_infinite() {
+            return Vec::new();
+        }
+
+        if !tolerance.is_finite()
+            || tolerance < 0.0
+            || items.iter().any(|item| match item {
+                LayoutItem::Box { width, .. } => !width.is_finite(),
+                LayoutItem::Glue {
+                    width,
+                    stretch,
+                    shrink,
+                } => !width.is_finite() || !stretch.is_finite() || !shrink.is_finite(),
+                LayoutItem::Penalty { width, penalty, .. } => {
+                    !width.is_finite() || !penalty.is_finite()
+                }
+            })
+        {
             return Vec::new();
         }
 
@@ -96,6 +170,8 @@ impl KnuthPlassBreaker {
             }
         }
 
+        let metrics = PrefixMetrics::new(items);
+
         // DP table of best active nodes reaching each candidate
         let mut best_nodes: Vec<ActiveNode> = vec![ActiveNode {
             item_idx: 0,
@@ -114,33 +190,8 @@ impl KnuthPlassBreaker {
                     continue;
                 }
 
-                // Compute total box width, glue width, stretch and shrink between i and j
-                let mut box_and_normal_glue = 0.0;
-                let mut total_stretch = 0.0;
-                let mut total_shrink = 0.0;
-
-                for k in i..j {
-                    match &items[k] {
-                        LayoutItem::Box { width, .. } => {
-                            box_and_normal_glue += *width;
-                        }
-                        LayoutItem::Glue {
-                            width,
-                            stretch,
-                            shrink,
-                        } => {
-                            // Trailing glue at line break is discarded from width
-                            if k < j - 1 || !matches!(items[j - 1], LayoutItem::Glue { .. }) {
-                                box_and_normal_glue += *width;
-                            }
-                            total_stretch += *stretch;
-                            total_shrink += *shrink;
-                        }
-                        LayoutItem::Penalty { width, .. } => {
-                            box_and_normal_glue += *width;
-                        }
-                    }
-                }
+                // Prefix sums avoid rescanning the item range for every DP edge.
+                let (box_and_normal_glue, total_stretch, total_shrink) = metrics.range(i, j, items);
 
                 // Compute adjustment ratio r
                 let delta = target_width - box_and_normal_glue;
@@ -306,6 +357,69 @@ impl KnuthPlassBreaker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prefix_metrics_match_reference_scan_for_all_ranges() {
+        let mut items = Vec::new();
+        for i in 0..64 {
+            items.push(LayoutItem::Box {
+                width: 10.25 + (i % 7) as f32,
+                text: String::new(),
+                glyphs: vec![],
+            });
+            items.push(LayoutItem::Glue {
+                width: 3.25,
+                stretch: 1.5,
+                shrink: 0.75,
+            });
+            items.push(LayoutItem::Penalty {
+                width: 2.5,
+                penalty: 50.0,
+                flagged: false,
+            });
+        }
+        let metrics = PrefixMetrics::new(&items);
+        for start in 0..items.len() {
+            for end in start + 1..=items.len() {
+                let (mut width, mut stretch, mut shrink) = (0.0, 0.0, 0.0);
+                for (k, item) in items.iter().enumerate().take(end).skip(start) {
+                    match item {
+                        LayoutItem::Box { width: w, .. } | LayoutItem::Penalty { width: w, .. } => {
+                            width += w
+                        }
+                        LayoutItem::Glue {
+                            width: w,
+                            stretch: s,
+                            shrink: h,
+                        } => {
+                            if k < end - 1 {
+                                width += w;
+                            }
+                            stretch += s;
+                            shrink += h;
+                        }
+                    }
+                }
+                assert_eq!(metrics.range(start, end, &items), (width, stretch, shrink));
+            }
+        }
+    }
+
+    #[test]
+    fn nonfinite_metrics_and_tolerance_are_rejected() {
+        let item = LayoutItem::Box {
+            width: f32::NAN,
+            text: String::new(),
+            glyphs: vec![],
+        };
+        assert!(KnuthPlassBreaker::break_paragraph(&[item], 100.0, 2.0).is_empty());
+        let item = LayoutItem::Glue {
+            width: 2.0,
+            stretch: 1.0,
+            shrink: 1.0,
+        };
+        assert!(KnuthPlassBreaker::break_paragraph(&[item], 100.0, f32::INFINITY).is_empty());
+    }
 
     #[test]
     fn test_knuth_plass_line_break() {
