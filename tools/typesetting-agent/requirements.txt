@@ -1,7 +1,0 @@
-# Tested optional dependencies; not part of the desktop application or Rust build.
-uharfbuzz==0.56.2
-fonttools==4.61.1
-pyphen==0.18.1
-shapely==2.1.2
-typst==0.15.0
-jsonschema==4.26.0
