@@ -188,17 +188,15 @@ function createWindow(): void {
     logger.warn(`Could not load ${uiPath}: ${err.message}. Loading fallback shell.`);
   });
 
-  // Once UI is ready, smoothly transition from splash to main window
+  // Once UI is ready, instantaneously transition from splash to main window
   mainWindow.once('ready-to-show', () => {
     logger.info('[MAIN] Main window ready to show.');
-    setTimeout(() => {
-      if (splashWindow && !splashWindow.isDestroyed()) {
-        splashWindow.destroy();
-        splashWindow = null;
-      }
-      mainWindow?.show();
-      mainWindow?.focus();
-    }, 450);
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.destroy();
+      splashWindow = null;
+    }
+    mainWindow?.show();
+    mainWindow?.focus();
   });
 
   mainWindow.on('closed', () => {
@@ -213,7 +211,7 @@ ipcMain.handle('tok:send-command', async (_, cmd: any) => {
   logger.info(`[IPC] Received send-command: ${action}`);
 
   if (action === 'ping') {
-    return { status: 'ok', version: '0.8.0', cliPath: cli, cliExists: fs.existsSync(cli) };
+    return { status: 'ok', version: '0.7.3', cliPath: cli, cliExists: fs.existsSync(cli) };
   }
 
   if (action === 'get-demo-html') {
@@ -361,17 +359,20 @@ ipcMain.handle('tok:open-external', async (_, url: string) => {
 
 ipcMain.handle('tok:get-app-info', async () => {
   return {
-    version: '0.8.0',
+    version: '0.7.3',
     name: 'TypesetOK (TOK)',
     repoUrl: 'https://github.com/TypesetOK/typesetok'
   };
 });
 
 app.whenReady().then(() => {
-  logger.init(14);
-  pluginManager.init();
   createSplashWindow();
   createWindow();
+  // Asynchronously initialize logger and plugins concurrently without delaying window creation
+  Promise.resolve().then(() => {
+    logger.init(14);
+    pluginManager.init();
+  });
 });
 
 app.on('window-all-closed', () => {

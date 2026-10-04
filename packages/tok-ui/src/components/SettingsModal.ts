@@ -1,5 +1,5 @@
 import { t, i18n, Language } from '../i18n';
-import { themeManager, ACCENT_PRESETS, CANVAS_TONE_PRESETS } from '../theme';
+import { themeManager, ACCENT_PRESETS, CANVAS_TONE_PRESETS, THEME_PALETTES } from '../theme';
 import { PluginEngine } from '../plugins/PluginEngine';
 import { renderIcon, IconName } from '../icons';
 
@@ -198,6 +198,72 @@ export class SettingsModal {
   // --- TAB 1: Appearance ---
   private renderAppearanceTab(container: HTMLElement): void {
     const currentTheme = themeManager.getSettings();
+
+    // 0. Visual Themes & Rich Atmospheres
+    const section0 = document.createElement('div');
+    section0.style.marginBottom = '24px';
+
+    const h3_0 = document.createElement('h3');
+    h3_0.style.fontSize = '14px';
+    h3_0.style.fontWeight = '700';
+    h3_0.style.color = '#60A5FA';
+    h3_0.style.marginBottom = '12px';
+    h3_0.textContent = 'ערכות נושא וגיוון צבעים (Visual Themes & Atmospheres)';
+    section0.appendChild(h3_0);
+
+    const palettesGrid = document.createElement('div');
+    palettesGrid.style.display = 'grid';
+    palettesGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    palettesGrid.style.gap = '10px';
+
+    for (const pal of THEME_PALETTES) {
+      const card = document.createElement('div');
+      card.style.padding = '12px 14px';
+      card.style.borderRadius = '8px';
+      card.style.background = currentTheme.paletteId === pal.id ? 'var(--tok-bg-surface-hover, #293548)' : 'var(--tok-bg-surface-2, #1E293B)';
+      card.style.border = currentTheme.paletteId === pal.id ? '2px solid #3B82F6' : '1px solid var(--tok-border-subtle, #334155)';
+      card.style.cursor = 'pointer';
+      card.style.transition = 'all 0.15s ease';
+
+      const swatches = document.createElement('div');
+      swatches.style.display = 'flex';
+      swatches.style.gap = '6px';
+      swatches.style.marginBottom = '8px';
+
+      for (const col of pal.previewColors) {
+        const dot = document.createElement('span');
+        dot.style.width = '14px';
+        dot.style.height = '14px';
+        dot.style.borderRadius = '4px';
+        dot.style.background = col;
+        dot.style.border = '1px solid rgba(255,255,255,0.2)';
+        swatches.appendChild(dot);
+      }
+      card.appendChild(swatches);
+
+      const palName = document.createElement('div');
+      palName.style.fontSize = '12px';
+      palName.style.fontWeight = '700';
+      palName.style.color = '#F8FAFC';
+      palName.textContent = pal.name;
+      card.appendChild(palName);
+
+      const palDesc = document.createElement('div');
+      palDesc.style.fontSize = '11px';
+      palDesc.style.color = '#94A3B8';
+      palDesc.style.marginTop = '2px';
+      palDesc.textContent = pal.desc;
+      card.appendChild(palDesc);
+
+      card.addEventListener('click', () => {
+        themeManager.setPalette(pal.id);
+        this.render();
+      });
+
+      palettesGrid.appendChild(card);
+    }
+    section0.appendChild(palettesGrid);
+    container.appendChild(section0);
 
     // 1. Accent Color
     const section1 = document.createElement('div');
@@ -737,7 +803,7 @@ export class SettingsModal {
 
     const currentInfo = document.createElement('div');
     currentInfo.innerHTML = `
-      <div style="font-size: 13px; font-weight: 600; color: #F8FAFC;">TypesetOK v0.8.0</div>
+      <div style="font-size: 13px; font-weight: 600; color: #F8FAFC;">TypesetOK v0.7.3</div>
       <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">ערוץ שחרור רשמי יציב (Official Stable Channel)</div>
     `;
     currentCard.appendChild(currentInfo);

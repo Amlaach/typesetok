@@ -9,6 +9,8 @@ export interface TopSystemBarCallbacks {
   onExportPdf: () => void;
   onOpenProjects?: () => void;
   onToggleLanguage?: () => void;
+  onOpenSettings?: () => void;
+  onOpenAbout?: () => void;
 }
 
 export class TopSystemBar {
@@ -119,41 +121,22 @@ export class TopSystemBar {
 
     leadingSide.appendChild(docPill);
 
-    // Projects Hub Button
-    const projectsBtn = document.createElement('button');
-    projectsBtn.className = 'tok-btn';
-    projectsBtn.style.height = '26px';
-    projectsBtn.style.padding = '0 10px';
-    projectsBtn.style.fontSize = '11px';
-    projectsBtn.style.background = '#1E293B';
-    projectsBtn.style.border = '1px solid #334155';
-    projectsBtn.style.color = '#CBD5E1';
-    projectsBtn.style.borderRadius = '6px';
-    projectsBtn.style.cursor = 'pointer';
-    projectsBtn.style.display = 'inline-flex';
-    projectsBtn.style.alignItems = 'center';
-    projectsBtn.style.gap = '6px';
-    projectsBtn.innerHTML = `${renderIcon('folder', 13)} <span>${t('topBarProjects')}</span>`;
-    projectsBtn.addEventListener('click', () => {
-      if (this.callbacks.onOpenProjects) this.callbacks.onOpenProjects();
-    });
-    leadingSide.appendChild(projectsBtn);
-
-    // Quick Menu Dropdown
+    // Unified Project & File Menu Button (Uncluttered)
     const menuBtn = document.createElement('button');
     menuBtn.className = 'tok-btn';
-    menuBtn.style.height = '26px';
-    menuBtn.style.padding = '0 8px';
-    menuBtn.style.fontSize = '11px';
-    menuBtn.style.background = 'transparent';
-    menuBtn.style.border = '1px solid transparent';
-    menuBtn.style.color = '#94A3B8';
+    menuBtn.style.height = '28px';
+    menuBtn.style.padding = '0 10px';
+    menuBtn.style.fontSize = '12px';
+    menuBtn.style.fontWeight = '500';
+    menuBtn.style.background = 'var(--tok-bg-surface-2, #1E293B)';
+    menuBtn.style.border = '1px solid var(--tok-border-strong, #334155)';
+    menuBtn.style.color = '#F1F5F9';
     menuBtn.style.borderRadius = '6px';
     menuBtn.style.cursor = 'pointer';
     menuBtn.style.display = 'inline-flex';
     menuBtn.style.alignItems = 'center';
-    menuBtn.style.gap = '5px';
-    menuBtn.innerHTML = `${renderIcon('chevronDown', 12)} <span>${t('topBarMenu')}</span>`;
+    menuBtn.style.gap = '6px';
+    menuBtn.innerHTML = `${renderIcon('folder', 13)} <span>${t('topBarFileAndMenu')}</span> ${renderIcon('chevronDown', 10)}`;
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.toggleQuickMenu(menuBtn);
@@ -255,14 +238,56 @@ export class TopSystemBar {
     trailingSide.style.alignItems = 'center';
     trailingSide.style.gap = '8px';
 
+    // Settings Button (Prominent & Direct)
+    const settingsBtn = document.createElement('button');
+    settingsBtn.className = 'tok-btn';
+    settingsBtn.style.height = '28px';
+    settingsBtn.style.padding = '0 9px';
+    settingsBtn.style.fontSize = '12px';
+    settingsBtn.style.background = 'var(--tok-bg-surface-2, #1E293B)';
+    settingsBtn.style.border = '1px solid var(--tok-border-strong, #334155)';
+    settingsBtn.style.color = '#F8FAFC';
+    settingsBtn.style.borderRadius = '6px';
+    settingsBtn.style.cursor = 'pointer';
+    settingsBtn.style.display = 'inline-flex';
+    settingsBtn.style.alignItems = 'center';
+    settingsBtn.style.gap = '6px';
+    settingsBtn.title = t('sidebarSettings');
+    settingsBtn.innerHTML = `${renderIcon('settings', 13)} <span>${t('sidebarSettings')}</span>`;
+    settingsBtn.addEventListener('click', () => {
+      if (this.callbacks.onOpenSettings) this.callbacks.onOpenSettings();
+    });
+    trailingSide.appendChild(settingsBtn);
+
+    // About Button (Prominent & Direct)
+    const aboutBtn = document.createElement('button');
+    aboutBtn.className = 'tok-btn';
+    aboutBtn.style.height = '28px';
+    aboutBtn.style.padding = '0 8px';
+    aboutBtn.style.fontSize = '12px';
+    aboutBtn.style.background = 'transparent';
+    aboutBtn.style.border = '1px solid var(--tok-border-subtle, #334155)';
+    aboutBtn.style.color = 'var(--tok-text-secondary, #94A3B8)';
+    aboutBtn.style.borderRadius = '6px';
+    aboutBtn.style.cursor = 'pointer';
+    aboutBtn.style.display = 'inline-flex';
+    aboutBtn.style.alignItems = 'center';
+    aboutBtn.style.gap = '5px';
+    aboutBtn.title = t('sidebarAbout');
+    aboutBtn.innerHTML = `${renderIcon('info', 13)} <span>${t('sidebarAbout')}</span>`;
+    aboutBtn.addEventListener('click', () => {
+      if (this.callbacks.onOpenAbout) this.callbacks.onOpenAbout();
+    });
+    trailingSide.appendChild(aboutBtn);
+
     // Language Switcher Button
     const langBtn = document.createElement('button');
     langBtn.className = 'tok-btn';
     langBtn.style.height = '28px';
     langBtn.style.padding = '0 9px';
     langBtn.style.fontSize = '11px';
-    langBtn.style.background = '#1E293B';
-    langBtn.style.border = '1px solid #334155';
+    langBtn.style.background = 'var(--tok-bg-surface-2, #1E293B)';
+    langBtn.style.border = '1px solid var(--tok-border-subtle, #334155)';
     langBtn.style.color = '#CBD5E1';
     langBtn.style.borderRadius = '6px';
     langBtn.style.cursor = 'pointer';
@@ -308,12 +333,12 @@ export class TopSystemBar {
     dropdown.className = 'tok-quick-menu';
     dropdown.style.position = 'absolute';
     dropdown.style.top = '100%';
-    dropdown.style.background = '#1E293B';
-    dropdown.style.border = '1px solid #334155';
+    dropdown.style.background = 'var(--tok-bg-elevated, #1E293B)';
+    dropdown.style.border = '1px solid var(--tok-border-strong, #334155)';
     dropdown.style.borderRadius = '8px';
     dropdown.style.boxShadow = '0 10px 30px rgba(0,0,0,0.7)';
     dropdown.style.padding = '6px 0';
-    dropdown.style.minWidth = '220px';
+    dropdown.style.minWidth = '230px';
     dropdown.style.zIndex = '999';
 
     if (i18n.getLanguage() === 'he') {
@@ -323,6 +348,7 @@ export class TopSystemBar {
     }
 
     const menuItems = [
+      { label: 'מרכז פרויקטים ותבניות...', shortcut: 'Ctrl+P', action: 'open-projects' },
       { label: 'הקמת מסמך חדש...', shortcut: 'Ctrl+N', action: 'new-document' },
       { label: 'פתיחת מסמך (.tok)...', shortcut: 'Ctrl+O', action: 'open-document' },
       { label: 'שמירת מסמך', shortcut: 'Ctrl+S', action: 'save-document' },
@@ -332,7 +358,10 @@ export class TopSystemBar {
       { label: 'מגן שמות קדושים (איסור שבירה)', action: 'shield-divine-names' },
       { label: 'סנכרון מספור עמודים עברי', action: 'recalculate-gematria' },
       { type: 'separator' },
-      { label: 'ייצוא קדם-דפוס (ISO PDF/X-1a)...', shortcut: 'Ctrl+E', action: 'export-pdf' }
+      { label: 'ייצוא קדם-דפוס (ISO PDF/X-1a)...', shortcut: 'Ctrl+E', action: 'export-pdf' },
+      { type: 'separator' },
+      { label: 'הגדרות המערכת...', shortcut: 'Ctrl+,', action: 'open-settings' },
+      { label: 'אודות TypesetOK...', action: 'open-about' }
     ];
 
     for (const item of menuItems) {

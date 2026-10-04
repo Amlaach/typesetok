@@ -6,6 +6,8 @@ export interface WelcomeModalCallbacks {
   onOpenProject: () => void;
   onLoadDemo: () => void;
   onClose: () => void;
+  onOpenSettings?: () => void;
+  onOpenAbout?: () => void;
 }
 
 export class WelcomeModal {
@@ -109,6 +111,51 @@ export class WelcomeModal {
     brand.appendChild(titleWrap);
     header.appendChild(brand);
 
+    const headerActions = document.createElement('div');
+    headerActions.style.display = 'flex';
+    headerActions.style.alignItems = 'center';
+    headerActions.style.gap = '8px';
+
+    const settingsBtn = document.createElement('button');
+    settingsBtn.className = 'tok-btn';
+    settingsBtn.style.height = '28px';
+    settingsBtn.style.padding = '0 10px';
+    settingsBtn.style.fontSize = '12px';
+    settingsBtn.style.background = 'var(--tok-bg-surface-2, #1E293B)';
+    settingsBtn.style.border = '1px solid var(--tok-border-strong, #334155)';
+    settingsBtn.style.color = '#F1F5F9';
+    settingsBtn.style.borderRadius = '6px';
+    settingsBtn.style.cursor = 'pointer';
+    settingsBtn.style.display = 'inline-flex';
+    settingsBtn.style.alignItems = 'center';
+    settingsBtn.style.gap = '6px';
+    settingsBtn.innerHTML = `${renderIcon('settings', 13)} <span>${t('sidebarSettings')}</span>`;
+    settingsBtn.addEventListener('click', () => {
+      this.hide();
+      if (this.callbacks.onOpenSettings) this.callbacks.onOpenSettings();
+    });
+    headerActions.appendChild(settingsBtn);
+
+    const aboutBtn = document.createElement('button');
+    aboutBtn.className = 'tok-btn';
+    aboutBtn.style.height = '28px';
+    aboutBtn.style.padding = '0 9px';
+    aboutBtn.style.fontSize = '12px';
+    aboutBtn.style.background = 'transparent';
+    aboutBtn.style.border = '1px solid var(--tok-border-subtle, #334155)';
+    aboutBtn.style.color = 'var(--tok-text-secondary, #94A3B8)';
+    aboutBtn.style.borderRadius = '6px';
+    aboutBtn.style.cursor = 'pointer';
+    aboutBtn.style.display = 'inline-flex';
+    aboutBtn.style.alignItems = 'center';
+    aboutBtn.style.gap = '5px';
+    aboutBtn.innerHTML = `${renderIcon('info', 13)} <span>${t('sidebarAbout')}</span>`;
+    aboutBtn.addEventListener('click', () => {
+      this.hide();
+      if (this.callbacks.onOpenAbout) this.callbacks.onOpenAbout();
+    });
+    headerActions.appendChild(aboutBtn);
+
     const closeBtn = document.createElement('button');
     closeBtn.style.background = 'transparent';
     closeBtn.style.border = 'none';
@@ -123,7 +170,8 @@ export class WelcomeModal {
       this.hide();
       this.callbacks.onClose();
     });
-    header.appendChild(closeBtn);
+    headerActions.appendChild(closeBtn);
+    header.appendChild(headerActions);
     modal.appendChild(header);
 
     // Body Grid
@@ -351,6 +399,38 @@ export class WelcomeModal {
     checkLabel.appendChild(check);
     checkLabel.appendChild(document.createTextNode(t('showOnStartup')));
     footer.appendChild(checkLabel);
+
+    const footerLinks = document.createElement('div');
+    footerLinks.style.display = 'flex';
+    footerLinks.style.alignItems = 'center';
+    footerLinks.style.gap = '14px';
+    footerLinks.style.fontSize = '12px';
+    footerLinks.style.color = '#94A3B8';
+
+    const sLink = document.createElement('span');
+    sLink.style.cursor = 'pointer';
+    sLink.style.display = 'inline-flex';
+    sLink.style.alignItems = 'center';
+    sLink.style.gap = '4px';
+    sLink.innerHTML = `${renderIcon('settings', 12)} ${t('sidebarSettings')}`;
+    sLink.addEventListener('click', () => {
+      this.hide();
+      if (this.callbacks.onOpenSettings) this.callbacks.onOpenSettings();
+    });
+    footerLinks.appendChild(sLink);
+
+    const aLink = document.createElement('span');
+    aLink.style.cursor = 'pointer';
+    aLink.style.display = 'inline-flex';
+    aLink.style.alignItems = 'center';
+    aLink.style.gap = '4px';
+    aLink.innerHTML = `${renderIcon('info', 12)} ${t('sidebarAbout')}`;
+    aLink.addEventListener('click', () => {
+      this.hide();
+      if (this.callbacks.onOpenAbout) this.callbacks.onOpenAbout();
+    });
+    footerLinks.appendChild(aLink);
+    footer.appendChild(footerLinks);
 
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'tok-btn';

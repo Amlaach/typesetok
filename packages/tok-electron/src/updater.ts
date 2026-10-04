@@ -20,7 +20,7 @@ export class TokUpdater {
   private currentVersion: string;
 
   constructor(currentVersion?: string) {
-    this.currentVersion = currentVersion || app.getVersion() || '0.7.0';
+    this.currentVersion = currentVersion || app.getVersion() || '0.7.3';
   }
 
   public getCurrentVersion(): string {

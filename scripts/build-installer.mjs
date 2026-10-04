@@ -6,8 +6,10 @@ import { execSync } from 'child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
+const rootPkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf-8'));
+const version = rootPkg.version || '0.7.3';
 const distDir = path.join(rootDir, 'dist');
-const bundleDir = path.join(distDir, 'TypesetOK-v0.8.0-windows-x64');
+const bundleDir = path.join(distDir, `TypesetOK-v${version}-windows-x64`);
 
 console.log('====================================================');
 console.log(' TypesetOK Multilingual Windows Installer Builder');
@@ -75,12 +77,12 @@ if (foundIscc) {
   console.log(`[BUILD-INSTALLER] Compiling with Inno Setup: ${foundIscc}`);
   const issFile = path.join(rootDir, 'scripts/installer.iss');
   execSync(`"${foundIscc}" "${issFile}"`, { cwd: rootDir, stdio: 'inherit' });
-  console.log('[BUILD-INSTALLER] SUCCESS! Installer created in dist/TypesetOK-v0.8.0-Setup-x64.exe');
+  console.log(`[BUILD-INSTALLER] SUCCESS! Installer created in dist/TypesetOK-v${version}-Setup-x64.exe`);
 } else if (foundNsis) {
   console.log(`[BUILD-INSTALLER] Compiling with NSIS: ${foundNsis}`);
   const nsiFile = path.join(rootDir, 'scripts/installer.nsi');
   execSync(`"${foundNsis}" "${nsiFile}"`, { cwd: rootDir, stdio: 'inherit' });
-  console.log('[BUILD-INSTALLER] SUCCESS! Installer created in dist/TypesetOK-v0.8.0-NSIS-Setup.exe');
+  console.log(`[BUILD-INSTALLER] SUCCESS! Installer created in dist/TypesetOK-v${version}-NSIS-Setup.exe`);
 } else {
   console.log('[BUILD-INSTALLER] Note: Inno Setup (ISCC.exe) and NSIS (makensis.exe) were not found in standard paths.');
   console.log('[BUILD-INSTALLER] Bilingual Installer scripts generated successfully:');

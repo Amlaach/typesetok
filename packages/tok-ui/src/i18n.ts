@@ -34,6 +34,7 @@ export const strings: Translations = {
   // Top Bar & Navigation
   topBarProjects: { he: 'פרויקטים', en: 'Projects' },
   topBarMenu: { he: 'תפריט', en: 'Menu' },
+  topBarFileAndMenu: { he: 'קובץ ותפריט', en: 'File & Menu' },
   topBarSearchPlaceholder: { he: 'חיפוש פקודה בסביבת העבודה...', en: 'Search workspace commands...' },
   topBarViewCanvas: { he: 'קנבס עמודים', en: 'Pages Canvas' },
   topBarViewSplit: { he: 'תצוגה מפוצלת', en: 'Split View' },
@@ -93,7 +94,7 @@ export const strings: Translations = {
 
   // Updates Settings
   updatesStatusChecking: { he: 'בודק זמינות עדכונים מול השרת...', en: 'Checking for updates on GitHub...' },
-  updatesStatusLatest: { he: 'הגרסה המותקנת היא העדכנית ביותר (v0.8.0)', en: 'You are using the latest version (v0.8.0)' },
+  updatesStatusLatest: { he: 'הגרסה המותקנת היא העדכנית ביותר (v0.7.3)', en: 'You are using the latest version (v0.7.3)' },
   updatesStatusAvailable: { he: 'גרסה חדשה זמינה להורדה והתקנה', en: 'A newer version is available for download' },
   updatesCheckNow: { he: 'בדיקת עדכונים כעת', en: 'Check for Updates Now' },
   updatesAutoCheck: { he: 'בדיקת עדכונים אוטומטית בעת פתיחת התוכנה', en: 'Automatically check for updates on startup' },

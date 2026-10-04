@@ -82,6 +82,8 @@ export class TypesetOkApp {
       onViewModeChange: (mode) => this.setViewMode(mode),
       onExportPdf: () => this.handleSystemAction('export-pdf'),
       onOpenProjects: () => this.welcomeModal.show(),
+      onOpenSettings: () => this.settingsModal.show(),
+      onOpenAbout: () => this.aboutModal.show(),
       onToggleLanguage: () => {
         this.showToast(`שפת הממשק הוחלפה ל-${i18n.getLanguage() === 'he' ? 'עברית (RTL)' : 'English (LTR)'}`);
       }
@@ -217,7 +219,9 @@ export class TypesetOkApp {
       onSelectTemplate: (tmpl) => this.handleTemplateSelect(tmpl),
       onOpenProject: () => this.handleSystemAction('open-document'),
       onLoadDemo: () => this.loadDemoProject(),
-      onClose: () => {}
+      onClose: () => {},
+      onOpenSettings: () => this.settingsModal.show(),
+      onOpenAbout: () => this.aboutModal.show()
     });
     this.root.appendChild(this.welcomeModal.element);
 
@@ -444,7 +448,14 @@ export class TypesetOkApp {
 
     switch (action) {
       case 'new-document':
+      case 'open-projects':
         this.welcomeModal.show();
+        break;
+      case 'open-settings':
+        this.settingsModal.show();
+        break;
+      case 'open-about':
+        this.aboutModal.show();
         break;
       case 'open-document':
         this.showToast(`פתיחת קובץ: ${data || ''}`);

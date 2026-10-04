@@ -5,15 +5,15 @@
 !include "FileFunc.nsh"
 
 Name "TypesetOK"
-OutFile "..\dist\TypesetOK-v0.8.0-NSIS-Setup.exe"
+OutFile "..\dist\TypesetOK-v0.7.3-NSIS-Setup.exe"
 InstallDir "$PROGRAMFILES64\TypesetOK"
 InstallDirRegKey HKLM "Software\TypesetOK" "Install_Dir"
 RequestExecutionLevel admin
 
 ; Interface Settings
 !define MUI_ABORTWARNING
-!define MUI_ICON "..\assets\icons\icon.ico"
-!define MUI_UNICON "..\assets\icons\icon.ico"
+; !define MUI_ICON "..\assets\icons\icon.ico"
+; !define MUI_UNICON "..\assets\icons\icon.ico"
 
 ; Language Selection Dialog
 !define MUI_LANGDLL_REGISTRY_ROOT "HKLM"
@@ -43,7 +43,7 @@ FunctionEnd
 Section "TypesetOK Application (Required)" SecApp
   SectionIn RO
   SetOutPath "$INSTDIR"
-  File /r "..\dist\TypesetOK-v0.8.0-windows-x64\*.*"
+  File /r "..\dist\TypesetOK-v0.7.3-windows-x64\*.*"
 
   ; Create shortcuts
   CreateDirectory "$SMPROGRAMS\TypesetOK"
@@ -62,7 +62,7 @@ Section "TypesetOK Application (Required)" SecApp
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "DisplayIcon" '"$INSTDIR\TypesetOK.exe"'
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "Publisher" "TypesetOK Team"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "DisplayVersion" "0.8.0"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "DisplayVersion" "0.7.3"
 SectionEnd
 
 Section "Uninstall"

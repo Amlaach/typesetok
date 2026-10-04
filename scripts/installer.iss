@@ -3,11 +3,11 @@
 ; =========================================================================
 
 #define MyAppName "TypesetOK"
-#define MyAppVersion "0.8.0"
+#define MyAppVersion "0.7.3"
 #define MyAppPublisher "TypesetOK Team"
 #define MyAppURL "https://github.com/TypesetOK/typesetok"
 #define MyAppExeName "TypesetOK.exe"
-#define SourceDir "..\dist\TypesetOK-v0.8.0-windows-x64"
+#define SourceDir "..\dist\TypesetOK-v0.7.3-windows-x64"
 
 [Setup]
 AppId={{E1B385C9-5D8A-4A73-98FB-364F36AA8C80}
@@ -23,7 +23,6 @@ DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE.md
 OutputDir=..\dist
 OutputBaseFilename=TypesetOK-v{#MyAppVersion}-Setup-x64
-SetupIconFile=..\assets\icons\icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -43,6 +42,10 @@ hebrew.AssociateTok=שייך קובצי מסמך (.tok) ל-TypesetOK
 english.AssociateTok=Associate TypesetOK document files (.tok)
 hebrew.AssociateTokBook=שייך קובצי ספר (.tokbook) ל-TypesetOK
 english.AssociateTokBook=Associate TypesetOK book files (.tokbook)
+hebrew.FileAssociations=שיוך סוגי קבצים
+english.FileAssociations=File Associations
+hebrew.AdditionalIcons=קיצורי דרך נוספים
+english.AdditionalIcons=Additional shortcuts
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

@@ -109,7 +109,7 @@ export class AboutModal {
     metaBox.innerHTML = `
       <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
         <span style="color: #64748B;">${t('aboutVersionLabel')}</span>
-        <span style="font-weight: 600; color: #F8FAFC;">v0.8.0 Stable (2026)</span>
+        <span style="font-weight: 600; color: #F8FAFC;">v0.7.3 Stable (2026)</span>
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
         <span style="color: #64748B;">${t('aboutCoreLabel')}</span>
