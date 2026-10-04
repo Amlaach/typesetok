@@ -14,3 +14,4 @@ thiserror = { workspace = true }
 log = { workspace = true }
 subsetter = "0.2"
 ttf-parser = "0.24"
+miniz_oxide = "0.9"

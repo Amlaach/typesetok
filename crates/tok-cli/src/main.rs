@@ -88,6 +88,7 @@ fn handle_render_pdf(input: &str, output: &str) -> Result<(), Box<dyn std::error
         custom_font_data: None,
         creation_date: Some(manifest.created_at.clone()),
         mod_date: Some(manifest.modified_at.clone()),
+        compress_streams: true,
     };
 
     let pdf_bytes =

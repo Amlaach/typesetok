@@ -12,7 +12,7 @@ use crate::boxes::PrePressPageBoxes;
 use crate::font_subsetter::{fnv1a, FontSubsetter, SubsetFontResult, FNV_OFFSET};
 use crate::tounicode::ToUnicodeCMap;
 use pdf_writer::types::{CidFontType, FontFlags, OutputIntentSubtype, SystemInfo, TrappingStatus};
-use pdf_writer::{Content, Date, Finish, Name, Pdf, Rect, Ref, Str, TextStr};
+use pdf_writer::{Content, Date, Filter, Finish, Name, Pdf, Rect, Ref, Str, TextStr};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use thiserror::Error;
@@ -41,6 +41,8 @@ pub struct PdfExportOptions {
     /// ISO 8601 / RFC 3339 modification timestamp (e.g. from TokManifest).
     /// If None, creation_date or a deterministic default is used.
     pub mod_date: Option<String>,
+    /// Compress streams with FlateDecode (deflate/zlib) for smaller PDF output.
+    pub compress_streams: bool,
 }
 
 impl Default for PdfExportOptions {
@@ -55,6 +57,7 @@ impl Default for PdfExportOptions {
             custom_font_data: None,
             creation_date: None,
             mod_date: None,
+            compress_streams: true,
         }
     }
 }
@@ -471,7 +474,7 @@ impl PdfPrePressEngine {
         for font in &embedded {
             let ids = [alloc(), alloc(), alloc(), alloc(), alloc()];
             type0_ids.push(ids[0]);
-            Self::write_font(&mut pdf, &font.subset, ids);
+            Self::write_font(&mut pdf, &font.subset, ids, options.compress_streams);
             id_hash = fnv1a(id_hash, font.subset.font_name.as_bytes());
         }
 
@@ -501,7 +504,12 @@ impl PdfPrePressEngine {
             id_hash = fnv1a(id_hash, &(content.len() as u64).to_le_bytes());
             id_hash = fnv1a(id_hash, &content[..content.len().min(256)]);
             id_hash = fnv1a(id_hash, &content[content.len().saturating_sub(256)..]);
-            pdf.stream(content_id, &content);
+            if options.compress_streams {
+                let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&content, 6);
+                pdf.stream(content_id, &compressed).filter(Filter::FlateDecode);
+            } else {
+                pdf.stream(content_id, &content);
+            }
 
             let mut page = pdf.page(page_id);
             page.parent(pages_id);
@@ -552,14 +560,28 @@ impl PdfPrePressEngine {
         Ok(pdf.finish())
     }
 
-    fn write_font(pdf: &mut Pdf, subset: &SubsetFontResult, ids: [Ref; 5]) {
+    fn write_font(
+        pdf: &mut Pdf,
+        subset: &SubsetFontResult,
+        ids: [Ref; 5],
+        compress: bool,
+    ) {
         let [type0_font_id, cid_font_id, descriptor_id, font_file_id, tounicode_id] = ids;
         let base_font = Name(subset.font_name.as_bytes());
 
         // FontFile2 Stream
-        let mut font_stream = pdf.stream(font_file_id, &subset.subset_bytes);
-        font_stream.pair(Name(b"Length1"), subset.subset_bytes.len() as i32);
-        font_stream.finish();
+        if compress {
+            let compressed_font =
+                miniz_oxide::deflate::compress_to_vec_zlib(&subset.subset_bytes, 6);
+            let mut font_stream = pdf.stream(font_file_id, &compressed_font);
+            font_stream.filter(Filter::FlateDecode);
+            font_stream.pair(Name(b"Length1"), subset.subset_bytes.len() as i32);
+            font_stream.finish();
+        } else {
+            let mut font_stream = pdf.stream(font_file_id, &subset.subset_bytes);
+            font_stream.pair(Name(b"Length1"), subset.subset_bytes.len() as i32);
+            font_stream.finish();
+        }
 
         // FontDescriptor
         let mut descriptor = pdf.font_descriptor(descriptor_id);
@@ -598,7 +620,13 @@ impl PdfPrePressEngine {
 
         // /ToUnicode CMap Stream
         let cmap_bytes = ToUnicodeCMap::generate(&subset.to_unicode_map);
-        pdf.stream(tounicode_id, &cmap_bytes);
+        if compress {
+            let compressed_cmap = miniz_oxide::deflate::compress_to_vec_zlib(&cmap_bytes, 6);
+            pdf.stream(tounicode_id, &compressed_cmap)
+                .filter(Filter::FlateDecode);
+        } else {
+            pdf.stream(tounicode_id, &cmap_bytes);
+        }
 
         // Type 0 Font
         let mut type0 = pdf.type0_font(type0_font_id);
@@ -757,6 +785,34 @@ mod tests {
             .count()
     }
 
+    fn decompress_flate_streams(pdf_bytes: &[u8]) -> Vec<Vec<u8>> {
+        let mut results = Vec::new();
+        let stream_tag = b"stream\n";
+        let endstream_tag = b"\nendstream";
+        let mut offset = 0;
+        while let Some(start_rel) = pdf_bytes[offset..]
+            .windows(stream_tag.len())
+            .position(|w| w == stream_tag)
+        {
+            let start = offset + start_rel + stream_tag.len();
+            if let Some(end_rel) = pdf_bytes[start..]
+                .windows(endstream_tag.len())
+                .position(|w| w == endstream_tag)
+            {
+                let stream_data = &pdf_bytes[start..start + end_rel];
+                if let Ok(decomp) = miniz_oxide::inflate::decompress_to_vec_zlib(stream_data) {
+                    results.push(decomp);
+                } else {
+                    results.push(stream_data.to_vec());
+                }
+                offset = start + end_rel + endstream_tag.len();
+            } else {
+                break;
+            }
+        }
+        results
+    }
+
     #[test]
     fn test_pdf_export_structure() {
         let line = LineBox {
@@ -789,7 +845,10 @@ mod tests {
         assert!(s.contains("/CIDFontType2"), "Must embed CIDFont Type 2");
         assert!(s.contains("/FontDescriptor"), "Must embed FontDescriptor");
         assert!(s.contains("/Identity-H"), "Must use Identity-H encoding");
-        assert_eq!(count(&bytes, b"BT\n"), 1);
+        assert!(s.contains("/Filter /FlateDecode"), "Must use FlateDecode compression");
+        let decompressed = decompress_flate_streams(&bytes);
+        let bt_count: usize = decompressed.iter().map(|st| count(st, b"BT\n")).sum();
+        assert_eq!(bt_count, 1);
     }
 
     #[test]
@@ -874,7 +933,9 @@ mod tests {
                 .unwrap();
         assert!(bytes.starts_with(b"%PDF-"));
         // The heuristic glyph is drawn through the legacy font by character.
-        assert_eq!(count(&bytes, b"TJ"), 1);
+        let decompressed = decompress_flate_streams(&bytes);
+        let tj_count: usize = decompressed.iter().map(|st| count(st, b"TJ")).sum();
+        assert_eq!(tj_count, 1);
     }
 
     #[test]
@@ -888,7 +949,9 @@ mod tests {
         let a = PdfPrePressEngine::export_pdf(&pages, &PdfExportOptions::default()).unwrap();
         let b = PdfPrePressEngine::export_pdf(&pages, &PdfExportOptions::default()).unwrap();
         assert_eq!(a, b);
-        assert_eq!(count(&a, b"BT\n"), n_lines);
+        let decompressed = decompress_flate_streams(&a);
+        let bt_count: usize = decompressed.iter().map(|st| count(st, b"BT\n")).sum();
+        assert_eq!(bt_count, n_lines);
     }
 
     #[test]
@@ -929,5 +992,41 @@ mod tests {
         let s = String::from_utf8_lossy(&bytes);
         assert!(s.contains("/CreationDate (D:20261004201437Z)"));
         assert!(s.contains("/ModDate (D:20261004223000Z)"));
+    }
+
+    #[test]
+    fn test_flate_compression_reduces_size() {
+        let lines = typeset(
+            "בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ TypesetOK 2026",
+            "Noto Serif Hebrew",
+        );
+        let pages = [page_with(lines)];
+        let uncompressed = PdfPrePressEngine::export_pdf(
+            &pages,
+            &PdfExportOptions {
+                compress_streams: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let compressed = PdfPrePressEngine::export_pdf(
+            &pages,
+            &PdfExportOptions {
+                compress_streams: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert!(
+            compressed.len() < uncompressed.len(),
+            "Compressed PDF ({} bytes) must be smaller than uncompressed ({} bytes)",
+            compressed.len(),
+            uncompressed.len()
+        );
+        let s_comp = String::from_utf8_lossy(&compressed);
+        let s_uncomp = String::from_utf8_lossy(&uncompressed);
+        assert!(s_comp.contains("/Filter /FlateDecode"));
+        assert!(!s_uncomp.contains("/Filter /FlateDecode"));
     }
 }

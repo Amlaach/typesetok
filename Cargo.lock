@@ -909,6 +909,7 @@ name = "tok-pdf"
 version = "0.7.0"
 dependencies = [
  "log",
+ "miniz_oxide",
  "pdf-writer",
  "serde",
  "subsetter",
