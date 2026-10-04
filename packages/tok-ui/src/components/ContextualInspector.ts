@@ -4,6 +4,7 @@ import {
   TextFrameData,
   TypographySettings
 } from '../types';
+import { renderIcon, IconName } from '../icons';
 
 export interface InspectorCallbacks {
   onDocumentChange: (settings: Partial<DocumentSettings>) => void;
@@ -135,7 +136,7 @@ export class ContextualInspector {
   // =========================================================================
   private renderZeroSelection(): void {
     // Header
-    this.element.appendChild(this.createHeader('הגדרות מסמך ועמוד', 'מסמך תורני', '📄'));
+    this.element.appendChild(this.createHeader('הגדרות מסמך ועמוד', 'מסמך תורני', 'file'));
 
     // 1. Page Size Card
     const sizeCard = this.createCard('ממדי עמוד ופורמט');
@@ -246,7 +247,7 @@ export class ContextualInspector {
   // State 2: Text Frame Selected (Object Mode)
   // =========================================================================
   private renderTextFrameMode(): void {
-    this.element.appendChild(this.createHeader('תיבת טקסט', this.selectedFrame.flowId, '📐'));
+    this.element.appendChild(this.createHeader('תיבת טקסט', this.selectedFrame.flowId, 'frame'));
 
     // 1. Geometry & Coordinates with Value Scrubbing
     const geoCard = this.createCard('מיקום וממדים (Geometry)');
@@ -384,7 +385,7 @@ export class ContextualInspector {
   // State 3: Text Edit Mode (Typography, 3-Tier Hebrew Justification, Niqqud)
   // =========================================================================
   private renderTextEditMode(): void {
-    this.element.appendChild(this.createHeader('טיפוגרפיה ועריכה', this.typographySettings.styleTokenName, '🔤'));
+    this.element.appendChild(this.createHeader('טיפוגרפיה ועריכה', this.typographySettings.styleTokenName, 'typography'));
 
     // 1. Style Token Card & Override Sync
     const styleCard = this.createCard('טוקן סגנון פסקה');
@@ -418,7 +419,11 @@ export class ContextualInspector {
     syncBtn.className = 'tok-btn tok-btn-primary';
     syncBtn.style.width = '100%';
     syncBtn.style.fontSize = '11px';
-    syncBtn.innerHTML = `<span>🔄</span><span>עדכן סגנון גלובלי מהשינוי הנוכחי</span>`;
+    syncBtn.style.display = 'flex';
+    syncBtn.style.alignItems = 'center';
+    syncBtn.style.justifyContent = 'center';
+    syncBtn.style.gap = '6px';
+    syncBtn.innerHTML = `${renderIcon('refresh', 13)}<span>עדכן סגנון גלובלי מהשינוי הנוכחי</span>`;
     syncBtn.addEventListener('click', () => {
       this.typographySettings.isOverride = false;
       this.callbacks.onSyncStyleToken();
@@ -576,7 +581,11 @@ export class ContextualInspector {
     normBtn.className = 'tok-btn tok-btn-primary';
     normBtn.style.width = '100%';
     normBtn.style.marginBottom = '8px';
-    normBtn.innerHTML = `<span>✨</span><span>נרמל רצף תווי ניקוד (ת"י 6100)</span>`;
+    normBtn.style.display = 'flex';
+    normBtn.style.alignItems = 'center';
+    normBtn.style.justifyContent = 'center';
+    normBtn.style.gap = '6px';
+    normBtn.innerHTML = `${renderIcon('sparkle', 13)}<span>נרמל רצף תווי ניקוד (ת"י 6100)</span>`;
     normBtn.addEventListener('click', () => {
       this.callbacks.onNormalizeNiqqud();
     });
@@ -609,7 +618,7 @@ export class ContextualInspector {
   // State 4: Image Frame Mode
   // =========================================================================
   private renderImageFrameMode(): void {
-    this.element.appendChild(this.createHeader('מסגרת תמונה ועיטור', 'תמונה', '🖼️'));
+    this.element.appendChild(this.createHeader('מסגרת תמונה ועיטור', 'תמונה', 'image'));
 
     const imgCard = this.createCard('התאמת תמונה (Fitting)');
     const fitSelect = document.createElement('select');
@@ -635,7 +644,7 @@ export class ContextualInspector {
   // State 5: Multi-Selection Mode (Align & Distribute)
   // =========================================================================
   private renderMultiSelectMode(): void {
-    this.element.appendChild(this.createHeader('בחירה מרובה', '3 אובייקטים', '📑'));
+    this.element.appendChild(this.createHeader('בחירה מרובה', '3 אובייקטים', 'layers'));
 
     const alignCard = this.createCard('יישור ופיזור מהיר (Align & Distribute)');
     const alignRow = document.createElement('div');
@@ -774,7 +783,7 @@ export class ContextualInspector {
     return card;
   }
 
-  private createHeader(title: string, subtitle: string, icon: string): HTMLElement {
+  private createHeader(title: string, subtitle: string, icon: IconName): HTMLElement {
     const header = document.createElement('div');
     header.style.padding = '12px 14px';
     header.style.borderBottom = '1px solid var(--tok-border-subtle)';
@@ -789,8 +798,11 @@ export class ContextualInspector {
     right.style.gap = '8px';
 
     const iconSpan = document.createElement('span');
-    iconSpan.textContent = icon;
-    iconSpan.style.fontSize = '16px';
+    iconSpan.style.display = 'inline-flex';
+    iconSpan.style.alignItems = 'center';
+    iconSpan.style.justifyContent = 'center';
+    iconSpan.style.color = '#60A5FA';
+    iconSpan.innerHTML = renderIcon(icon, 16);
     right.appendChild(iconSpan);
 
     const textWrap = document.createElement('div');

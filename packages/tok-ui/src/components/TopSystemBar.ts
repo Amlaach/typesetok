@@ -1,5 +1,6 @@
 import { ViewMode } from '../types';
 import { t, i18n } from '../i18n';
+import { renderIcon } from '../icons';
 
 export interface TopSystemBarCallbacks {
   onMenuAction: (action: string, data?: unknown) => void;
@@ -77,8 +78,8 @@ export class TopSystemBar {
     });
 
     const brandIcon = document.createElement('span');
-    brandIcon.textContent = '📘';
-    brandIcon.style.fontSize = '16px';
+    brandIcon.style.color = '#3B82F6';
+    brandIcon.innerHTML = renderIcon('brand', 18);
     brandWrap.appendChild(brandIcon);
 
     const brandName = document.createElement('span');
@@ -86,6 +87,7 @@ export class TopSystemBar {
     brandName.style.fontWeight = '700';
     brandName.style.fontSize = '13px';
     brandName.style.color = '#60A5FA';
+    brandName.style.letterSpacing = '-0.2px';
     brandWrap.appendChild(brandName);
 
     leadingSide.appendChild(brandWrap);
@@ -117,24 +119,27 @@ export class TopSystemBar {
 
     leadingSide.appendChild(docPill);
 
-    // Projects Button
+    // Projects Hub Button
     const projectsBtn = document.createElement('button');
     projectsBtn.className = 'tok-btn';
     projectsBtn.style.height = '26px';
-    projectsBtn.style.padding = '0 8px';
+    projectsBtn.style.padding = '0 10px';
     projectsBtn.style.fontSize = '11px';
     projectsBtn.style.background = '#1E293B';
     projectsBtn.style.border = '1px solid #334155';
-    projectsBtn.style.color = '#94A3B8';
+    projectsBtn.style.color = '#CBD5E1';
     projectsBtn.style.borderRadius = '6px';
     projectsBtn.style.cursor = 'pointer';
-    projectsBtn.innerHTML = `📁 ${t('topBarProjects')}`;
+    projectsBtn.style.display = 'inline-flex';
+    projectsBtn.style.alignItems = 'center';
+    projectsBtn.style.gap = '6px';
+    projectsBtn.innerHTML = `${renderIcon('folder', 13)} <span>${t('topBarProjects')}</span>`;
     projectsBtn.addEventListener('click', () => {
       if (this.callbacks.onOpenProjects) this.callbacks.onOpenProjects();
     });
     leadingSide.appendChild(projectsBtn);
 
-    // Menu Dropdown (Compact, Non-intrusive)
+    // Quick Menu Dropdown
     const menuBtn = document.createElement('button');
     menuBtn.className = 'tok-btn';
     menuBtn.style.height = '26px';
@@ -145,7 +150,10 @@ export class TopSystemBar {
     menuBtn.style.color = '#94A3B8';
     menuBtn.style.borderRadius = '6px';
     menuBtn.style.cursor = 'pointer';
-    menuBtn.innerHTML = `☰ ${i18n.getLanguage() === 'he' ? 'תפריט' : 'Menu'}`;
+    menuBtn.style.display = 'inline-flex';
+    menuBtn.style.alignItems = 'center';
+    menuBtn.style.gap = '5px';
+    menuBtn.innerHTML = `${renderIcon('chevronDown', 12)} <span>${t('topBarMenu')}</span>`;
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.toggleQuickMenu(menuBtn);
@@ -170,10 +178,10 @@ export class TopSystemBar {
     viewGroup.style.borderRadius = '6px';
     viewGroup.style.padding = '2px';
 
-    const modes: { id: ViewMode; label: string; icon: string }[] = [
-      { id: 'canvas', label: t('topBarViewCanvas'), icon: '📄' },
-      { id: 'split', label: t('topBarViewSplit'), icon: '🔲' },
-      { id: 'story', label: t('topBarViewStory'), icon: '📝' }
+    const modes: { id: ViewMode; label: string; icon: 'canvas' | 'split' | 'story' }[] = [
+      { id: 'canvas', label: t('topBarViewCanvas'), icon: 'canvas' },
+      { id: 'split', label: t('topBarViewSplit'), icon: 'split' },
+      { id: 'story', label: t('topBarViewStory'), icon: 'story' }
     ];
 
     for (const m of modes) {
@@ -186,8 +194,11 @@ export class TopSystemBar {
       modeBtn.style.fontSize = '11px';
       modeBtn.style.fontWeight = this.currentMode === m.id ? '600' : 'normal';
       modeBtn.style.cursor = 'pointer';
+      modeBtn.style.display = 'inline-flex';
+      modeBtn.style.alignItems = 'center';
+      modeBtn.style.gap = '5px';
       modeBtn.style.transition = 'all 0.15s';
-      modeBtn.innerHTML = `<span>${m.icon}</span> <span>${m.label}</span>`;
+      modeBtn.innerHTML = `${renderIcon(m.icon, 13)} <span>${m.label}</span>`;
 
       modeBtn.addEventListener('click', () => {
         this.currentMode = m.id;
@@ -216,7 +227,7 @@ export class TopSystemBar {
     searchPill.style.transition = 'all 0.15s';
 
     searchPill.innerHTML = `
-      <span>🔍</span>
+      ${renderIcon('search', 13)}
       <span>${t('topBarSearchPlaceholder')}</span>
       <kbd style="background: #1E293B; padding: 1px 5px; border-radius: 4px; font-size: 10px; color: #CBD5E1; border: 1px solid #334155;">Ctrl+K</kbd>
     `;
@@ -248,14 +259,17 @@ export class TopSystemBar {
     const langBtn = document.createElement('button');
     langBtn.className = 'tok-btn';
     langBtn.style.height = '28px';
-    langBtn.style.padding = '0 8px';
+    langBtn.style.padding = '0 9px';
     langBtn.style.fontSize = '11px';
     langBtn.style.background = '#1E293B';
     langBtn.style.border = '1px solid #334155';
     langBtn.style.color = '#CBD5E1';
     langBtn.style.borderRadius = '6px';
     langBtn.style.cursor = 'pointer';
-    langBtn.innerHTML = i18n.getLanguage() === 'he' ? '🌐 עברית' : '🌐 English';
+    langBtn.style.display = 'inline-flex';
+    langBtn.style.alignItems = 'center';
+    langBtn.style.gap = '6px';
+    langBtn.innerHTML = `${renderIcon('globe', 13)} <span>${i18n.getLanguage() === 'he' ? 'עברית' : 'English'}</span>`;
     langBtn.title = 'Switch Language / החלף שפה';
     langBtn.addEventListener('click', () => {
       i18n.toggleLanguage();
@@ -263,7 +277,7 @@ export class TopSystemBar {
     });
     trailingSide.appendChild(langBtn);
 
-    // Primary Action: Export PDF
+    // Primary Action: Export Pre-Press PDF
     const exportBtn = document.createElement('button');
     exportBtn.className = 'tok-btn tok-btn-primary';
     exportBtn.style.height = '28px';
@@ -272,7 +286,10 @@ export class TopSystemBar {
     exportBtn.style.fontWeight = '600';
     exportBtn.style.borderRadius = '6px';
     exportBtn.style.boxShadow = '0 0 10px rgba(37, 99, 235, 0.4)';
-    exportBtn.innerHTML = `🚀 ${t('topBarExportPdf')}`;
+    exportBtn.style.display = 'inline-flex';
+    exportBtn.style.alignItems = 'center';
+    exportBtn.style.gap = '6px';
+    exportBtn.innerHTML = `${renderIcon('export', 13)} <span>${t('topBarExportPdf')}</span>`;
     exportBtn.addEventListener('click', () => {
       this.callbacks.onExportPdf();
     });
@@ -296,7 +313,7 @@ export class TopSystemBar {
     dropdown.style.borderRadius = '8px';
     dropdown.style.boxShadow = '0 10px 30px rgba(0,0,0,0.7)';
     dropdown.style.padding = '6px 0';
-    dropdown.style.minWidth = '200px';
+    dropdown.style.minWidth = '220px';
     dropdown.style.zIndex = '999';
 
     if (i18n.getLanguage() === 'he') {
@@ -306,16 +323,16 @@ export class TopSystemBar {
     }
 
     const menuItems = [
-      { label: 'מסמך חדש...', shortcut: 'Ctrl+N', action: 'new-document' },
-      { label: 'פתח מסמך...', shortcut: 'Ctrl+O', action: 'open-document' },
-      { label: 'שמור מסמך', shortcut: 'Ctrl+S', action: 'save-document' },
-      { label: 'שמור בשם...', shortcut: 'Ctrl+Shift+S', action: 'save-as' },
+      { label: 'הקמת מסמך חדש...', shortcut: 'Ctrl+N', action: 'new-document' },
+      { label: 'פתיחת מסמך (.tok)...', shortcut: 'Ctrl+O', action: 'open-document' },
+      { label: 'שמירת מסמך', shortcut: 'Ctrl+S', action: 'save-document' },
+      { label: 'שמירה בשם...', shortcut: 'Ctrl+Shift+S', action: 'save-as' },
       { type: 'separator' },
-      { label: 'נרמל ניקוד וטעמים (ת"י 6100)', shortcut: 'Ctrl+Shift+N', action: 'normalize-hebrew' },
-      { label: 'מגן שמות קדושים', action: 'shield-divine-names' },
-      { label: 'סנכרן גימטריה', action: 'recalculate-gematria' },
+      { label: 'נרמול ניקוד וטעמים (ת"י 6100)', shortcut: 'Ctrl+Shift+N', action: 'normalize-hebrew' },
+      { label: 'מגן שמות קדושים (איסור שבירה)', action: 'shield-divine-names' },
+      { label: 'סנכרון מספור עמודים עברי', action: 'recalculate-gematria' },
       { type: 'separator' },
-      { label: 'ייצא לדפוס (ISO PDF/X-1a)...', shortcut: 'Ctrl+E', action: 'export-pdf' }
+      { label: 'ייצוא קדם-דפוס (ISO PDF/X-1a)...', shortcut: 'Ctrl+E', action: 'export-pdf' }
     ];
 
     for (const item of menuItems) {

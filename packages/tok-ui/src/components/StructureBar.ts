@@ -1,5 +1,6 @@
 import { MultiFlowItem, StyleToken, PageThumbnailItem } from '../types';
 import { t, i18n } from '../i18n';
+import { renderIcon, IconName } from '../icons';
 
 export interface StructureBarCallbacks {
   onSelectPage: (pageIndex: number) => void;
@@ -93,11 +94,11 @@ export class StructureBar {
     tabHeader.style.background = 'var(--tok-bg-app)';
     tabHeader.style.flexShrink = '0';
 
-    const tabs: { id: 'pages' | 'flows' | 'styles' | 'layers'; label: string; icon: string }[] = [
-      { id: 'pages', label: t('sidebarPages'), icon: '📄' },
-      { id: 'flows', label: t('sidebarFlows'), icon: '🌊' },
-      { id: 'styles', label: t('sidebarStyles'), icon: '🔤' },
-      { id: 'layers', label: t('sidebarLayers'), icon: '📑' }
+    const tabs: { id: 'pages' | 'flows' | 'styles' | 'layers'; label: string; icon: IconName }[] = [
+      { id: 'pages', label: t('sidebarPages'), icon: 'pages' },
+      { id: 'flows', label: t('sidebarFlows'), icon: 'flows' },
+      { id: 'styles', label: t('sidebarStyles'), icon: 'typography' },
+      { id: 'layers', label: t('sidebarLayers'), icon: 'layers' }
     ];
 
     for (const tItem of tabs) {
@@ -111,7 +112,11 @@ export class StructureBar {
       tabBtn.style.cursor = 'pointer';
       tabBtn.style.fontSize = '11px';
       tabBtn.style.fontWeight = this.activeTab === tItem.id ? '600' : 'normal';
-      tabBtn.innerHTML = `<span>${tItem.icon}</span> <span>${tItem.label}</span>`;
+      tabBtn.style.display = 'inline-flex';
+      tabBtn.style.alignItems = 'center';
+      tabBtn.style.justifyContent = 'center';
+      tabBtn.style.gap = '5px';
+      tabBtn.innerHTML = `${renderIcon(tItem.icon, 13)} <span>${tItem.label}</span>`;
 
       tabBtn.addEventListener('click', () => {
         this.activeTab = tItem.id;
@@ -158,7 +163,7 @@ export class StructureBar {
     settingsBtn.style.padding = '0 10px';
     settingsBtn.style.borderRadius = '6px';
     settingsBtn.style.transition = 'all 0.15s';
-    settingsBtn.innerHTML = `<span>⚙️</span><span>${t('sidebarSettings')}</span>`;
+    settingsBtn.innerHTML = `${renderIcon('settings', 14)} <span>${t('sidebarSettings')}</span>`;
 
     settingsBtn.addEventListener('mouseenter', () => {
       settingsBtn.style.background = 'var(--tok-bg-surface-2)';
@@ -192,7 +197,7 @@ export class StructureBar {
     aboutBtn.style.padding = '0 10px';
     aboutBtn.style.borderRadius = '6px';
     aboutBtn.style.transition = 'all 0.15s';
-    aboutBtn.innerHTML = `<span>ℹ️</span><span>${t('sidebarAbout')}</span>`;
+    aboutBtn.innerHTML = `${renderIcon('info', 14)} <span>${t('sidebarAbout')}</span>`;
 
     aboutBtn.addEventListener('mouseenter', () => {
       aboutBtn.style.background = 'var(--tok-bg-surface-2)';
@@ -491,12 +496,16 @@ export class StructureBar {
       eye.style.background = 'transparent';
       eye.style.border = 'none';
       eye.style.cursor = 'pointer';
-      eye.style.fontSize = '14px';
-      eye.textContent = l.visible ? '👁' : '🚫';
+      eye.style.color = l.visible ? 'var(--tok-text-primary)' : 'var(--tok-text-muted)';
+      eye.style.display = 'inline-flex';
+      eye.style.alignItems = 'center';
+      eye.style.padding = '2px';
+      eye.innerHTML = l.visible ? renderIcon('eye', 14) : renderIcon('eyeOff', 14);
       eye.title = l.visible ? 'הסתר שכבה' : 'הצג שכבה';
       eye.addEventListener('click', () => {
         l.visible = !l.visible;
-        eye.textContent = l.visible ? '👁' : '🚫';
+        eye.style.color = l.visible ? 'var(--tok-text-primary)' : 'var(--tok-text-muted)';
+        eye.innerHTML = l.visible ? renderIcon('eye', 14) : renderIcon('eyeOff', 14);
         this.callbacks.onToggleLayer(l.id, l.visible);
       });
       nameWrap.appendChild(eye);
@@ -512,12 +521,16 @@ export class StructureBar {
       lock.style.background = 'transparent';
       lock.style.border = 'none';
       lock.style.cursor = 'pointer';
-      lock.style.fontSize = '13px';
-      lock.textContent = l.locked ? '🔒' : '🔓';
+      lock.style.color = l.locked ? '#F59E0B' : 'var(--tok-text-muted)';
+      lock.style.display = 'inline-flex';
+      lock.style.alignItems = 'center';
+      lock.style.padding = '2px';
+      lock.innerHTML = l.locked ? renderIcon('lock', 14) : renderIcon('unlock', 14);
       lock.title = l.locked ? 'שחרר נעילת שכבה' : 'נעל שכבה';
       lock.addEventListener('click', () => {
         l.locked = !l.locked;
-        lock.textContent = l.locked ? '🔒' : '🔓';
+        lock.style.color = l.locked ? '#F59E0B' : 'var(--tok-text-muted)';
+        lock.innerHTML = l.locked ? renderIcon('lock', 14) : renderIcon('unlock', 14);
       });
       row.appendChild(lock);
 

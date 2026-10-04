@@ -14,6 +14,7 @@ import { PageDescriptor } from 'tok-viewer';
 import { ViewMode } from './types';
 import { i18n, t } from './i18n';
 import { themeManager } from './theme';
+import { renderIcon } from './icons';
 
 export class TypesetOkApp {
   private root: HTMLElement;
@@ -488,7 +489,7 @@ export class TypesetOkApp {
     toast.className = 'tok-toast';
     toast.style.background = isError ? '#EF4444' : '#1E293B';
     toast.style.borderColor = isError ? '#B91C1C' : '#334155';
-    toast.innerHTML = `<span>${isError ? '⚠️' : '⚡'}</span><span>${msg}</span>`;
+    toast.innerHTML = `${renderIcon(isError ? 'warning' : 'zap', 14)}<span>${msg}</span>`;
 
     document.body.appendChild(toast);
     setTimeout(() => {

@@ -1,3 +1,5 @@
+import { renderIcon } from '../icons';
+
 export interface StatusBarCallbacks {
   onZoomChange: (zoomPercent: number) => void;
   onPageClick: () => void;
@@ -62,8 +64,8 @@ export class StatusBar {
     pageItem.style.cursor = 'pointer';
     pageItem.style.display = 'flex';
     pageItem.style.alignItems = 'center';
-    pageItem.style.gap = '4px';
-    pageItem.innerHTML = `<span>📖</span><span>${this.pageLabel}</span>`;
+    pageItem.style.gap = '6px';
+    pageItem.innerHTML = `${renderIcon('pages', 13)}<span>${this.pageLabel}</span>`;
     pageItem.addEventListener('click', () => this.callbacks.onPageClick());
     right.appendChild(pageItem);
 

@@ -1,4 +1,5 @@
 import { t, i18n } from '../i18n';
+import { renderIcon } from '../icons';
 
 export interface AboutModalCallbacks {
   onClose: () => void;
@@ -70,10 +71,10 @@ export class AboutModal {
     logo.style.display = 'flex';
     logo.style.alignItems = 'center';
     logo.style.justifyContent = 'center';
-    logo.style.fontSize = '32px';
+    logo.style.color = '#60A5FA';
     logo.style.marginBottom = '14px';
     logo.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.4)';
-    logo.innerHTML = '📘';
+    logo.innerHTML = renderIcon('brand', 30);
     card.appendChild(logo);
 
     // Title & Tagline
@@ -82,6 +83,7 @@ export class AboutModal {
     title.style.fontSize = '22px';
     title.style.fontWeight = '800';
     title.style.color = '#60A5FA';
+    title.style.letterSpacing = '-0.3px';
     title.textContent = 'TypesetOK (TOK)';
     card.appendChild(title);
 
@@ -115,7 +117,7 @@ export class AboutModal {
       </div>
       <div style="display: flex; justify-content: space-between;">
         <span style="color: #64748B;">${t('aboutShellLabel')}</span>
-        <span style="color: #F8FAFC;">Chromium / Electron DTP Shell</span>
+        <span style="color: #F8FAFC;">Electron + Chromium Pre-Press Platform</span>
       </div>
     `;
     card.appendChild(metaBox);
@@ -128,7 +130,11 @@ export class AboutModal {
     ghBtn.style.fontSize = '13px';
     ghBtn.style.fontWeight = '600';
     ghBtn.style.marginBottom = '10px';
-    ghBtn.innerHTML = `⭐ ${t('aboutGithubBtn')}`;
+    ghBtn.style.display = 'inline-flex';
+    ghBtn.style.alignItems = 'center';
+    ghBtn.style.justifyContent = 'center';
+    ghBtn.style.gap = '8px';
+    ghBtn.innerHTML = `${renderIcon('brand', 15)} <span>${t('aboutGithubBtn')}</span>`;
 
     ghBtn.addEventListener('click', () => {
       const url = 'https://github.com/TypesetOK/typesetok';

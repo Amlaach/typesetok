@@ -1,6 +1,7 @@
 import { t, i18n, Language } from '../i18n';
 import { themeManager, ACCENT_PRESETS, CANVAS_TONE_PRESETS } from '../theme';
 import { PluginEngine } from '../plugins/PluginEngine';
+import { renderIcon, IconName } from '../icons';
 
 export interface SettingsModalCallbacks {
   onLanguageChange: (lang: Language) => void;
@@ -12,10 +13,9 @@ export interface SettingsModalCallbacks {
 export class SettingsModal {
   public element: HTMLElement;
   private callbacks: SettingsModalCallbacks;
-  private activeTab: 'appearance' | 'language' | 'logs' | 'updates' | 'plugins' = 'appearance';
+  private activeTab: 'appearance' | 'accessibility' | 'language' | 'logs' | 'updates' | 'plugins' = 'appearance';
   private isVisible = false;
   private logRetentionDays = 14;
-  private autoCheckUpdates = true;
 
   constructor(callbacks: SettingsModalCallbacks) {
     this.callbacks = callbacks;
@@ -43,7 +43,7 @@ export class SettingsModal {
     });
   }
 
-  public show(initialTab?: 'appearance' | 'language' | 'logs' | 'updates' | 'plugins'): void {
+  public show(initialTab?: 'appearance' | 'accessibility' | 'language' | 'logs' | 'updates' | 'plugins'): void {
     if (initialTab) this.activeTab = initialTab;
     this.isVisible = true;
     this.element.style.display = 'flex';
@@ -62,9 +62,9 @@ export class SettingsModal {
 
     const card = document.createElement('div');
     card.className = 'tok-settings-card';
-    card.style.width = '780px';
+    card.style.width = '820px';
     card.style.maxWidth = '92vw';
-    card.style.height = '560px';
+    card.style.height = '580px';
     card.style.maxHeight = '90vh';
     card.style.background = '#0F172A';
     card.style.border = '1px solid #1E3A8A';
@@ -89,13 +89,13 @@ export class SettingsModal {
     titleWrap.style.gap = '10px';
 
     const icon = document.createElement('span');
-    icon.style.fontSize = '20px';
-    icon.textContent = '⚙️';
+    icon.style.color = '#60A5FA';
+    icon.innerHTML = renderIcon('settings', 18);
     titleWrap.appendChild(icon);
 
     const title = document.createElement('h2');
     title.style.margin = '0';
-    title.style.fontSize = '17px';
+    title.style.fontSize = '16px';
     title.style.fontWeight = '700';
     title.style.color = '#F8FAFC';
     title.textContent = t('settingsTitle');
@@ -107,9 +107,12 @@ export class SettingsModal {
     closeBtn.style.background = 'transparent';
     closeBtn.style.border = 'none';
     closeBtn.style.color = '#94A3B8';
-    closeBtn.style.fontSize = '20px';
     closeBtn.style.cursor = 'pointer';
-    closeBtn.textContent = '✕';
+    closeBtn.style.padding = '4px';
+    closeBtn.style.display = 'inline-flex';
+    closeBtn.style.alignItems = 'center';
+    closeBtn.style.justifyContent = 'center';
+    closeBtn.innerHTML = renderIcon('close', 14);
     closeBtn.addEventListener('click', () => this.hide());
     header.appendChild(closeBtn);
 
@@ -123,7 +126,7 @@ export class SettingsModal {
 
     // Tabs Column
     const tabsCol = document.createElement('div');
-    tabsCol.style.width = '200px';
+    tabsCol.style.width = '210px';
     tabsCol.style.background = '#0B132B';
     tabsCol.style.borderLeft = i18n.getLanguage() === 'he' ? '1px solid #1E293B' : 'none';
     tabsCol.style.borderRight = i18n.getLanguage() === 'en' ? '1px solid #1E293B' : 'none';
@@ -132,12 +135,13 @@ export class SettingsModal {
     tabsCol.style.flexDirection = 'column';
     tabsCol.style.gap = '4px';
 
-    const tabs: { id: 'appearance' | 'language' | 'logs' | 'updates' | 'plugins'; label: string; icon: string }[] = [
-      { id: 'appearance', label: t('settingsTabAppearance'), icon: '🎨' },
-      { id: 'language', label: t('settingsTabLanguage'), icon: '🌐' },
-      { id: 'logs', label: t('settingsTabLogs'), icon: '📋' },
-      { id: 'updates', label: t('settingsTabUpdates'), icon: '🔄' },
-      { id: 'plugins', label: t('settingsTabPlugins'), icon: '🧩' },
+    const tabs: { id: 'appearance' | 'accessibility' | 'language' | 'logs' | 'updates' | 'plugins'; label: string; icon: IconName }[] = [
+      { id: 'appearance', label: t('settingsTabAppearance'), icon: 'typography' },
+      { id: 'accessibility', label: t('settingsTabAccessibility'), icon: 'accessibility' },
+      { id: 'language', label: t('settingsTabLanguage'), icon: 'globe' },
+      { id: 'logs', label: t('settingsTabLogs'), icon: 'file' },
+      { id: 'updates', label: t('settingsTabUpdates'), icon: 'refresh' },
+      { id: 'plugins', label: t('settingsTabPlugins'), icon: 'plugin' },
     ];
 
     for (const tab of tabs) {
@@ -145,7 +149,7 @@ export class SettingsModal {
       tabBtn.style.display = 'flex';
       tabBtn.style.alignItems = 'center';
       tabBtn.style.gap = '10px';
-      tabBtn.style.padding = '10px 14px';
+      tabBtn.style.padding = '9px 12px';
       tabBtn.style.borderRadius = '8px';
       tabBtn.style.border = 'none';
       tabBtn.style.background = this.activeTab === tab.id ? '#1E3A8A' : 'transparent';
@@ -153,10 +157,10 @@ export class SettingsModal {
       tabBtn.style.fontWeight = this.activeTab === tab.id ? '600' : 'normal';
       tabBtn.style.cursor = 'pointer';
       tabBtn.style.textAlign = i18n.getLanguage() === 'he' ? 'right' : 'left';
-      tabBtn.style.fontSize = '13px';
+      tabBtn.style.fontSize = '12.5px';
       tabBtn.style.transition = 'all 0.15s';
 
-      tabBtn.innerHTML = `<span>${tab.icon}</span><span>${tab.label}</span>`;
+      tabBtn.innerHTML = `${renderIcon(tab.icon, 14)} <span>${tab.label}</span>`;
       tabBtn.addEventListener('click', () => {
         this.activeTab = tab.id;
         this.render();
@@ -174,6 +178,8 @@ export class SettingsModal {
 
     if (this.activeTab === 'appearance') {
       this.renderAppearanceTab(contentArea);
+    } else if (this.activeTab === 'accessibility') {
+      this.renderAccessibilityTab(contentArea);
     } else if (this.activeTab === 'language') {
       this.renderLanguageTab(contentArea);
     } else if (this.activeTab === 'logs') {
@@ -198,7 +204,7 @@ export class SettingsModal {
     section1.style.marginBottom = '24px';
 
     const h3_1 = document.createElement('h3');
-    h3_1.style.fontSize = '14px';
+    h3_1.style.fontSize = '13.5px';
     h3_1.style.color = '#60A5FA';
     h3_1.style.marginBottom = '12px';
     h3_1.textContent = t('appearanceAccentColor');
@@ -223,8 +229,8 @@ export class SettingsModal {
       btn.style.fontSize = '12px';
 
       const dot = document.createElement('span');
-      dot.style.width = '14px';
-      dot.style.height = '14px';
+      dot.style.width = '12px';
+      dot.style.height = '12px';
       dot.style.borderRadius = '50%';
       dot.style.background = preset.value;
       btn.appendChild(dot);
@@ -248,7 +254,7 @@ export class SettingsModal {
     section2.style.marginBottom = '24px';
 
     const h3_2 = document.createElement('h3');
-    h3_2.style.fontSize = '14px';
+    h3_2.style.fontSize = '13.5px';
     h3_2.style.color = '#60A5FA';
     h3_2.style.marginBottom = '12px';
     h3_2.textContent = t('appearanceCanvasTone');
@@ -273,8 +279,8 @@ export class SettingsModal {
       btn.style.fontSize = '12px';
 
       const box = document.createElement('span');
-      box.style.width = '20px';
-      box.style.height = '20px';
+      box.style.width = '18px';
+      box.style.height = '18px';
       box.style.borderRadius = '4px';
       box.style.background = preset.value;
       box.style.border = '1px solid #475569';
@@ -297,7 +303,7 @@ export class SettingsModal {
     // 3. UI Density
     const section3 = document.createElement('div');
     const h3_3 = document.createElement('h3');
-    h3_3.style.fontSize = '14px';
+    h3_3.style.fontSize = '13.5px';
     h3_3.style.color = '#60A5FA';
     h3_3.style.marginBottom = '12px';
     h3_3.textContent = t('appearanceDensity');
@@ -333,10 +339,181 @@ export class SettingsModal {
     container.appendChild(section3);
   }
 
-  // --- TAB 2: Language & Direction ---
-  private renderLanguageTab(container: HTMLElement): void {
+  // --- TAB 2: Accessibility (נגישות) ---
+  private renderAccessibilityTab(container: HTMLElement): void {
+    const currentTheme = themeManager.getSettings();
+
     const title = document.createElement('h3');
     title.style.fontSize = '14px';
+    title.style.color = '#60A5FA';
+    title.style.marginBottom = '16px';
+    title.textContent = t('settingsTabAccessibility');
+    container.appendChild(title);
+
+    // 1. High Contrast Switch
+    this.createToggleCard(
+      container,
+      t('accessHighContrast'),
+      t('accessHighContrastDesc'),
+      currentTheme.highContrast,
+      (val) => {
+        themeManager.setHighContrast(val);
+        this.callbacks.showToast(`מצב ניגודיות גבוהה: ${val ? 'הופעל' : 'הושבת'}`);
+        this.render();
+      }
+    );
+
+    // 2. Font Scale Selector
+    const scaleCard = document.createElement('div');
+    scaleCard.style.padding = '14px 18px';
+    scaleCard.style.background = '#1E293B';
+    scaleCard.style.border = '1px solid #334155';
+    scaleCard.style.borderRadius = '8px';
+    scaleCard.style.marginBottom = '12px';
+
+    const scaleTop = document.createElement('div');
+    scaleTop.style.display = 'flex';
+    scaleTop.style.justifyContent = 'space-between';
+    scaleTop.style.alignItems = 'center';
+    scaleTop.style.marginBottom = '6px';
+
+    const scaleLabel = document.createElement('span');
+    scaleLabel.style.fontSize = '13px';
+    scaleLabel.style.fontWeight = '600';
+    scaleLabel.style.color = '#F8FAFC';
+    scaleLabel.textContent = t('accessFontScale');
+    scaleTop.appendChild(scaleLabel);
+
+    const scaleBadge = document.createElement('span');
+    scaleBadge.style.fontSize = '12px';
+    scaleBadge.style.color = '#60A5FA';
+    scaleBadge.textContent = `${currentTheme.fontScale}%`;
+    scaleTop.appendChild(scaleBadge);
+    scaleCard.appendChild(scaleTop);
+
+    const scaleDesc = document.createElement('div');
+    scaleDesc.style.fontSize = '11px';
+    scaleDesc.style.color = '#94A3B8';
+    scaleDesc.style.marginBottom = '12px';
+    scaleDesc.textContent = t('accessFontScaleDesc');
+    scaleCard.appendChild(scaleDesc);
+
+    const scaleButtons = document.createElement('div');
+    scaleButtons.style.display = 'flex';
+    scaleButtons.style.gap = '8px';
+
+    const scales = [100, 110, 120, 130];
+    for (const sc of scales) {
+      const btn = document.createElement('button');
+      btn.style.flex = '1';
+      btn.style.padding = '6px 8px';
+      btn.style.borderRadius = '5px';
+      btn.style.background = currentTheme.fontScale === sc ? '#1E3A8A' : '#0F172A';
+      btn.style.border = currentTheme.fontScale === sc ? '1.5px solid #3B82F6' : '1px solid #334155';
+      btn.style.color = '#F8FAFC';
+      btn.style.cursor = 'pointer';
+      btn.style.fontSize = '12px';
+      btn.textContent = `${sc}%`;
+      btn.addEventListener('click', () => {
+        themeManager.setFontScale(sc);
+        this.render();
+      });
+      scaleButtons.appendChild(btn);
+    }
+    scaleCard.appendChild(scaleButtons);
+    container.appendChild(scaleCard);
+
+    // 3. Reduced Motion
+    this.createToggleCard(
+      container,
+      t('accessReducedMotion'),
+      t('accessReducedMotionDesc'),
+      currentTheme.reducedMotion,
+      (val) => {
+        themeManager.setReducedMotion(val);
+        this.callbacks.showToast(`הפחתת אנימציות: ${val ? 'פעיל' : 'מושבת'}`);
+      }
+    );
+
+    // 4. Enhanced Focus Indicators
+    this.createToggleCard(
+      container,
+      t('accessEnhancedFocus'),
+      t('accessEnhancedFocusDesc'),
+      currentTheme.enhancedFocus,
+      (val) => {
+        themeManager.setEnhancedFocus(val);
+        this.callbacks.showToast(`הדגשת פוקוס במקלדת: ${val ? 'פעיל' : 'מושבת'}`);
+      }
+    );
+
+    // 5. Accessible UI Font
+    this.createToggleCard(
+      container,
+      t('accessDyslexicFont'),
+      t('accessDyslexicFontDesc'),
+      currentTheme.accessibleFont,
+      (val) => {
+        themeManager.setAccessibleFont(val);
+        this.callbacks.showToast(`גופן ממשק נגיש: ${val ? 'הופעל' : 'הושבת'}`);
+      }
+    );
+  }
+
+  private createToggleCard(
+    container: HTMLElement,
+    title: string,
+    desc: string,
+    checked: boolean,
+    onChange: (val: boolean) => void
+  ): void {
+    const card = document.createElement('div');
+    card.style.display = 'flex';
+    card.style.alignItems = 'center';
+    card.style.justifyContent = 'space-between';
+    card.style.padding = '14px 18px';
+    card.style.background = '#1E293B';
+    card.style.border = '1px solid #334155';
+    card.style.borderRadius = '8px';
+    card.style.marginBottom = '12px';
+
+    const textWrap = document.createElement('div');
+    textWrap.style.flex = '1';
+    textWrap.style.paddingLeft = i18n.getLanguage() === 'he' ? '0' : '14px';
+    textWrap.style.paddingRight = i18n.getLanguage() === 'he' ? '14px' : '0';
+
+    const titleEl = document.createElement('div');
+    titleEl.style.fontSize = '13px';
+    titleEl.style.fontWeight = '600';
+    titleEl.style.color = '#F8FAFC';
+    titleEl.textContent = title;
+    textWrap.appendChild(titleEl);
+
+    const descEl = document.createElement('div');
+    descEl.style.fontSize = '11px';
+    descEl.style.color = '#94A3B8';
+    descEl.style.marginTop = '2px';
+    descEl.textContent = desc;
+    textWrap.appendChild(descEl);
+
+    card.appendChild(textWrap);
+
+    const toggle = document.createElement('input');
+    toggle.type = 'checkbox';
+    toggle.checked = checked;
+    toggle.style.width = '18px';
+    toggle.style.height = '18px';
+    toggle.style.cursor = 'pointer';
+    toggle.addEventListener('change', () => onChange(toggle.checked));
+    card.appendChild(toggle);
+
+    container.appendChild(card);
+  }
+
+  // --- TAB 3: Language & Direction ---
+  private renderLanguageTab(container: HTMLElement): void {
+    const title = document.createElement('h3');
+    title.style.fontSize = '13.5px';
     title.style.color = '#60A5FA';
     title.style.marginBottom = '16px';
     title.textContent = t('languageSelect');
@@ -344,9 +521,9 @@ export class SettingsModal {
 
     const currentLang = i18n.getLanguage();
 
-    const langs: { id: Language; label: string; flag: string }[] = [
-      { id: 'he', label: t('languageHebrew'), flag: '🇮🇱' },
-      { id: 'en', label: t('languageEnglish'), flag: '🌐' }
+    const langs: { id: Language; label: string }[] = [
+      { id: 'he', label: t('languageHebrew') },
+      { id: 'en', label: t('languageEnglish') }
     ];
 
     for (const l of langs) {
@@ -366,13 +543,13 @@ export class SettingsModal {
       left.style.alignItems = 'center';
       left.style.gap = '12px';
 
-      const flag = document.createElement('span');
-      flag.style.fontSize = '22px';
-      flag.textContent = l.flag;
-      left.appendChild(flag);
+      const icon = document.createElement('span');
+      icon.style.color = currentLang === l.id ? '#60A5FA' : '#94A3B8';
+      icon.innerHTML = renderIcon('globe', 18);
+      left.appendChild(icon);
 
       const text = document.createElement('span');
-      text.style.fontSize = '14px';
+      text.style.fontSize = '13.5px';
       text.style.fontWeight = currentLang === l.id ? '600' : 'normal';
       text.style.color = '#F8FAFC';
       text.textContent = l.label;
@@ -384,10 +561,13 @@ export class SettingsModal {
         const badge = document.createElement('span');
         badge.style.background = '#2563EB';
         badge.style.color = '#FFFFFF';
-        badge.style.padding = '2px 8px';
+        badge.style.padding = '3px 9px';
         badge.style.borderRadius = '12px';
         badge.style.fontSize = '11px';
-        badge.textContent = '✓ פעיל';
+        badge.style.display = 'inline-flex';
+        badge.style.alignItems = 'center';
+        badge.style.gap = '5px';
+        badge.innerHTML = `${renderIcon('check', 11)} <span>${t('languageActiveBadge')}</span>`;
         card.appendChild(badge);
       }
 
@@ -401,10 +581,10 @@ export class SettingsModal {
     }
   }
 
-  // --- TAB 3: Logs & Maintenance ---
+  // --- TAB 4: Logs & Maintenance ---
   private renderLogsTab(container: HTMLElement): void {
     const title = document.createElement('h3');
-    title.style.fontSize = '14px';
+    title.style.fontSize = '13.5px';
     title.style.color = '#60A5FA';
     title.style.marginBottom = '14px';
     title.textContent = t('settingsTabLogs');
@@ -421,7 +601,7 @@ export class SettingsModal {
     retentionRow.style.marginBottom = '14px';
 
     const label = document.createElement('span');
-    label.style.fontSize = '13px';
+    label.style.fontSize = '12.5px';
     label.style.color = '#F8FAFC';
     label.textContent = t('logsRetentionLabel');
     retentionRow.appendChild(label);
@@ -450,7 +630,7 @@ export class SettingsModal {
       if (win.tokIpc && win.tokIpc.setLogRetention) {
         win.tokIpc.setLogRetention(this.logRetentionDays);
       }
-      this.callbacks.showToast(`מדיניות מחיקת לוגים עודכנה ל-${this.logRetentionDays} ימים`);
+      this.callbacks.showToast(`מדיניות מחיקת יומנים עודכנה ל-${this.logRetentionDays} ימים`);
     });
     retentionRow.appendChild(select);
     container.appendChild(retentionRow);
@@ -464,7 +644,11 @@ export class SettingsModal {
     const openFolderBtn = document.createElement('button');
     openFolderBtn.className = 'tok-btn';
     openFolderBtn.style.flex = '1';
-    openFolderBtn.textContent = `📁 ${t('logsOpenFolder')}`;
+    openFolderBtn.style.display = 'inline-flex';
+    openFolderBtn.style.alignItems = 'center';
+    openFolderBtn.style.justifyContent = 'center';
+    openFolderBtn.style.gap = '7px';
+    openFolderBtn.innerHTML = `${renderIcon('folder', 14)} <span>${t('logsOpenFolder')}</span>`;
     openFolderBtn.addEventListener('click', async () => {
       const win = window as any;
       if (win.tokIpc && win.tokIpc.openLogsFolder) {
@@ -478,15 +662,19 @@ export class SettingsModal {
     const cleanNowBtn = document.createElement('button');
     cleanNowBtn.className = 'tok-btn';
     cleanNowBtn.style.flex = '1';
-    cleanNowBtn.textContent = `🧹 ${t('logsCleanNow')}`;
+    cleanNowBtn.style.display = 'inline-flex';
+    cleanNowBtn.style.alignItems = 'center';
+    cleanNowBtn.style.justifyContent = 'center';
+    cleanNowBtn.style.gap = '7px';
+    cleanNowBtn.innerHTML = `${renderIcon('trash', 14)} <span>${t('logsCleanNow')}</span>`;
     cleanNowBtn.addEventListener('click', async () => {
       const win = window as any;
       if (win.tokIpc && win.tokIpc.cleanOldLogs) {
         const deleted = await win.tokIpc.cleanOldLogs(this.logRetentionDays);
-        this.callbacks.showToast(`ניקוי הושלם: נמחקו ${deleted} קובצי לוג ישנים`);
+        this.callbacks.showToast(`ניקוי הושלם: נמחקו ${deleted} קובצי יומן ישנים`);
         this.render();
       } else {
-        this.callbacks.showToast('ניקוי לוגים הושלם');
+        this.callbacks.showToast('ניקוי יומנים הושלם בהצלחה');
       }
     });
     actionsRow.appendChild(cleanNowBtn);
@@ -513,26 +701,26 @@ export class SettingsModal {
     logBox.style.color = '#CBD5E1';
     logBox.style.overflowY = 'auto';
     logBox.style.whiteSpace = 'pre-wrap';
-    logBox.textContent = 'טוען לוגים אחרונים...';
+    logBox.textContent = 'טוען רשומות מיומן המערכת...';
 
     const win = window as any;
     if (win.tokIpc && win.tokIpc.getRecentLogs) {
       win.tokIpc.getRecentLogs().then((lines: string[]) => {
-        logBox.textContent = lines.length ? lines.join('\n') : '[אין רשומות לוג להצגה]';
+        logBox.textContent = lines.length ? lines.join('\n') : '[אין רשומות יומן להצגה]';
       }).catch((e: any) => {
-        logBox.textContent = `[שגיאה בטעינת לוגים: ${e.message}]`;
+        logBox.textContent = `[שגיאה בטעינת יומן: ${e.message}]`;
       });
     } else {
-      logBox.textContent = `[${new Date().toISOString()}] [INFO] TypesetOK Web Preview active.\n[${new Date().toISOString()}] [INFO] Knuth-Plass typesetting engine verified (58/58 tests passed).\n[${new Date().toISOString()}] [INFO] Hebrew typography normalizer SI 6100 initialized.`;
+      logBox.textContent = `[${new Date().toISOString()}] [INFO] TypesetOK Desktop Publishing Platform.\n[${new Date().toISOString()}] [INFO] Knuth-Plass Hebrew Breaker and Pre-press pipeline active.`;
     }
 
     container.appendChild(logBox);
   }
 
-  // --- TAB 4: Software Updates ---
+  // --- TAB 5: Software Updates ---
   private renderUpdatesTab(container: HTMLElement): void {
     const title = document.createElement('h3');
-    title.style.fontSize = '14px';
+    title.style.fontSize = '13.5px';
     title.style.color = '#60A5FA';
     title.style.marginBottom = '14px';
     title.textContent = t('settingsTabUpdates');
@@ -550,13 +738,16 @@ export class SettingsModal {
     const currentInfo = document.createElement('div');
     currentInfo.innerHTML = `
       <div style="font-size: 13px; font-weight: 600; color: #F8FAFC;">TypesetOK v0.8.0</div>
-      <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">מהדורת סתיו 2026 • ערוץ שחרור רשמי (Stable)</div>
+      <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">ערוץ שחרור רשמי יציב (Official Stable Channel)</div>
     `;
     currentCard.appendChild(currentInfo);
 
     const checkBtn = document.createElement('button');
     checkBtn.className = 'tok-btn tok-btn-primary';
-    checkBtn.textContent = `🔄 ${t('updatesCheckNow')}`;
+    checkBtn.style.display = 'inline-flex';
+    checkBtn.style.alignItems = 'center';
+    checkBtn.style.gap = '6px';
+    checkBtn.innerHTML = `${renderIcon('refresh', 13)} <span>${t('updatesCheckNow')}</span>`;
     currentCard.appendChild(checkBtn);
 
     container.appendChild(currentCard);
@@ -567,46 +758,50 @@ export class SettingsModal {
     resultBox.style.background = '#0B132B';
     resultBox.style.border = '1px solid #1E293B';
     resultBox.style.borderRadius = '8px';
-    resultBox.style.fontSize = '13px';
+    resultBox.style.fontSize = '12.5px';
     resultBox.style.color = '#94A3B8';
-    resultBox.textContent = 'לחץ על "בדוק עדכונים כעת" כדי לבדוק שחרורים חדשים ב-GitHub.';
+    resultBox.textContent = 'לחץ על "בדיקת עדכונים כעת" כדי לבדוק שחרורים מול מאגר GitHub.';
     container.appendChild(resultBox);
 
     checkBtn.addEventListener('click', async () => {
-      checkBtn.textContent = t('updatesStatusChecking');
+      checkBtn.innerHTML = `${renderIcon('refresh', 13)} <span>${t('updatesStatusChecking')}</span>`;
       const win = window as any;
       if (win.tokIpc && win.tokIpc.checkForUpdates) {
         try {
           const res = await win.tokIpc.checkForUpdates();
           if (res.hasUpdate) {
             resultBox.innerHTML = `
-              <div style="color: #34D399; font-weight: 600; margin-bottom: 6px;">🎉 ${t('updatesStatusAvailable')} (גרסה v${res.latestVersion})</div>
-              <div style="font-size: 12px; color: #E2E8F0; margin-bottom: 8px;">${res.releaseNotes}</div>
-              <button id="tok-download-btn" class="tok-btn tok-btn-primary" style="height: 30px; font-size: 12px;">⬇️ ${t('updatesDownload')}</button>
+              <div style="color: #34D399; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                ${renderIcon('sparkle', 14)} <span>${t('updatesStatusAvailable')} (גרסה v${res.latestVersion})</span>
+              </div>
+              <div style="font-size: 12px; color: #E2E8F0; margin-bottom: 10px;">${res.releaseNotes}</div>
+              <button id="tok-download-btn" class="tok-btn tok-btn-primary" style="height: 30px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                ${renderIcon('export', 13)} <span>${t('updatesDownload')}</span>
+              </button>
             `;
             const dlBtn = resultBox.querySelector('#tok-download-btn');
             dlBtn?.addEventListener('click', () => {
               win.tokIpc.openReleaseUrl(res.downloadUrl || res.releaseUrl);
             });
           } else {
-            resultBox.innerHTML = `<span style="color: #60A5FA;">✓ ${t('updatesStatusLatest')}</span>`;
+            resultBox.innerHTML = `<span style="color: #60A5FA; display: inline-flex; align-items: center; gap: 6px;">${renderIcon('check', 14)} <span>${t('updatesStatusLatest')}</span></span>`;
           }
         } catch (err: any) {
           resultBox.textContent = `שגיאה בבדיקת עדכונים: ${err.message}`;
         }
       } else {
         setTimeout(() => {
-          resultBox.innerHTML = `<span style="color: #60A5FA;">✓ ${t('updatesStatusLatest')}</span>`;
-        }, 400);
+          resultBox.innerHTML = `<span style="color: #60A5FA; display: inline-flex; align-items: center; gap: 6px;">${renderIcon('check', 14)} <span>${t('updatesStatusLatest')}</span></span>`;
+        }, 300);
       }
-      checkBtn.textContent = `🔄 ${t('updatesCheckNow')}`;
+      checkBtn.innerHTML = `${renderIcon('refresh', 13)} <span>${t('updatesCheckNow')}</span>`;
     });
   }
 
-  // --- TAB 5: Plugins Manager ---
+  // --- TAB 6: Plugins Manager ---
   private renderPluginsTab(container: HTMLElement): void {
     const title = document.createElement('h3');
-    title.style.fontSize = '14px';
+    title.style.fontSize = '13.5px';
     title.style.color = '#60A5FA';
     title.style.marginBottom = '14px';
     title.textContent = t('pluginsInstalled');
@@ -621,7 +816,11 @@ export class SettingsModal {
     const openFolderBtn = document.createElement('button');
     openFolderBtn.className = 'tok-btn';
     openFolderBtn.style.flex = '1';
-    openFolderBtn.textContent = `📂 ${t('pluginsOpenFolder')}`;
+    openFolderBtn.style.display = 'inline-flex';
+    openFolderBtn.style.alignItems = 'center';
+    openFolderBtn.style.justifyContent = 'center';
+    openFolderBtn.style.gap = '7px';
+    openFolderBtn.innerHTML = `${renderIcon('folder', 14)} <span>${t('pluginsOpenFolder')}</span>`;
     openFolderBtn.addEventListener('click', () => {
       this.callbacks.pluginEngine.openPluginsFolder();
     });
@@ -630,7 +829,11 @@ export class SettingsModal {
     const reloadBtn = document.createElement('button');
     reloadBtn.className = 'tok-btn';
     reloadBtn.style.flex = '1';
-    reloadBtn.textContent = `🔄 ${t('pluginsReload')}`;
+    reloadBtn.style.display = 'inline-flex';
+    reloadBtn.style.alignItems = 'center';
+    reloadBtn.style.justifyContent = 'center';
+    reloadBtn.style.gap = '7px';
+    reloadBtn.innerHTML = `${renderIcon('refresh', 14)} <span>${t('pluginsReload')}</span>`;
     reloadBtn.addEventListener('click', async () => {
       await this.callbacks.pluginEngine.loadPlugins();
       this.callbacks.showToast('התוספים נטענו מחדש בהצלחה');

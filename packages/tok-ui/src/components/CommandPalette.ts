@@ -1,3 +1,5 @@
+import { renderIcon } from '../icons';
+
 export interface PaletteItem {
   id: string;
   category: string;
@@ -73,15 +75,17 @@ export class CommandPalette {
     inputWrap.className = 'tok-palette-input-wrap';
 
     const searchIcon = document.createElement('span');
-    searchIcon.textContent = '🔍';
+    searchIcon.style.display = 'inline-flex';
+    searchIcon.style.alignItems = 'center';
     searchIcon.style.marginLeft = '10px';
-    searchIcon.style.fontSize = '16px';
+    searchIcon.style.color = '#94A3B8';
+    searchIcon.innerHTML = renderIcon('search', 16);
     inputWrap.appendChild(searchIcon);
 
     this.inputEl = document.createElement('input');
     this.inputEl.type = 'text';
     this.inputEl.className = 'tok-palette-input';
-    this.inputEl.placeholder = 'חפש פקודות, סגנונות או עמודים... (הקלד לסינון)';
+    this.inputEl.placeholder = 'הקלד לחיפוש פקודות, תזרימים, עמודים או פעולות עימוד...';
     inputWrap.appendChild(this.inputEl);
 
     const escBadge = document.createElement('span');

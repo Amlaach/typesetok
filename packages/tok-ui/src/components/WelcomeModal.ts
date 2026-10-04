@@ -1,4 +1,5 @@
 import { t, i18n } from '../i18n';
+import { renderIcon, IconName } from '../icons';
 
 export interface WelcomeModalCallbacks {
   onSelectTemplate: (templateId: string) => void;
@@ -64,7 +65,7 @@ export class WelcomeModal {
 
     // Header
     const header = document.createElement('div');
-    header.style.padding = '24px 28px 18px';
+    header.style.padding = '22px 28px 18px';
     header.style.borderBottom = '1px solid #1E293B';
     header.style.background = 'linear-gradient(180deg, #131E38 0%, #0F172A 100%)';
     header.style.display = 'flex';
@@ -77,21 +78,21 @@ export class WelcomeModal {
     brand.style.gap = '14px';
 
     const logo = document.createElement('div');
-    logo.style.width = '48px';
-    logo.style.height = '48px';
+    logo.style.width = '44px';
+    logo.style.height = '44px';
     logo.style.borderRadius = '10px';
     logo.style.background = '#1E293B';
     logo.style.border = '1px solid #3B82F6';
     logo.style.display = 'flex';
     logo.style.alignItems = 'center';
     logo.style.justifyContent = 'center';
-    logo.style.fontSize = '24px';
-    logo.innerHTML = '📘';
+    logo.style.color = '#60A5FA';
+    logo.innerHTML = renderIcon('brand', 22);
     brand.appendChild(logo);
 
     const titleWrap = document.createElement('div');
     const title = document.createElement('h1');
-    title.style.fontSize = '20px';
+    title.style.fontSize = '18px';
     title.style.fontWeight = '700';
     title.style.color = '#F8FAFC';
     title.style.margin = '0 0 4px 0';
@@ -99,7 +100,7 @@ export class WelcomeModal {
     titleWrap.appendChild(title);
 
     const subtitle = document.createElement('p');
-    subtitle.style.fontSize = '13px';
+    subtitle.style.fontSize = '12px';
     subtitle.style.color = '#94A3B8';
     subtitle.style.margin = '0';
     subtitle.textContent = t('welcomeSubtitle');
@@ -112,10 +113,12 @@ export class WelcomeModal {
     closeBtn.style.background = 'transparent';
     closeBtn.style.border = 'none';
     closeBtn.style.color = '#94A3B8';
-    closeBtn.style.fontSize = '20px';
     closeBtn.style.cursor = 'pointer';
-    closeBtn.style.padding = '4px 8px';
-    closeBtn.textContent = '✕';
+    closeBtn.style.padding = '4px';
+    closeBtn.style.display = 'inline-flex';
+    closeBtn.style.alignItems = 'center';
+    closeBtn.style.justifyContent = 'center';
+    closeBtn.innerHTML = renderIcon('close', 14);
     closeBtn.addEventListener('click', () => {
       this.hide();
       this.callbacks.onClose();
@@ -138,18 +141,18 @@ export class WelcomeModal {
     leftCol.style.borderRight = i18n.getLanguage() === 'en' ? '1px solid #1E293B' : 'none';
 
     const templatesHeading = document.createElement('h3');
-    templatesHeading.style.fontSize = '14px';
+    templatesHeading.style.fontSize = '13px';
     templatesHeading.style.color = '#60A5FA';
     templatesHeading.style.marginBottom = '14px';
     templatesHeading.style.fontWeight = '600';
     templatesHeading.textContent = t('newProject');
     leftCol.appendChild(templatesHeading);
 
-    const templates = [
-      { id: 'gemara', icon: '📜', title: t('templateGemara'), desc: t('templateGemaraDesc') },
-      { id: 'prose', icon: '📖', title: t('templateProse'), desc: t('templateProseDesc') },
-      { id: 'bulletin', icon: '📰', title: t('templateBulletin'), desc: t('templateBulletinDesc') },
-      { id: 'blank', icon: '📄', title: t('templateBlank'), desc: t('templateBlankDesc') }
+    const templates: { id: string; icon: IconName; title: string; desc: string }[] = [
+      { id: 'gemara', icon: 'templateTalmud', title: t('templateGemara'), desc: t('templateGemaraDesc') },
+      { id: 'prose', icon: 'templateBook', title: t('templateProse'), desc: t('templateProseDesc') },
+      { id: 'bulletin', icon: 'templateColumns', title: t('templateBulletin'), desc: t('templateBulletinDesc') },
+      { id: 'blank', icon: 'templateBlank', title: t('templateBlank'), desc: t('templateBlankDesc') }
     ];
 
     for (const tmpl of templates) {
@@ -182,8 +185,9 @@ export class WelcomeModal {
       });
 
       const icon = document.createElement('span');
-      icon.style.fontSize = '22px';
-      icon.textContent = tmpl.icon;
+      icon.style.color = '#60A5FA';
+      icon.style.marginTop = '2px';
+      icon.innerHTML = renderIcon(tmpl.icon, 20);
       card.appendChild(icon);
 
       const textWrap = document.createElement('div');
@@ -197,7 +201,7 @@ export class WelcomeModal {
       const tmplDesc = document.createElement('div');
       tmplDesc.style.fontSize = '11px';
       tmplDesc.style.color = '#94A3B8';
-      tmplDesc.style.marginTop = '2px';
+      tmplDesc.style.marginTop = '3px';
       tmplDesc.textContent = tmpl.desc;
       textWrap.appendChild(tmplDesc);
 
@@ -215,7 +219,7 @@ export class WelcomeModal {
     rightCol.style.flexDirection = 'column';
 
     const recentHeading = document.createElement('h3');
-    recentHeading.style.fontSize = '14px';
+    recentHeading.style.fontSize = '13px';
     recentHeading.style.color = '#60A5FA';
     recentHeading.style.marginBottom = '14px';
     recentHeading.style.fontWeight = '600';
@@ -289,7 +293,11 @@ export class WelcomeModal {
     openBtn.style.border = '1px solid #334155';
     openBtn.style.fontWeight = '500';
     openBtn.style.cursor = 'pointer';
-    openBtn.textContent = `📂 ${t('openProject')}`;
+    openBtn.style.display = 'inline-flex';
+    openBtn.style.alignItems = 'center';
+    openBtn.style.justifyContent = 'center';
+    openBtn.style.gap = '8px';
+    openBtn.innerHTML = `${renderIcon('folder', 14)} <span>${t('openProject')}</span>`;
     openBtn.addEventListener('click', () => {
       this.hide();
       this.callbacks.onOpenProject();
@@ -300,7 +308,11 @@ export class WelcomeModal {
     demoBtn.className = 'tok-btn tok-btn-primary';
     demoBtn.style.height = '34px';
     demoBtn.style.fontWeight = '600';
-    demoBtn.textContent = `✨ ${t('demoProject')}`;
+    demoBtn.style.display = 'inline-flex';
+    demoBtn.style.alignItems = 'center';
+    demoBtn.style.justifyContent = 'center';
+    demoBtn.style.gap = '8px';
+    demoBtn.innerHTML = `${renderIcon('sparkle', 14)} <span>${t('demoProject')}</span>`;
     demoBtn.addEventListener('click', () => {
       this.hide();
       this.callbacks.onLoadDemo();
@@ -342,7 +354,7 @@ export class WelcomeModal {
 
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'tok-btn';
-    dismissBtn.textContent = 'המשך לסביבת העבודה ←';
+    dismissBtn.textContent = t('continueToWorkspace');
     dismissBtn.addEventListener('click', () => {
       this.hide();
       this.callbacks.onClose();
