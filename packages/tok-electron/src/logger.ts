@@ -11,41 +11,56 @@ export interface LogEntry {
   meta?: unknown;
 }
 
+const LOG_FILE_RE = /^tok-(\d{4}-\d{2}-\d{2})\.log$/;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Daily rotating file logger (logs/tok-YYYY-MM-DD.log under userData).
+ *
+ * File writes are buffered and flushed asynchronously in order, so logging never
+ * blocks the main process (and therefore never delays window painting or IPC).
+ * Pending lines are flushed synchronously when the process exits.
+ */
 export class TokLogger {
   private logDir: string;
   private retentionDays: number;
-  private initialized = false;
+  private dirReady = false;
+  private pending: { file: string; text: string }[] = [];
+  private flushing = false;
+  private exitHookInstalled = false;
 
   constructor(retentionDays: number = 14) {
     this.retentionDays = retentionDays;
-    // When app is not yet ready, use fallback until init is called
+    this.logDir = TokLogger.resolveLogDir();
+  }
+
+  private static resolveLogDir(): string {
     try {
-      this.logDir = path.join(app.getPath('userData'), 'logs');
+      return path.join(app.getPath('userData'), 'logs');
     } catch {
-      this.logDir = path.join(process.cwd(), 'logs');
+      return path.join(process.cwd(), 'logs');
     }
   }
 
+  /**
+   * Resolves the final log directory (userData is only reliable once the app is
+   * ready). Cheap: no directory scan. Old-log cleanup is left to the caller
+   * (see cleanOldLogs) so it can run off the startup path.
+   */
   public init(retentionDays?: number): void {
     if (retentionDays !== undefined) {
-      this.retentionDays = retentionDays;
+      this.retentionDays = Math.max(1, retentionDays);
     }
-    try {
-      this.logDir = path.join(app.getPath('userData'), 'logs');
-      if (!fs.existsSync(this.logDir)) {
-        fs.mkdirSync(this.logDir, { recursive: true });
-      }
-      this.initialized = true;
-      this.cleanOldLogs(this.retentionDays);
-      this.info('TokLogger initialized. Log directory:', { dir: this.logDir, retentionDays: this.retentionDays });
-    } catch (err: any) {
-      console.error('[TOK-LOGGER] Failed to initialize logger:', err.message);
-    }
+    this.logDir = TokLogger.resolveLogDir();
+    this.dirReady = false;
+    this.installExitHook();
+    this.info('TokLogger initialized. Log directory:', { dir: this.logDir, retentionDays: this.retentionDays });
   }
 
   public setRetentionDays(days: number): void {
-    this.retentionDays = Math.max(1, days);
-    this.cleanOldLogs(this.retentionDays);
+    const n = Number(days);
+    this.retentionDays = Number.isFinite(n) ? Math.max(1, Math.floor(n)) : this.retentionDays;
+    this.cleanOldLogs().catch(() => {});
   }
 
   public getRetentionDays(): number {
@@ -57,8 +72,7 @@ export class TokLogger {
   }
 
   private getTodayFilename(): string {
-    const d = new Date();
-    const dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
+    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     return path.join(this.logDir, `tok-${dateStr}.log`);
   }
 
@@ -72,34 +86,19 @@ export class TokLogger {
         metaStr = ' [Circular/Unserializable meta]';
       }
     }
-    const logLine = `[${timestamp}] [${level}] ${message}${metaStr}\n`;
 
-    // Console output
     if (level === 'ERROR') {
-      console.error(`[TOK] ${message}`, meta || '');
+      console.error(`[TOK] ${message}`, meta ?? '');
     } else if (level === 'WARN') {
-      console.warn(`[TOK] ${message}`, meta || '');
+      console.warn(`[TOK] ${message}`, meta ?? '');
     } else {
-      console.log(`[TOK] ${message}`, meta || '');
+      console.log(`[TOK] ${message}`, meta ?? '');
     }
 
-    // Write to file
-    if (!this.initialized) {
-      try {
-        if (!fs.existsSync(this.logDir)) {
-          fs.mkdirSync(this.logDir, { recursive: true });
-        }
-        this.initialized = true;
-      } catch {
-        return;
-      }
-    }
-
-    try {
-      const file = this.getTodayFilename();
-      fs.appendFileSync(file, logLine, 'utf-8');
-    } catch (err: any) {
-      console.error('[TOK-LOGGER] Failed to write log:', err.message);
+    this.pending.push({ file: this.getTodayFilename(), text: `[${timestamp}] [${level}] ${message}${metaStr}\n` });
+    if (!this.flushing) {
+      this.flushing = true;
+      setImmediate(() => this.flushAsync());
     }
   }
 
@@ -119,79 +118,127 @@ export class TokLogger {
     this.log('DEBUG', message, meta);
   }
 
-  /**
-   * Scans log files and deletes any file whose age exceeds retentionDays.
-   */
-  public cleanOldLogs(retentionDays: number = this.retentionDays): number {
-    if (!fs.existsSync(this.logDir)) return 0;
+  /** Groups consecutive pending lines by target file (date rollover safe). */
+  private takeBatches(): { file: string; text: string }[] {
+    const batches: { file: string; text: string }[] = [];
+    for (const entry of this.pending) {
+      const last = batches[batches.length - 1];
+      if (last && last.file === entry.file) last.text += entry.text;
+      else batches.push({ ...entry });
+    }
+    this.pending = [];
+    return batches;
+  }
 
-    let deletedCount = 0;
-    const now = Date.now();
-    const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000;
-
+  private async flushAsync(): Promise<void> {
     try {
-      const files = fs.readdirSync(this.logDir);
-      for (const file of files) {
-        // Pattern: tok-YYYY-MM-DD.log
-        const match = file.match(/^tok-(\d{4}-\d{2}-\d{2})\.log$/);
-        if (!match) continue;
-
-        const filePath = path.join(this.logDir, file);
-        const dateStr = match[1];
-        const fileDate = new Date(dateStr).getTime();
-
-        const isOldByDate = !isNaN(fileDate) && (now - fileDate > maxAgeMs);
-        const stats = fs.statSync(filePath);
-        const isOldByMtime = (now - stats.mtimeMs > maxAgeMs);
-
-        if (isOldByDate || isOldByMtime) {
-          try {
-            fs.unlinkSync(filePath);
-            deletedCount++;
-            console.log(`[TOK-LOGGER] Cleaned old log file: ${file} (retention: ${retentionDays} days)`);
-          } catch (err: any) {
-            console.error(`[TOK-LOGGER] Failed to delete ${file}:`, err.message);
-          }
+      while (this.pending.length) {
+        if (!this.dirReady) {
+          await fs.promises.mkdir(this.logDir, { recursive: true });
+          this.dirReady = true;
+        }
+        for (const batch of this.takeBatches()) {
+          await fs.promises.appendFile(batch.file, batch.text, 'utf-8');
         }
       }
     } catch (err: any) {
-      console.error('[TOK-LOGGER] Error scanning log directory:', err.message);
+      console.error('[TOK-LOGGER] Failed to write log:', err?.message);
+      this.pending = [];
+    } finally {
+      this.flushing = false;
+      // A line may have been queued after the loop's last check.
+      if (this.pending.length) {
+        this.flushing = true;
+        setImmediate(() => this.flushAsync());
+      }
     }
+  }
 
+  /** Writes any queued lines synchronously (used on process exit). */
+  public flushSync(): void {
+    if (!this.pending.length) return;
+    try {
+      fs.mkdirSync(this.logDir, { recursive: true });
+      for (const batch of this.takeBatches()) {
+        fs.appendFileSync(batch.file, batch.text, 'utf-8');
+      }
+    } catch (err: any) {
+      console.error('[TOK-LOGGER] Failed to flush log:', err?.message);
+    }
+  }
+
+  private installExitHook(): void {
+    if (this.exitHookInstalled) return;
+    this.exitHookInstalled = true;
+    process.once('exit', () => this.flushSync());
+  }
+
+  private isExpired(file: string, mtimeMs: number, now: number, maxAgeMs: number): boolean {
+    const match = file.match(LOG_FILE_RE);
+    if (!match) return false;
+    const fileDate = new Date(match[1]).getTime();
+    const isOldByDate = !isNaN(fileDate) && now - fileDate > maxAgeMs;
+    return isOldByDate || now - mtimeMs > maxAgeMs;
+  }
+
+  /** Deletes log files older than retentionDays (by file-name date or mtime). Non-blocking. */
+  public async cleanOldLogs(retentionDays: number = this.retentionDays): Promise<number> {
+    const now = Date.now();
+    const maxAgeMs = Math.max(1, retentionDays) * DAY_MS;
+    let files: string[];
+    try {
+      files = await fs.promises.readdir(this.logDir);
+    } catch {
+      return 0; // no log dir yet
+    }
+    let deletedCount = 0;
+    for (const file of files) {
+      if (!LOG_FILE_RE.test(file)) continue;
+      const filePath = path.join(this.logDir, file);
+      try {
+        const stats = await fs.promises.stat(filePath);
+        if (this.isExpired(file, stats.mtimeMs, now, maxAgeMs)) {
+          await fs.promises.unlink(filePath);
+          deletedCount++;
+        }
+      } catch (err: any) {
+        console.error(`[TOK-LOGGER] Failed to clean ${file}:`, err?.message);
+      }
+    }
+    if (deletedCount) this.info(`[TOK-LOGGER] Cleaned ${deletedCount} old log file(s) (retention: ${retentionDays} days)`);
     return deletedCount;
   }
 
-  public getRecentLogs(limit: number = 100): string[] {
-    if (!fs.existsSync(this.logDir)) return [];
+  public async getRecentLogs(limit: number = 100): Promise<string[]> {
+    // Make sure lines logged a moment ago are on disk before reading.
+    this.flushSync();
     try {
-      const files = fs.readdirSync(this.logDir)
-        .filter(f => f.startsWith('tok-') && f.endsWith('.log'))
+      const files = (await fs.promises.readdir(this.logDir))
+        .filter((f) => LOG_FILE_RE.test(f))
         .sort()
         .reverse();
 
       const lines: string[] = [];
       for (const file of files) {
-        const content = fs.readFileSync(path.join(this.logDir, file), 'utf-8');
-        const fileLines = content.split('\n').filter(Boolean);
-        lines.push(...fileLines.reverse());
+        const content = await fs.promises.readFile(path.join(this.logDir, file), 'utf-8');
+        lines.push(...content.split('\n').filter(Boolean).reverse());
         if (lines.length >= limit) break;
       }
       return lines.slice(0, limit);
     } catch (err: any) {
-      return [`[ERROR reading logs: ${err.message}]`];
+      if (err?.code === 'ENOENT') return [];
+      return [`[ERROR reading logs: ${err?.message}]`];
     }
   }
 
-  public openLogsFolder(): boolean {
-    if (!fs.existsSync(this.logDir)) {
-      try {
-        fs.mkdirSync(this.logDir, { recursive: true });
-      } catch {
-        return false;
-      }
+  public async openLogsFolder(): Promise<boolean> {
+    try {
+      await fs.promises.mkdir(this.logDir, { recursive: true });
+    } catch {
+      return false;
     }
-    shell.openPath(this.logDir);
-    return true;
+    const err = await shell.openPath(this.logDir);
+    return !err;
   }
 }
 
