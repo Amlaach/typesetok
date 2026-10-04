@@ -15,3 +15,4 @@ unicode-bidi = { workspace = true }
 unicode-normalization = { workspace = true }
 rayon = { workspace = true }
 log = { workspace = true }
+ttf-parser = "0.24"

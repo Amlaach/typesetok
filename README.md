@@ -6,7 +6,8 @@
 ### תוכנת עימוד שולחנית מקצועית בקוד פתוח | Open-Source Professional Desktop Publishing (DTP) System
 
 [![CI Build](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml/badge.svg)](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-71%2F71%20Passing-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/Version-0.6.0-blue.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-80%2F80%20Passing-brightgreen.svg)]()
 [![Electron](https://img.shields.io/badge/Electron-29.4%2B-blue.svg?logo=electron)](https://www.electronjs.org)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
 [![Standard](https://img.shields.io/badge/Standard-ת"י%206100%20(SI%206100)-blue.svg)]()
@@ -179,13 +180,16 @@ cargo run -p tok-cli -- inspect-package document.tok
 
 ---
 
-## 📊 Verification & Benchmark Status
+## 📊 Verification & Benchmark Status (v0.6.0)
 
 | Metric | Architectural Target | Actual Result | Status |
 | :--- | :--- | :--- | :---: |
-| **Rust Engine Tests** | 100% Pass Across All Crates | **58 / 58 Tests Passing** | **PASSED** |
-| **Frontend Shell Tests** | Gematria, Virtualizer, Caret & Artifacts | **13 / 13 Tests Passing** | **PASSED** |
-| **Total Automated Tests** | Rust + TypeScript CI Matrix | **71 / 71 Tests Passing** | **PASSED** |
+| **Rust Engine Tests** | 100% Pass Across All 7 Crates | **65 / 65 Tests Passing** | **PASSED** |
+| **Frontend Shell Tests** | Gematria, Virtualizer, Hit-Testing & UI | **15 / 15 Tests Passing** | **PASSED** |
+| **Total Automated Tests** | Rust + TypeScript CI Matrix | **80 / 80 Tests Passing** | **PASSED** |
+| **TrueType Font Subsetting** | TrueType OpenType Subsetting in PDF | **Identity-H & /ToUnicode** | **PASSED** |
+| **Spatial Hit-Testing** | Sub-pixel glyph snap & selection range | **100% RTL & Bidi Coordinated** | **PASSED** |
+| **Talmud Tzurat HaDaf** | L-Shape expansion & Recto/Verso spreads | **Tested & Validated** | **PASSED** |
 | **Clippy Linter** | 0 Warnings with `-D warnings` | **0 Warnings (Clean)** | **PASSED** |
 | **Formatting** | `cargo fmt --check` Compliant | **100% Formatted** | **PASSED** |
 | **Bit-for-Bit Determinism** | Identical SHA-256 across runs | `Pass 1 SHA == Pass 2 SHA` | **PASSED** |
@@ -198,11 +202,10 @@ cargo run -p tok-cli -- inspect-package document.tok
 
 ## 🤝 Code of Conduct & Contributing
 
-We welcome contributions from developers, typographers, and Hebrew DTP experts. Please review our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
-
-1. Fork the Repository & Create your feature branch (`git checkout -b feature/amazing-feature`)
-2. Ensure `cargo test --workspace`, `cargo fmt --check`, and `cargo clippy --workspace --all-targets -- -D warnings` pass cleanly.
-3. Commit your changes and open a Pull Request.
+We warmly welcome contributions from developers, typographers, and Hebrew DTP experts!
+- Please read our [**Contributing Guide (מדריך לתורמים)**](CONTRIBUTING.md) for full instructions on setup, coding standards, and pull request workflows.
+- View the project architecture and planned milestones in our [**Roadmap & Code Map (מפת קוד ויעדים)**](ROADMAP.md).
+- Review our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
 ---
 

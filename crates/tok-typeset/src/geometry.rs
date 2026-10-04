@@ -56,6 +56,7 @@ pub struct GlyphBox {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LineBox {
     pub line_index: usize,
+    pub paragraph_id: Option<tok_core::id::NodeId>,
     pub baseline_y: f32,
     pub height: f32,
     pub width: f32,

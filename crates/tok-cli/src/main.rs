@@ -85,6 +85,7 @@ fn handle_render_pdf(input: &str, output: &str) -> Result<(), Box<dyn std::error
         bleed_pt: 8.504,
         slug_pt: 28.346,
         draw_crop_marks: true,
+        custom_font_data: None,
     };
 
     let pdf_bytes = PdfPrePressEngine::export_pdf(&pages, &options);

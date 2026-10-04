@@ -4,11 +4,12 @@
 //! 3-tier Hebrew justification, and multi-page convergence pagination.
 
 use crate::bidi::BidiEngine;
+use crate::font::FontManager;
 use crate::gematria::GematriaEngine;
 use crate::geometry::{BreakToken, GlyphBox, LineBox, PageLayoutBox, PhysicalRect, TextFrameBox};
 use crate::hebrew_justify::HebrewJustifier;
 use crate::knuth_plass::{KnuthPlassBreaker, LayoutItem};
-use crate::shaper::{PositionedGlyph, TextShaper};
+use crate::shaper::PositionedGlyph;
 use tok_core::model::{DocumentRoot, ParagraphNode};
 
 pub struct TypesettingEngineConfig {
@@ -36,17 +37,46 @@ impl Default for TypesettingEngineConfig {
 
 pub struct TypesettingEngine {
     config: TypesettingEngineConfig,
+    pub font_manager: FontManager,
 }
 
 impl TypesettingEngine {
     pub fn new(config: TypesettingEngineConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            font_manager: FontManager::default(),
+        }
     }
 
-    /// Typesets a single paragraph into formatted, justified LineBoxes.
+    pub fn with_font_manager(config: TypesettingEngineConfig, font_manager: FontManager) -> Self {
+        Self {
+            config,
+            font_manager,
+        }
+    }
+
+    /// Typesets a single paragraph into formatted, justified LineBoxes using default font.
     pub fn typeset_paragraph(
         &self,
         paragraph: &ParagraphNode,
+        column_width_pt: f32,
+        font_size_pt: f32,
+        line_height_pt: f32,
+    ) -> Vec<LineBox> {
+        self.typeset_paragraph_with_font(
+            paragraph,
+            "Noto Serif Hebrew",
+            column_width_pt,
+            font_size_pt,
+            line_height_pt,
+        )
+    }
+
+    /// Typesets a single paragraph into formatted, justified LineBoxes with a specified font family.
+    pub fn typeset_paragraph_with_font(
+        &self,
+        paragraph: &ParagraphNode,
+        font_family: &str,
         column_width_pt: f32,
         font_size_pt: f32,
         line_height_pt: f32,
@@ -64,7 +94,9 @@ impl TypesettingEngine {
 
         for (i, word) in words.iter().enumerate() {
             if !word.is_empty() {
-                let shaped = TextShaper::shape_fallback(word, font_size_pt, is_rtl);
+                let shaped = self
+                    .font_manager
+                    .shape_text(word, font_family, font_size_pt, is_rtl);
                 items.push(LayoutItem::Box {
                     width: shaped.total_width_pt,
                     text: word.to_string(),
@@ -111,9 +143,18 @@ impl TypesettingEngine {
                         line_glyphs.extend(glyphs);
                     }
                     LayoutItem::Glue { .. } => {
-                        // Add space glyph
+                        let space_gid = self
+                            .font_manager
+                            .get_font(font_family)
+                            .and_then(|f| {
+                                let face = ttf_parser::Face::parse(&f.raw_bytes, 0).ok()?;
+                                face.glyph_index(' ')
+                            })
+                            .map(|gid| gid.0 as u32)
+                            .unwrap_or(3);
+
                         line_glyphs.push(PositionedGlyph {
-                            glyph_id: 32,
+                            glyph_id: space_gid,
                             cluster: line_glyphs.len() as u32,
                             x_advance: font_size_pt * 0.28,
                             y_advance: 0.0,
@@ -147,6 +188,7 @@ impl TypesettingEngine {
 
             result_lines.push(LineBox {
                 line_index: idx,
+                paragraph_id: Some(paragraph.id),
                 baseline_y: (idx as f32 + 1.0) * line_height_pt,
                 height: line_height_pt,
                 width: current_x,
@@ -175,10 +217,27 @@ impl TypesettingEngine {
         for (sec_idx, sec) in doc.sections.iter().enumerate() {
             if let Some(main_flow) = sec.main_flow() {
                 for (p_idx, p) in main_flow.paragraphs.iter().enumerate() {
-                    let p_lines =
-                        self.typeset_paragraph(p, content_width, font_size_pt, line_height_pt);
+                    let (font_family, font_size, line_height) = if let Some(style) =
+                        doc.paragraph_styles.iter().find(|s| s.id == p.style_id)
+                    {
+                        (
+                            style.font_family.as_str(),
+                            style.font_size_pt,
+                            style.line_height_pt,
+                        )
+                    } else {
+                        ("Noto Serif Hebrew", font_size_pt, line_height_pt)
+                    };
 
-                    for line in p_lines {
+                    let p_lines = self.typeset_paragraph_with_font(
+                        p,
+                        font_family,
+                        content_width,
+                        font_size,
+                        line_height,
+                    );
+
+                    for mut line in p_lines {
                         if current_height + line.height > content_height
                             && !current_page_lines.is_empty()
                         {
@@ -217,6 +276,8 @@ impl TypesettingEngine {
                             current_height = 0.0;
                         }
 
+                        line.baseline_y += current_height;
+                        line.line_index = current_page_lines.len();
                         current_height += line.height;
                         current_page_lines.push(line);
                     }

@@ -78,6 +78,31 @@ export class TypesetOkApp {
       // Trigger optimistic caret advance in overlay
       this.overlay.advanceCaretOptimisticRtl(7.5);
     });
+
+    // Wire up Direct Canvas WYSIWYG Editing & Hit-Testing
+    this.overlay.onCaretMoved = (pos) => {
+      console.log(`[TOK-UI] Canvas caret placed: Page ${pos.pageIndex}, x=${pos.x.toFixed(1)}, y=${pos.y.toFixed(1)}`);
+    };
+
+    this.overlay.onSelectionChanged = (rects) => {
+      console.log(`[TOK-UI] Canvas selection updated: ${rects.length} rects`);
+    };
+
+    this.overlay.onTextInserted = (char) => {
+      console.log(`[TOK-UI] Direct typing on page canvas: '${char}'`);
+      const activeEl = document.querySelector('.tok-story-editor-content p') as HTMLElement | null;
+      if (activeEl) {
+        activeEl.textContent = (activeEl.textContent || '') + char;
+      }
+    };
+
+    this.overlay.onBackspacePressed = () => {
+      console.log(`[TOK-UI] Backspace pressed on page canvas`);
+      const activeEl = document.querySelector('.tok-story-editor-content p') as HTMLElement | null;
+      if (activeEl && activeEl.textContent && activeEl.textContent.length > 0) {
+        activeEl.textContent = activeEl.textContent.slice(0, -1);
+      }
+    };
   }
 
   public loadDocumentPages(pages: PageDescriptor[]): void {

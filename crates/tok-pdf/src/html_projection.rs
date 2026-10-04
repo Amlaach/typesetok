@@ -172,6 +172,7 @@ mod tests {
             rect: PhysicalRect::new(50.0, 50.0, 400.0, 600.0),
             lines: vec![LineBox {
                 line_index: 0,
+                paragraph_id: None,
                 baseline_y: 14.5,
                 height: 14.5,
                 width: 300.0,
