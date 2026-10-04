@@ -18,6 +18,7 @@ export class TopSystemBar {
   private currentMode: ViewMode = 'canvas';
   private callbacks: TopSystemBarCallbacks;
   private activeDropdown: HTMLElement | null = null;
+  private activeAnchor: HTMLElement | null = null;
   private documentTitle = 'מסכת ברכות — מהדורת מופת.tok';
 
   constructor(callbacks: TopSystemBarCallbacks) {
@@ -50,6 +51,9 @@ export class TopSystemBar {
         this.closeDropdown();
       }
     });
+    document.addEventListener('keydown', (e) => {
+      if (this.activeDropdown && e.key === 'Escape') this.closeDropdown();
+    });
   }
 
   public setDocumentTitle(title: string): void {
@@ -58,6 +62,9 @@ export class TopSystemBar {
   }
 
   private render(): void {
+    // innerHTML='' below detaches an open dropdown; drop the reference too, otherwise
+    // the next Menu click only "closes" the detached node and nothing opens.
+    this.closeDropdown();
     this.element.innerHTML = '';
 
     // ==========================================
@@ -113,6 +120,8 @@ export class TopSystemBar {
     statusDot.style.borderRadius = '50%';
     statusDot.style.background = '#10B981'; // Green saved status
     statusDot.title = t('topBarSaved');
+    statusDot.setAttribute('role', 'img');
+    statusDot.setAttribute('aria-label', t('topBarSaved'));
     docPill.appendChild(statusDot);
 
     const docTitle = document.createElement('span');
@@ -137,6 +146,8 @@ export class TopSystemBar {
     menuBtn.style.alignItems = 'center';
     menuBtn.style.gap = '6px';
     menuBtn.innerHTML = `${renderIcon('folder', 13)} <span>${t('topBarFileAndMenu')}</span> ${renderIcon('chevronDown', 10)}`;
+    menuBtn.setAttribute('aria-haspopup', 'menu');
+    menuBtn.setAttribute('aria-expanded', 'false');
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.toggleQuickMenu(menuBtn);
@@ -160,6 +171,8 @@ export class TopSystemBar {
     viewGroup.style.border = '1px solid #1E293B';
     viewGroup.style.borderRadius = '6px';
     viewGroup.style.padding = '2px';
+    viewGroup.setAttribute('role', 'group');
+    viewGroup.setAttribute('aria-label', t('topBarViewMode'));
 
     const modes: { id: ViewMode; label: string; icon: 'canvas' | 'split' | 'story' }[] = [
       { id: 'canvas', label: t('topBarViewCanvas'), icon: 'canvas' },
@@ -182,8 +195,10 @@ export class TopSystemBar {
       modeBtn.style.gap = '5px';
       modeBtn.style.transition = 'all 0.15s';
       modeBtn.innerHTML = `${renderIcon(m.icon, 13)} <span>${m.label}</span>`;
+      modeBtn.setAttribute('aria-pressed', String(this.currentMode === m.id));
 
       modeBtn.addEventListener('click', () => {
+        if (this.currentMode === m.id) return;
         this.currentMode = m.id;
         this.callbacks.onViewModeChange(m.id);
         this.render();
@@ -295,7 +310,8 @@ export class TopSystemBar {
     langBtn.style.alignItems = 'center';
     langBtn.style.gap = '6px';
     langBtn.innerHTML = `${renderIcon('globe', 13)} <span>${i18n.getLanguage() === 'he' ? 'עברית' : 'English'}</span>`;
-    langBtn.title = 'Switch Language / החלף שפה';
+    langBtn.title = t('topBarSwitchLanguage');
+    langBtn.setAttribute('aria-label', t('topBarSwitchLanguage'));
     langBtn.addEventListener('click', () => {
       i18n.toggleLanguage();
       if (this.callbacks.onToggleLanguage) this.callbacks.onToggleLanguage();
@@ -331,6 +347,7 @@ export class TopSystemBar {
 
     const dropdown = document.createElement('div');
     dropdown.className = 'tok-quick-menu';
+    dropdown.setAttribute('role', 'menu');
     dropdown.style.position = 'absolute';
     dropdown.style.top = '100%';
     dropdown.style.background = 'var(--tok-bg-elevated, #1E293B)';
@@ -341,32 +358,37 @@ export class TopSystemBar {
     dropdown.style.minWidth = '230px';
     dropdown.style.zIndex = '999';
 
-    if (i18n.getLanguage() === 'he') {
-      dropdown.style.right = '120px';
+    // Open under the Menu button (was a fixed 120px offset that ignored the actual
+    // button position, e.g. with a long document title or a different density).
+    if (i18n.getDirection() === 'rtl') {
+      dropdown.style.right = `${Math.max(0, this.element.clientWidth - (anchorBtn.offsetLeft + anchorBtn.offsetWidth))}px`;
     } else {
-      dropdown.style.left = '120px';
+      dropdown.style.left = `${Math.max(0, anchorBtn.offsetLeft)}px`;
     }
 
-    const menuItems = [
-      { label: 'מרכז פרויקטים ותבניות...', shortcut: 'Ctrl+P', action: 'open-projects' },
-      { label: 'הקמת מסמך חדש...', shortcut: 'Ctrl+N', action: 'new-document' },
-      { label: 'פתיחת מסמך (.tok)...', shortcut: 'Ctrl+O', action: 'open-document' },
-      { label: 'שמירת מסמך', shortcut: 'Ctrl+S', action: 'save-document' },
-      { label: 'שמירה בשם...', shortcut: 'Ctrl+Shift+S', action: 'save-as' },
+    // Only shortcuts that are actually bound (Electron menu accelerators) are shown.
+    const menuItems: ({ type: 'separator' } | { labelKey: string; shortcut?: string; action: string })[] = [
+      { labelKey: 'topBarProjects', shortcut: 'Ctrl+Shift+P', action: 'open-projects' },
+      { labelKey: 'menuNewDocument', shortcut: 'Ctrl+N', action: 'new-document' },
+      { labelKey: 'menuOpenDocument', shortcut: 'Ctrl+O', action: 'open-document' },
+      { labelKey: 'menuSave', shortcut: 'Ctrl+S', action: 'save-document' },
+      { labelKey: 'menuSaveAs', shortcut: 'Ctrl+Shift+S', action: 'save-as' },
       { type: 'separator' },
-      { label: 'נרמול ניקוד וטעמים (ת"י 6100)', shortcut: 'Ctrl+Shift+N', action: 'normalize-hebrew' },
-      { label: 'מגן שמות קדושים (איסור שבירה)', action: 'shield-divine-names' },
-      { label: 'סנכרון מספור עמודים עברי', action: 'recalculate-gematria' },
+      { labelKey: 'menuNormalizeNiqqud', action: 'normalize-hebrew' },
+      { labelKey: 'menuShieldDivineNames', action: 'shield-divine-names' },
+      { labelKey: 'menuRecalcGematria', action: 'recalculate-gematria' },
       { type: 'separator' },
-      { label: 'ייצוא קדם-דפוס (ISO PDF/X-1a)...', shortcut: 'Ctrl+E', action: 'export-pdf' },
+      { labelKey: 'menuExportPdf', shortcut: 'Ctrl+E', action: 'export-pdf' },
       { type: 'separator' },
-      { label: 'הגדרות המערכת...', shortcut: 'Ctrl+,', action: 'open-settings' },
-      { label: 'אודות TypesetOK...', action: 'open-about' }
+      { labelKey: 'sidebarSettings', shortcut: 'Ctrl+,', action: 'open-settings' },
+      { labelKey: 'sidebarAbout', action: 'open-about' }
     ];
 
+    const rows: HTMLButtonElement[] = [];
     for (const item of menuItems) {
-      if (item.type === 'separator') {
+      if ('type' in item) {
         const sep = document.createElement('div');
+        sep.setAttribute('role', 'separator');
         sep.style.height = '1px';
         sep.style.background = '#334155';
         sep.style.margin = '4px 0';
@@ -374,43 +396,90 @@ export class TopSystemBar {
         continue;
       }
 
-      const row = document.createElement('div');
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'tok-quick-menu-item';
+      row.setAttribute('role', 'menuitem');
+      row.tabIndex = -1;
+      row.style.width = '100%';
+      row.style.border = 'none';
+      row.style.background = 'transparent';
+      row.style.font = 'inherit';
+      row.style.textAlign = 'start';
       row.style.padding = '7px 14px';
       row.style.fontSize = '12px';
       row.style.color = '#F8FAFC';
       row.style.display = 'flex';
       row.style.alignItems = 'center';
       row.style.justifyContent = 'space-between';
+      row.style.gap = '16px';
       row.style.cursor = 'pointer';
+      row.style.outline = 'none';
 
-      row.addEventListener('mouseenter', () => {
-        row.style.background = '#2563EB';
-      });
-      row.addEventListener('mouseleave', () => {
-        row.style.background = 'transparent';
-      });
+      const highlight = (on: boolean) => {
+        row.style.background = on ? '#2563EB' : 'transparent';
+      };
+      row.addEventListener('mouseenter', () => row.focus());
+      row.addEventListener('focus', () => highlight(true));
+      row.addEventListener('blur', () => highlight(false));
 
-      row.innerHTML = `
-        <span>${item.label}</span>
-        ${item.shortcut ? `<span style="font-size: 10px; color: #94A3B8;">${item.shortcut}</span>` : ''}
-      `;
+      const label = document.createElement('span');
+      label.textContent = t(item.labelKey);
+      row.appendChild(label);
+      if (item.shortcut) {
+        const sc = document.createElement('span');
+        sc.style.fontSize = '10px';
+        sc.style.color = '#94A3B8';
+        sc.dir = 'ltr';
+        sc.textContent = item.shortcut;
+        row.appendChild(sc);
+      }
 
       row.addEventListener('click', () => {
         this.closeDropdown();
-        this.callbacks.onMenuAction(item.action!);
+        this.callbacks.onMenuAction(item.action);
       });
 
+      rows.push(row);
       dropdown.appendChild(row);
     }
 
+    // Keyboard: ArrowUp/Down/Home/End move between items, Escape/Tab close.
+    dropdown.addEventListener('keydown', (e) => {
+      const idx = rows.indexOf(document.activeElement as HTMLButtonElement);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const delta = e.key === 'ArrowDown' ? 1 : -1;
+        rows[(idx + delta + rows.length) % rows.length].focus();
+      } else if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        rows[e.key === 'Home' ? 0 : rows.length - 1].focus();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.closeDropdown();
+        anchorBtn.focus();
+      } else if (e.key === 'Tab') {
+        this.closeDropdown();
+      }
+    });
+
     this.element.appendChild(dropdown);
     this.activeDropdown = dropdown;
+    anchorBtn.setAttribute('aria-expanded', 'true');
+    this.activeAnchor = anchorBtn;
+    // Opened from the keyboard: put focus on the first item.
+    if (document.activeElement === anchorBtn) rows[0]?.focus();
   }
 
   private closeDropdown(): void {
     if (this.activeDropdown) {
       this.activeDropdown.remove();
       this.activeDropdown = null;
+    }
+    if (this.activeAnchor) {
+      this.activeAnchor.setAttribute('aria-expanded', 'false');
+      this.activeAnchor = null;
     }
   }
 }

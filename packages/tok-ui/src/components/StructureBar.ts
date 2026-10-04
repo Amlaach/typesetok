@@ -1,6 +1,7 @@
 import { MultiFlowItem, StyleToken, PageThumbnailItem } from '../types';
-import { t, i18n } from '../i18n';
+import { t, tf, i18n } from '../i18n';
 import { renderIcon, IconName } from '../icons';
+import { isRectoPage, isRightHandPage } from './SpreadCanvas';
 
 export interface StructureBarCallbacks {
   onSelectPage: (pageIndex: number) => void;
@@ -10,6 +11,18 @@ export interface StructureBarCallbacks {
   onToggleLayer: (layerId: string, visible: boolean) => void;
   onOpenSettings?: () => void;
   onOpenAbout?: () => void;
+}
+
+/** Lets a clickable non-button element be focused with Tab and activated with Enter/Space. */
+function makeKeyboardActivatable(el: HTMLElement): void {
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      el.click();
+    }
+  });
 }
 
 export class StructureBar {
@@ -52,8 +65,7 @@ export class StructureBar {
     this.element.style.width = 'var(--tok-structure-width)';
     this.element.style.minWidth = 'var(--tok-structure-width)';
     this.element.style.background = 'var(--tok-bg-surface-1)';
-    this.element.style.borderLeft = i18n.getLanguage() === 'he' ? '1px solid var(--tok-border-subtle)' : 'none';
-    this.element.style.borderRight = i18n.getLanguage() === 'en' ? '1px solid var(--tok-border-subtle)' : 'none';
+    this.element.style.borderInlineEnd = '1px solid var(--tok-border-subtle)';
     this.element.style.display = 'flex';
     this.element.style.flexDirection = 'column';
     this.element.style.overflow = 'hidden';
@@ -61,8 +73,6 @@ export class StructureBar {
 
     i18n.onChange((lang) => {
       this.element.dir = lang === 'he' ? 'rtl' : 'ltr';
-      this.element.style.borderLeft = lang === 'he' ? '1px solid var(--tok-border-subtle)' : 'none';
-      this.element.style.borderRight = lang === 'en' ? '1px solid var(--tok-border-subtle)' : 'none';
       this.render();
     });
 
@@ -93,6 +103,7 @@ export class StructureBar {
     tabHeader.style.borderBottom = '1px solid var(--tok-border-subtle)';
     tabHeader.style.background = 'var(--tok-bg-app)';
     tabHeader.style.flexShrink = '0';
+    tabHeader.setAttribute('role', 'tablist');
 
     const tabs: { id: 'pages' | 'flows' | 'styles' | 'layers'; label: string; icon: IconName }[] = [
       { id: 'pages', label: t('sidebarPages'), icon: 'pages' },
@@ -117,10 +128,14 @@ export class StructureBar {
       tabBtn.style.justifyContent = 'center';
       tabBtn.style.gap = '5px';
       tabBtn.innerHTML = `${renderIcon(tItem.icon, 13)} <span>${tItem.label}</span>`;
+      tabBtn.setAttribute('role', 'tab');
+      tabBtn.setAttribute('aria-selected', String(this.activeTab === tItem.id));
 
       tabBtn.addEventListener('click', () => {
+        if (this.activeTab === tItem.id) return;
         this.activeTab = tItem.id;
         this.render();
+        (this.element.querySelector('[role="tab"][aria-selected="true"]') as HTMLElement | null)?.focus();
       });
 
       tabHeader.appendChild(tabBtn);
@@ -133,6 +148,7 @@ export class StructureBar {
     bodyWrapper.style.flex = '1';
     bodyWrapper.style.overflowY = 'auto';
     bodyWrapper.style.padding = '10px';
+    bodyWrapper.setAttribute('role', 'tabpanel');
     this.element.appendChild(bodyWrapper);
 
     // 3. Bottom Spacer & Bottom Section (Settings & About)
@@ -252,7 +268,7 @@ export class StructureBar {
     countLabel.style.fontSize = '12px';
     countLabel.style.fontWeight = 'bold';
     countLabel.style.color = 'var(--tok-text-primary)';
-    countLabel.textContent = `עמודי הספר (${this.pages.length})`;
+    countLabel.textContent = tf('structurePagesCount', { n: this.pages.length });
     headerRow.appendChild(countLabel);
 
     const addBtn = document.createElement('button');
@@ -260,8 +276,8 @@ export class StructureBar {
     addBtn.style.height = '24px';
     addBtn.style.fontSize = '11px';
     addBtn.style.padding = '0 8px';
-    addBtn.textContent = '+ עמוד חדש';
-    addBtn.title = 'הוסף עמוד לספר (Ctrl+Enter)';
+    addBtn.textContent = `+ ${t('sidebarAddPage')}`;
+    addBtn.title = t('sidebarAddPage');
     addBtn.addEventListener('click', () => this.callbacks.onAddPage());
     headerRow.appendChild(addBtn);
 
@@ -287,6 +303,9 @@ export class StructureBar {
       card.style.alignItems = 'center';
       card.style.justifyContent = 'space-between';
       card.style.transition = 'all 0.15s ease';
+      // Keyboard reachable (was a plain div): Tab to it, Enter/Space selects.
+      makeKeyboardActivatable(card);
+      card.setAttribute('aria-current', String(p.pageIndex === this.activePageIndex));
 
       card.addEventListener('mouseenter', () => {
         if (p.pageIndex !== this.activePageIndex) card.style.borderColor = '#60A5FA';
@@ -310,13 +329,15 @@ export class StructureBar {
       title.style.fontSize = '13px';
       title.style.fontWeight = 'bold';
       title.style.color = p.pageIndex === this.activePageIndex ? '#60A5FA' : '#FFFFFF';
-      title.textContent = p.label || `דף ${p.gematria}`;
+      title.textContent = p.label || tf('structurePageLabel', { g: p.gematria });
       infoWrap.appendChild(title);
 
       const subtitle = document.createElement('span');
       subtitle.style.fontSize = '11px';
       subtitle.style.color = 'var(--tok-text-muted)';
-      subtitle.textContent = `עמ' ${p.pageIndex + 1} • ${p.isSpreadRight ? 'כפולה ימנית (ע"א)' : 'כפולה שמאלית (ע"ב)'}`;
+      // Derived from the page position with the same helpers SpreadCanvas uses, so the
+      // list can never disagree with the canvas about which side/amud a page is.
+      subtitle.textContent = `${tf('structurePageNumber', { n: p.pageIndex + 1 })} • ${t(isRightHandPage(p.pageIndex) ? 'structureSpreadRight' : 'structureSpreadLeft')} (${isRectoPage(p.pageIndex) ? 'ע"א' : 'ע"ב'})`;
       infoWrap.appendChild(subtitle);
 
       card.appendChild(infoWrap);
@@ -343,6 +364,7 @@ export class StructureBar {
       const isActive = idx === this.activePageIndex;
       card.style.background = isActive ? 'var(--tok-bg-surface-hover)' : 'var(--tok-bg-surface-2)';
       card.style.borderColor = isActive ? 'var(--tok-selection-frame)' : 'var(--tok-border-strong)';
+      card.setAttribute('aria-current', String(isActive));
       const title = card.querySelector('span');
       if (title) {
         title.style.color = isActive ? '#60A5FA' : '#FFFFFF';
@@ -355,14 +377,14 @@ export class StructureBar {
     title.style.fontSize = '12px';
     title.style.fontWeight = 'bold';
     title.style.marginBottom = '8px';
-    title.textContent = 'תזרימים מקבילים (Multi-Flow)';
+    title.textContent = t('structureFlowsTitle');
     container.appendChild(title);
 
     const desc = document.createElement('p');
     desc.style.fontSize = '11px';
     desc.style.color = 'var(--tok-text-muted)';
     desc.style.marginBottom = '12px';
-    desc.textContent = 'מנוע סנכרון רב-תזרימי תורני: כל תזרים מוזרם באזור מוגדר בעמוד.';
+    desc.textContent = t('structureFlowsDesc');
     container.appendChild(desc);
 
     for (const f of this.flows) {
@@ -374,6 +396,8 @@ export class StructureBar {
       item.style.marginBottom = '8px';
       item.style.cursor = 'pointer';
 
+      makeKeyboardActivatable(item);
+      item.setAttribute('aria-pressed', String(f.id === this.activeFlowId));
       item.addEventListener('click', () => {
         this.activeFlowId = f.id;
         this.flows.forEach((flow) => (flow.isActive = flow.id === f.id));
@@ -410,7 +434,7 @@ export class StructureBar {
       const words = document.createElement('span');
       words.style.fontSize = '11px';
       words.style.color = 'var(--tok-text-muted)';
-      words.textContent = `${f.wordCount.toLocaleString()} מילים`;
+      words.textContent = `${f.wordCount.toLocaleString()} ${t('statusWords')}`;
       topRow.appendChild(words);
 
       item.appendChild(topRow);
@@ -418,7 +442,7 @@ export class StructureBar {
       const role = document.createElement('div');
       role.style.fontSize = '11px';
       role.style.color = 'var(--tok-text-secondary)';
-      role.textContent = `מיקום: ${f.role}`;
+      role.textContent = `${t('structureFlowPosition')}: ${f.role}`;
       item.appendChild(role);
 
       container.appendChild(item);
@@ -430,7 +454,7 @@ export class StructureBar {
     title.style.fontSize = '12px';
     title.style.fontWeight = 'bold';
     title.style.marginBottom = '8px';
-    title.textContent = 'סגנונות מסמך (Style Tokens)';
+    title.textContent = t('structureStylesTitle');
     container.appendChild(title);
 
     for (const s of this.styles) {
@@ -444,6 +468,7 @@ export class StructureBar {
 
       card.addEventListener('mouseenter', () => (card.style.borderColor = 'var(--tok-accent-primary)'));
       card.addEventListener('mouseleave', () => (card.style.borderColor = 'var(--tok-border-strong)'));
+      makeKeyboardActivatable(card);
       card.addEventListener('click', () => this.callbacks.onSelectStyle(s.id));
 
       const row = document.createElement('div');
@@ -473,7 +498,7 @@ export class StructureBar {
     title.style.fontSize = '12px';
     title.style.fontWeight = 'bold';
     title.style.marginBottom = '10px';
-    title.textContent = 'שכבות עבודה';
+    title.textContent = t('structureLayersTitle');
     container.appendChild(title);
 
     for (const l of this.layers) {
@@ -501,11 +526,16 @@ export class StructureBar {
       eye.style.alignItems = 'center';
       eye.style.padding = '2px';
       eye.innerHTML = l.visible ? renderIcon('eye', 14) : renderIcon('eyeOff', 14);
-      eye.title = l.visible ? 'הסתר שכבה' : 'הצג שכבה';
+      eye.title = t(l.visible ? 'structureHideLayer' : 'structureShowLayer');
+      eye.setAttribute('aria-label', `${eye.title}: ${l.name}`);
+      eye.setAttribute('aria-pressed', String(l.visible));
       eye.addEventListener('click', () => {
         l.visible = !l.visible;
         eye.style.color = l.visible ? 'var(--tok-text-primary)' : 'var(--tok-text-muted)';
         eye.innerHTML = l.visible ? renderIcon('eye', 14) : renderIcon('eyeOff', 14);
+        eye.title = t(l.visible ? 'structureHideLayer' : 'structureShowLayer');
+        eye.setAttribute('aria-label', `${eye.title}: ${l.name}`);
+        eye.setAttribute('aria-pressed', String(l.visible));
         this.callbacks.onToggleLayer(l.id, l.visible);
       });
       nameWrap.appendChild(eye);
@@ -526,11 +556,16 @@ export class StructureBar {
       lock.style.alignItems = 'center';
       lock.style.padding = '2px';
       lock.innerHTML = l.locked ? renderIcon('lock', 14) : renderIcon('unlock', 14);
-      lock.title = l.locked ? 'שחרר נעילת שכבה' : 'נעל שכבה';
+      lock.title = t(l.locked ? 'structureUnlockLayer' : 'structureLockLayer');
+      lock.setAttribute('aria-label', `${lock.title}: ${l.name}`);
+      lock.setAttribute('aria-pressed', String(l.locked));
       lock.addEventListener('click', () => {
         l.locked = !l.locked;
         lock.style.color = l.locked ? '#F59E0B' : 'var(--tok-text-muted)';
         lock.innerHTML = l.locked ? renderIcon('lock', 14) : renderIcon('unlock', 14);
+        lock.title = t(l.locked ? 'structureUnlockLayer' : 'structureLockLayer');
+        lock.setAttribute('aria-label', `${lock.title}: ${l.name}`);
+        lock.setAttribute('aria-pressed', String(l.locked));
       });
       row.appendChild(lock);
 

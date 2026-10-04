@@ -1,3 +1,5 @@
+import { t, i18n } from '../i18n';
+
 export interface ActionHudCallbacks {
   onFontChange: (fontFamily: string) => void;
   onSizeChange: (sizePt: number) => void;
@@ -14,11 +16,22 @@ export class ActionHud {
   private currentSize = 14;
   private isBold = false;
   private currentAlign: 'right' | 'center' | 'left' | 'justify' = 'right';
+  private currentStyle = 'gemara';
+  private currentFont = '';
 
   constructor(callbacks: ActionHudCallbacks) {
     this.callbacks = callbacks;
     this.element = document.createElement('div');
     this.element.className = 'tok-action-hud';
+    this.element.setAttribute('role', 'toolbar');
+    this.element.setAttribute('aria-label', t('hudQuickStyle'));
+    // The stylesheet pins the HUD to RTL; follow the UI language.
+    this.element.style.direction = i18n.getDirection();
+    i18n.onChange(() => {
+      this.element.style.direction = i18n.getDirection();
+      this.element.setAttribute('aria-label', t('hudQuickStyle'));
+      if (this.isVisible) this.render();
+    });
     this.element.style.display = 'none';
 
     this.render();
@@ -43,11 +56,16 @@ export class ActionHud {
     if (initialValues?.bold !== undefined) this.isBold = initialValues.bold;
     if (initialValues?.align) this.currentAlign = initialValues.align;
 
+    if (initialValues?.style) this.currentStyle = initialValues.style;
+    if (initialValues?.font) this.currentFont = initialValues.font;
+
     this.render();
 
-    // Position HUD centered above (x, y)
+    // Position HUD centered above (x, y), kept fully inside the window
     this.element.style.display = 'flex';
-    this.element.style.left = `${Math.max(10, x - 180)}px`;
+    const width = this.element.offsetWidth || 360;
+    const maxLeft = Math.max(10, window.innerWidth - width - 10);
+    this.element.style.left = `${Math.min(maxLeft, Math.max(10, x - width / 2))}px`;
     this.element.style.top = `${Math.max(50, y - 48)}px`;
     this.isVisible = true;
   }
@@ -77,9 +95,13 @@ export class ActionHud {
       const opt = document.createElement('option');
       opt.value = f.split(' ')[0];
       opt.textContent = f;
+      if (opt.value === this.currentFont) opt.selected = true;
       fontSelect.appendChild(opt);
     }
+    fontSelect.title = t('hudFont');
+    fontSelect.setAttribute('aria-label', t('hudFont'));
     fontSelect.addEventListener('change', () => {
+      this.currentFont = fontSelect.value;
       this.callbacks.onFontChange(fontSelect.value);
     });
     this.element.appendChild(fontSelect);
@@ -97,6 +119,8 @@ export class ActionHud {
     minusBtn.textContent = '−';
     minusBtn.style.padding = '0 5px';
     minusBtn.style.height = '24px';
+    minusBtn.title = t('hudSmaller');
+    minusBtn.setAttribute('aria-label', t('hudSmaller'));
     minusBtn.addEventListener('click', () => {
       this.currentSize = Math.max(6, this.currentSize - 1);
       sizeInput.value = `${this.currentSize}pt`;
@@ -111,9 +135,11 @@ export class ActionHud {
     sizeInput.style.width = '44px';
     sizeInput.style.height = '24px';
     sizeInput.style.padding = '0 2px';
+    sizeInput.setAttribute('aria-label', t('inspFontSize'));
     sizeInput.addEventListener('change', () => {
       const parsed = parseInt(sizeInput.value, 10);
-      if (!isNaN(parsed) && parsed > 4 && parsed < 200) {
+      // Same 6–150pt range the −/+ steppers enforce.
+      if (!isNaN(parsed) && parsed >= 6 && parsed <= 150) {
         this.currentSize = parsed;
         this.callbacks.onSizeChange(this.currentSize);
       }
@@ -126,6 +152,8 @@ export class ActionHud {
     plusBtn.textContent = '+';
     plusBtn.style.padding = '0 5px';
     plusBtn.style.height = '24px';
+    plusBtn.title = t('hudLarger');
+    plusBtn.setAttribute('aria-label', t('hudLarger'));
     plusBtn.addEventListener('click', () => {
       this.currentSize = Math.min(150, this.currentSize + 1);
       sizeInput.value = `${this.currentSize}pt`;
@@ -146,10 +174,14 @@ export class ActionHud {
     boldBtn.style.height = '24px';
     boldBtn.style.background = this.isBold ? 'var(--tok-accent-primary)' : 'var(--tok-bg-surface-2)';
     boldBtn.style.color = this.isBold ? '#FFFFFF' : 'var(--tok-text-primary)';
+    boldBtn.title = t('hudBold');
+    boldBtn.setAttribute('aria-label', t('hudBold'));
+    boldBtn.setAttribute('aria-pressed', String(this.isBold));
     boldBtn.addEventListener('click', () => {
       this.isBold = !this.isBold;
       boldBtn.style.background = this.isBold ? 'var(--tok-accent-primary)' : 'var(--tok-bg-surface-2)';
       boldBtn.style.color = this.isBold ? '#FFFFFF' : 'var(--tok-text-primary)';
+      boldBtn.setAttribute('aria-pressed', String(this.isBold));
       this.callbacks.onWeightChange(this.isBold);
     });
     this.element.appendChild(boldBtn);
@@ -157,11 +189,12 @@ export class ActionHud {
     // 4. Basic Alignment Toggle (Right / Center / Justify)
     const alignBtn = document.createElement('button');
     alignBtn.className = 'tok-btn';
-    alignBtn.textContent = this.currentAlign === 'justify' ? '≡ בלוק' : this.currentAlign === 'center' ? '≡ מרכז' : '≡ ימין';
+    const alignLabel = () => `≡ ${t(this.currentAlign === 'justify' ? 'hudAlignJustify' : this.currentAlign === 'center' ? 'hudAlignCenter' : 'hudAlignRight')}`;
+    alignBtn.textContent = alignLabel();
     alignBtn.style.height = '24px';
     alignBtn.style.fontSize = '11px';
     alignBtn.style.padding = '0 6px';
-    alignBtn.title = 'שנה יישור (ימין / מרכז / בלוק)';
+    alignBtn.title = t('hudAlignTitle');
     alignBtn.addEventListener('click', () => {
       if (this.currentAlign === 'right') {
         this.currentAlign = 'justify';
@@ -170,7 +203,7 @@ export class ActionHud {
       } else {
         this.currentAlign = 'right';
       }
-      alignBtn.textContent = this.currentAlign === 'justify' ? '≡ בלוק' : this.currentAlign === 'center' ? '≡ מרכז' : '≡ ימין';
+      alignBtn.textContent = alignLabel();
       this.callbacks.onAlignChange(this.currentAlign);
     });
     this.element.appendChild(alignBtn);
@@ -183,7 +216,7 @@ export class ActionHud {
     styleSelect.style.height = '24px';
     styleSelect.style.fontSize = '11px';
     styleSelect.style.padding = '0 4px';
-    styleSelect.title = 'בורר סגנון מהיר';
+    styleSelect.title = t('hudQuickStyle');
 
     const styles = [
       { id: 'gemara', name: 'גמרא' },
@@ -195,9 +228,12 @@ export class ActionHud {
       const opt = document.createElement('option');
       opt.value = s.id;
       opt.textContent = s.name;
+      if (s.id === this.currentStyle) opt.selected = true;
       styleSelect.appendChild(opt);
     }
+    styleSelect.setAttribute('aria-label', t('hudQuickStyle'));
     styleSelect.addEventListener('change', () => {
+      this.currentStyle = styleSelect.value;
       this.callbacks.onStyleChange(styleSelect.value);
     });
     this.element.appendChild(styleSelect);

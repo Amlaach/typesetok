@@ -1,37 +1,7 @@
-import { TypesetOkApp } from './app';
+import { TypesetOkApp, toHebrewGematria } from './app';
+import { t } from './i18n';
 import { PageDescriptor } from 'tok-viewer';
 import { StoryParagraph } from 'tok-story-editor';
-
-// Gematria converter for Hebrew page numbering
-function toHebrewGematria(num: number): string {
-  if (num <= 0) return '';
-  const letters: [number, string][] = [
-    [400, 'ת'], [300, 'ש'], [200, 'ר'], [100, 'ק'],
-    [90, 'צ'], [80, 'פ'], [70, 'ע'], [60, 'ס'],
-    [50, 'נ'], [40, 'מ'], [30, 'ל'], [20, 'כ'],
-    [10, 'י'], [9, 'ט'], [8, 'ח'], [7, 'ז'],
-    [6, 'ו'], [5, 'ה'], [4, 'ד'], [3, 'ג'],
-    [2, 'ב'], [1, 'א']
-  ];
-  let n = num;
-  let res = '';
-  // Special Talmudic cases for 15 and 16
-  if (n === 15) return 'ט״ו';
-  if (n === 16) return 'ט״ז';
-
-  for (const [val, char] of letters) {
-    while (n >= val) {
-      res += char;
-      n -= val;
-    }
-  }
-  if (res.length === 1) {
-    return res + '׳';
-  } else if (res.length > 1) {
-    return res.slice(0, -1) + '״' + res.slice(-1);
-  }
-  return res;
-}
 
 // Sample classic Hebrew literature/Talmudic text with Niqqud
 const sampleHebrewParagraphs: string[] = [
@@ -108,131 +78,44 @@ function getStoryParagraphs(): StoryParagraph[] {
   }));
 }
 
-function showNotification(msg: string, isError: boolean = false): void {
-  const toast = document.createElement('div');
-  toast.className = 'tok-toast';
-  toast.style.position = 'fixed';
-  toast.style.bottom = '24px';
-  toast.style.left = '24px';
-  toast.style.background = isError ? '#d32f2f' : '#1976d2';
-  toast.style.color = '#ffffff';
-  toast.style.padding = '10px 20px';
-  toast.style.borderRadius = '6px';
-  toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-  toast.style.fontSize = '14px';
-  toast.style.zIndex = '99999';
-  toast.style.transition = 'opacity 0.3s ease';
-  toast.textContent = msg;
-
-  document.body.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
-}
 
 // Bootstrap TypesetOK Workbench
-window.addEventListener('DOMContentLoaded', async () => {
+window.addEventListener('DOMContentLoaded', () => {
   const appContainer = document.getElementById('app');
   if (!appContainer) {
     console.error('Missing #app container');
     return;
   }
 
-  console.log('[TOK] Initializing TypesetOK Desktop Workbench...');
   const app = new TypesetOkApp(appContainer);
   (window as any).tokApp = app;
 
   // Load Initial Hebrew demo document
-  const demoPages = generateDemoPageDescriptors(12);
-  app.loadDocumentPages(demoPages);
+  app.loadDocumentPages(generateDemoPageDescriptors(12));
 
-  // Try to load story paragraphs into the Story Editor
-  const storyEditorEl = document.querySelector('.tok-story-editor-content') as HTMLDivElement | null;
-  if (storyEditorEl) {
-    const paragraphs = getStoryParagraphs();
-    storyEditorEl.innerHTML = '';
-    for (const p of paragraphs) {
-      const pEl = document.createElement('p');
-      pEl.dataset.paraId = p.id;
-      pEl.dataset.styleId = p.styleId;
-      pEl.textContent = p.text;
-      pEl.style.marginBottom = '12px';
-      storyEditorEl.appendChild(pEl);
-    }
-  }
+  // Load the same text into the continuous Story Editor
+  app.loadStory(getStoryParagraphs());
+  // Startup milestone (read by the opt-in startup trace in tok-electron/main.ts)
+  performance.mark('tok-ui-built');
+
+  const runAction = (action: unknown, data?: unknown) => {
+    if (typeof action === 'string' && action) app.handleSystemAction(action, data);
+  };
 
   // Hook into IPC bridge if running inside Electron
-  const win = window as any;
-  if (win.tokIpc) {
-    console.log('[TOK] Electron IPC Bridge detected and active.');
-    showNotification('מעטפת TypesetOK פעילה ומחוברת לליבת Rust');
-
-    // Handle menu actions from main process
-    if (win.tokIpc.onEvent) {
-      win.tokIpc.onEvent((eventPayload: any) => {
-        console.log('[TOK-IPC] Received event:', eventPayload);
-        if (typeof eventPayload === 'object' && eventPayload?.action) {
-          handleAction(eventPayload.action, eventPayload.data);
-        }
-      });
-    }
+  const tokIpc = (window as any).tokIpc;
+  if (tokIpc) {
+    app.showToast(t('toastShellConnected'));
+    // Native menu actions from the main process
+    tokIpc.onEvent?.((payload: any) => {
+      if (payload && typeof payload === 'object') runAction(payload.action, payload.data);
+    });
   } else {
     console.log('[TOK] Running in standalone web preview mode');
   }
 
-  function handleAction(action: string, data?: any) {
-    switch (action) {
-      case 'new-document':
-      case 'open-welcome':
-        showNotification('פתיחת מסך פרויקטים...');
-        (window as any).tokApp?.welcomeModal?.show?.();
-        break;
-      case 'open-settings':
-        (window as any).tokApp?.settingsModal?.show?.();
-        break;
-      case 'open-about':
-        (window as any).tokApp?.aboutModal?.show?.();
-        break;
-      case 'toggle-lang':
-        (window as any).tokApp?.toggleLanguage?.();
-        break;
-      case 'open-document':
-        showNotification(`פתיחת קובץ: ${data || ''}`);
-        break;
-      case 'save-document':
-      case 'save-as':
-        showNotification('המסמך נשמר בהצלחה בפורמט .tok');
-        break;
-      case 'export-pdf':
-        if (win.tokIpc) {
-          showNotification('מייצא לקובץ לדפוס ISO PDF/X-1a...');
-          win.tokIpc.renderPdf('--demo', 'TypesetOK_Export.pdf')
-            .then((res: string) => {
-              showNotification('הייצוא לדפוס הושלם בהצלחה!');
-              console.log(res);
-            })
-            .catch((err: any) => {
-              showNotification(`שגיאת ייצוא: ${err.message}`, true);
-            });
-        }
-        break;
-      case 'normalize-hebrew':
-        showNotification('נרמול ניקוד וטעמים ת"י 6100 הוחל על כל הפסקאות');
-        break;
-      case 'shield-divine-names':
-        showNotification('מגן שמות קדושים הופעל (איסור שבירה בשמות הויה ואדנות)');
-        break;
-      case 'recalculate-gematria':
-        showNotification('סנכרון מספור עמודים עברי בגימטריה הושלם');
-        break;
-      default:
-        console.log('[TOK] Unknown action:', action);
-    }
-  }
-
   // Global window listener for custom dispatch
   window.addEventListener('tok-action', ((e: CustomEvent) => {
-    handleAction(e.detail.action, e.detail.data);
+    runAction(e.detail?.action, e.detail?.data);
   }) as EventListener);
 });

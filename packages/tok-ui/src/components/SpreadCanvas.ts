@@ -1,6 +1,35 @@
 import { PageDescriptor } from 'tok-viewer';
 import { SelectionMode, TextFrameData } from '../types';
 
+/**
+ * Spread geometry for a right-to-left bound book.
+ *
+ * The first page (index 0) is a recto and stands alone; after it pages pair up as
+ * (1,2), (3,4), ... In an RTL book the recto (front of the leaf, amud aleph) is the
+ * LEFT page of an open spread and the verso (amud bet) is the RIGHT page, so:
+ *   - even index -> recto, ע״א, left side
+ *   - odd index  -> verso, ע״ב, right side
+ * These helpers are the single source of truth for the canvas and the page list.
+ */
+export function isRectoPage(pageIndex: number): boolean {
+  return pageIndex % 2 === 0;
+}
+
+export function isRightHandPage(pageIndex: number): boolean {
+  return !isRectoPage(pageIndex);
+}
+
+/** Groups page positions into spreads, each listed right-to-left: [[0], [1, 2], [3, 4], ...]. */
+export function groupIntoSpreads(pageCount: number): number[][] {
+  const spreads: number[][] = [];
+  if (pageCount <= 0) return spreads;
+  spreads.push([0]);
+  for (let i = 1; i < pageCount; i += 2) {
+    spreads.push(i + 1 < pageCount ? [i, i + 1] : [i]);
+  }
+  return spreads;
+}
+
 export interface SpreadCanvasCallbacks {
   onSelectionModeChange: (mode: SelectionMode, frame?: TextFrameData) => void;
   onRequestActionHud: (x: number, y: number, initialValues?: any) => void;
@@ -18,6 +47,11 @@ export class SpreadCanvas {
   private pages: PageDescriptor[] = [];
   private selectedFrameId: string | null = null;
   private innerContainer!: HTMLElement;
+  private lastReportedPage = -1;
+  private scrollRaf = 0;
+  private programmaticScroll = false;
+  private scrollSettleTimer = 0;
+  private baselineGridPt = 13;
 
   constructor(callbacks: SpreadCanvasCallbacks) {
     this.callbacks = callbacks;
@@ -30,7 +64,10 @@ export class SpreadCanvas {
     this.element.style.overflow = 'auto';
     this.element.style.display = 'flex';
     this.element.style.flexDirection = 'column';
-    this.element.style.alignItems = 'center';
+    // Not `center`: a centered flex item that is wider than the viewport overflows on
+    // both sides and the overflow on the start side can never be scrolled into view.
+    // The inner container is centered with auto margins instead (see renderContainer).
+    this.element.style.alignItems = 'flex-start';
     this.element.style.padding = '30px';
 
     this.renderContainer();
@@ -40,23 +77,84 @@ export class SpreadCanvas {
   public setPages(pages: PageDescriptor[], activeIndex = 0): void {
     this.pages = pages;
     this.activePageIndex = activeIndex;
+    this.lastReportedPage = activeIndex;
     this.renderSpreads();
+    // After layout, make sure the active page is actually on screen.
+    requestAnimationFrame(() => {
+      if (!this.programmaticScroll) this.revealPage(this.activePageIndex, false, false);
+    });
   }
 
   public scrollToPage(pageIndex: number): void {
     this.activePageIndex = pageIndex;
-    const spreadEl = this.innerContainer.querySelector(`[data-page-index="${pageIndex}"]`);
-    if (spreadEl) {
-      spreadEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // While the smooth scroll runs, the pages it passes must not be reported; the
+    // target is reported right away and tracking resumes once scrolling settles.
+    this.programmaticScroll = true;
+    this.armScrollSettle();
+    if (this.lastReportedPage !== pageIndex) {
+      this.lastReportedPage = pageIndex;
+      this.callbacks.onPageChange(pageIndex);
     }
+    this.revealPage(pageIndex, true, true);
+  }
+
+  private armScrollSettle(): void {
+    if (this.scrollSettleTimer) clearTimeout(this.scrollSettleTimer);
+    this.scrollSettleTimer = window.setTimeout(() => {
+      this.scrollSettleTimer = 0;
+      this.programmaticScroll = false;
+    }, 200);
+  }
+
+  /**
+   * Scrolls only the canvas (element.scrollIntoView also scrolls overflow:hidden
+   * ancestors such as the workbench) so that the page is vertically centered (optional)
+   * and horizontally fully visible. A spread is wider than the canvas at 100% on common
+   * window sizes, so without the horizontal part the requested page could stay cut off.
+   */
+  private revealPage(pageIndex: number, smooth: boolean, centerVertically: boolean): void {
+    const sheet = this.innerContainer.querySelector<HTMLElement>(`.tok-page-sheet[data-page-index="${pageIndex}"]`);
+    if (!sheet) return;
+    const s = sheet.getBoundingClientRect();
+    const c = this.element.getBoundingClientRect();
+    const margin = 16;
+    let dx = 0;
+    if (s.width + 2 * margin >= c.width) {
+      dx = s.left + s.width / 2 - (c.left + c.width / 2);
+    } else if (s.left < c.left + margin) {
+      dx = s.left - (c.left + margin);
+    } else if (s.right > c.right - margin) {
+      dx = s.right - (c.right - margin);
+    }
+    let dy = 0;
+    if (centerVertically) {
+      dy = s.top + s.height / 2 - (c.top + c.height / 2);
+    } else if (s.top < c.top) {
+      dy = s.top - c.top - margin;
+    } else if (s.bottom > c.bottom) {
+      dy = Math.min(s.bottom - c.bottom + margin, s.top - c.top - margin);
+    }
+    if (dx || dy) this.element.scrollBy({ left: dx, top: dy, behavior: smooth ? 'smooth' : 'auto' });
   }
 
   public setZoom(zoom: number): void {
     this.zoomPercent = zoom;
     if (this.innerContainer) {
-      this.innerContainer.style.transform = `scale(${zoom / 100})`;
-      this.innerContainer.style.transformOrigin = 'top center';
+      // CSS `zoom` (unlike `transform: scale`) changes the layout size, so the scroll
+      // area grows/shrinks with the pages and every part of a zoomed page stays reachable.
+      this.innerContainer.style.transform = '';
+      this.innerContainer.style.setProperty('zoom', String(zoom / 100));
     }
+  }
+
+  public getZoom(): number {
+    return this.zoomPercent;
+  }
+
+  public setBaselineGrid(pt: number): void {
+    if (!(pt > 0)) return;
+    this.baselineGridPt = pt;
+    this.updateGuides();
   }
 
   public toggleMarginsGuide(): void {
@@ -76,7 +174,7 @@ export class SpreadCanvas {
     this.innerContainer.style.display = 'flex';
     this.innerContainer.style.flexDirection = 'column';
     this.innerContainer.style.gap = '40px';
-    this.innerContainer.style.transition = 'transform 0.15s ease-out';
+    this.innerContainer.style.marginInline = 'auto';
     this.element.appendChild(this.innerContainer);
   }
 
@@ -85,36 +183,20 @@ export class SpreadCanvas {
 
     if (this.pages.length === 0) return;
 
-    // Group into spreads (Recto on Right, Verso on Left in RTL)
-    // Page 0 = Single Cover / First Page
-    // Pages 1,2 = Spread 1; Pages 3,4 = Spread 2; etc.
-    let pageIdx = 0;
-
-    while (pageIdx < this.pages.length) {
+    for (const spread of groupIntoSpreads(this.pages.length)) {
       const spreadRow = document.createElement('div');
       spreadRow.className = 'tok-spread-row';
       spreadRow.style.display = 'flex';
       spreadRow.style.gap = '8px';
       spreadRow.style.position = 'relative';
 
-      if (pageIdx === 0) {
-        // Single recto page (Cover / Title)
-        const p0 = this.pages[pageIdx];
-        const pageEl = this.createPageSheet(p0, true);
-        spreadRow.appendChild(pageEl);
-        pageIdx++;
-      } else {
-        // True RTL Spread: Page N (Recto - Right) and Page N+1 (Verso - Left)
-        const rectoPage = this.pages[pageIdx];
-        const versoPage = pageIdx + 1 < this.pages.length ? this.pages[pageIdx + 1] : null;
-
-        if (rectoPage) {
-          spreadRow.appendChild(this.createPageSheet(rectoPage, true));
-        }
-        if (versoPage) {
-          spreadRow.appendChild(this.createPageSheet(versoPage, false));
-        }
-        pageIdx += 2;
+      // The canvas is dir="rtl", so the first sheet appended lands on the right.
+      // The lone first page is a recto and therefore belongs on the left.
+      if (spread.length === 1 && isRectoPage(spread[0])) {
+        spreadRow.style.justifyContent = 'flex-end';
+      }
+      for (const pos of spread) {
+        spreadRow.appendChild(this.createPageSheet(this.pages[pos], pos));
       }
 
       this.innerContainer.appendChild(spreadRow);
@@ -123,7 +205,9 @@ export class SpreadCanvas {
     this.updateGuides();
   }
 
-  private createPageSheet(page: PageDescriptor, isRecto: boolean): HTMLElement {
+  private createPageSheet(page: PageDescriptor, position: number): HTMLElement {
+    const isRecto = isRectoPage(position);
+    const isRightPage = isRightHandPage(position);
     const sheet = document.createElement('div');
     sheet.className = 'tok-page-sheet';
     sheet.dataset.pageIndex = page.pageIndex.toString();
@@ -168,8 +252,13 @@ export class SpreadCanvas {
     // 2. Talmudic Multi-Flow Layout Grid (Gemara in Center, Rashi inside, Tosafot outside)
     const talmudGrid = document.createElement('div');
     talmudGrid.style.display = 'grid';
-    talmudGrid.style.gridTemplateColumns = isRecto ? '110px 1fr 110px' : '110px 1fr 110px';
+    talmudGrid.style.gridTemplateColumns = '110px 1fr 110px';
     talmudGrid.style.gap = '12px';
+    // Rashi sits on the inner (spine) side and Tosafot on the outer side. The grid is
+    // RTL (column 1 is rightmost); the spine is on the left of a right-hand page and
+    // on the right of a left-hand page.
+    const innerColumn = isRightPage ? '3' : '1';
+    const outerColumn = isRightPage ? '1' : '3';
     talmudGrid.style.height = '480px';
     talmudGrid.style.position = 'relative';
 
@@ -181,6 +270,8 @@ export class SpreadCanvas {
       fontStyle: 'font-family: "Rashi", serif; font-size: 11px; line-height: 1.45;',
       text: '<b>מֵאֵימָתַי קוֹרִין</b> — מֵאֵיזֶה זְמַן הִיא מִצְוָתָהּ. מִשָּׁעָה שֶׁהַכֹּהֲנִים נִכְנָסִים לֶאֱכֹל בִּתְרוּמָתָן — כֹּהֲנִים שֶׁנִּטְמְאוּ וְטָבְלוּ וְהֶעֱרִיב שִׁמְשָׁן וְהִגִּיעַ עֵת לֶאֱכֹל בְּטָהֳרָה.'
     });
+    rashiFrame.style.gridRow = '1';
+    rashiFrame.style.gridColumn = innerColumn;
     talmudGrid.appendChild(rashiFrame);
 
     // Gemara Main Frame (Center)
@@ -191,6 +282,8 @@ export class SpreadCanvas {
       fontStyle: 'font-family: "Vilna", "Taamey Frank CLM", serif; font-size: 14.5px; line-height: 1.6; font-weight: bold;',
       text: '<div style="text-align:center; font-size:16px; margin-bottom:8px; border-bottom:1px dotted #888; padding-bottom:4px;">מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית?</div>מִשָּׁעָה שֶׁהַכֹּהֲנִים נִכְנָסִים לֶאֱכֹל בִּתְרוּמָתָן, עַד סוֹף הָאַשְׁמוּרָה הָרִאשׁוֹנָה, דִּבְרֵי רַבִּי אֱלִיעֶזֶר. וַחֲכָמִים אוֹמְרִים: עַד חֲצוֹת. רַבָּן גַּמְלִיאֵל אוֹמֵר: עַד שֶׁיַּעֲלֶה עַמּוּד הַשָּׁחַר. מַעֲשֶׂה שֶׁבָּאוּ בָנָיו מִבֵּית הַמִּשְׁתֶּה, אָמְרוּ לוֹ: לֹא קָרִינוּ אֶת שְׁמַע! אָמַר לָהֶם: אִם לֹא עָלָה עַמּוּד הַשָּׁחַר, חַיָּבִין אַתֶּם לִקְרוֹת.'
     });
+    gemaraFrame.style.gridRow = '1';
+    gemaraFrame.style.gridColumn = '2';
     talmudGrid.appendChild(gemaraFrame);
 
     // Tosafot Frame (Outer)
@@ -201,6 +294,8 @@ export class SpreadCanvas {
       fontStyle: 'font-family: "Rashi", serif; font-size: 11px; line-height: 1.45;',
       text: '<b>מֵאֵימָתַי קוֹרִין</b> — תֵּימַהּ דְּלָא תָּנֵי זְמַן קְרִיאַת שְׁמַע שֶׁל שַׁחֲרִית בְּרֵישָׁא כְּדִכְתִיב בְּשָׁכְבְּךָ וּבְקוּמֶךָ. וְיֵשׁ לוֹמַר דִּסְמַךְ אַקְּרָא דִּכְתִיב וַיְהִי עֶרֶב וַיְהִי בֹקֶר יוֹם אֶחָד.'
     });
+    tosafotFrame.style.gridRow = '1';
+    tosafotFrame.style.gridColumn = outerColumn;
     talmudGrid.appendChild(tosafotFrame);
 
     sheet.appendChild(talmudGrid);
@@ -255,6 +350,16 @@ export class SpreadCanvas {
     marginGuide.style.opacity = '0.5';
     guidesLayer.appendChild(marginGuide);
 
+    // Baseline Grid (hidden until toggled on)
+    const baselineGuide = document.createElement('div');
+    baselineGuide.className = 'tok-guide-baseline';
+    baselineGuide.style.position = 'absolute';
+    baselineGuide.style.top = '36px';
+    baselineGuide.style.left = '36px';
+    baselineGuide.style.right = '36px';
+    baselineGuide.style.bottom = '36px';
+    guidesLayer.appendChild(baselineGuide);
+
     sheet.appendChild(guidesLayer);
 
     return sheet;
@@ -278,6 +383,10 @@ export class SpreadCanvas {
     frame.style.borderRadius = '2px';
     frame.style.padding = '4px';
     frame.style.transition = 'box-shadow 0.15s ease';
+    // <body> is `user-select: none`; frame text must stay selectable, otherwise
+    // getSelection() is always empty below and the Action HUD can never open.
+    frame.style.userSelect = 'text';
+    frame.style.setProperty('-webkit-user-select', 'text');
 
     frame.innerHTML = `
       <div style="${params.fontStyle}">
@@ -384,6 +493,37 @@ export class SpreadCanvas {
     marginGuides.forEach((g) => {
       g.style.display = this.showMargins ? 'block' : 'none';
     });
+
+    const stepPx = (this.baselineGridPt * 96) / 72;
+    const line = 'var(--tok-guide-baseline)';
+    const baselineGuides = this.innerContainer.querySelectorAll<HTMLElement>('.tok-guide-baseline');
+    baselineGuides.forEach((g) => {
+      g.style.display = this.showBaseline ? 'block' : 'none';
+      g.style.backgroundImage =
+        `repeating-linear-gradient(to bottom, transparent 0, transparent ${stepPx - 1}px, ${line} ${stepPx - 1}px, ${line} ${stepPx}px)`;
+    });
+  }
+
+  /** Index (PageDescriptor.pageIndex) of the page sheet closest to the viewport's vertical center. */
+  private findCenteredPage(): number | null {
+    const sheets = this.innerContainer.querySelectorAll<HTMLElement>('.tok-page-sheet[data-page-index]');
+    if (sheets.length === 0) return null;
+    const box = this.element.getBoundingClientRect();
+    const centerY = box.top + box.height / 2;
+    let best: number | null = null;
+    let bestDist = Infinity;
+    sheets.forEach((sheet) => {
+      const r = sheet.getBoundingClientRect();
+      const dist = centerY < r.top ? r.top - centerY : centerY > r.bottom ? centerY - r.bottom : 0;
+      const idx = parseInt(sheet.dataset.pageIndex as string, 10);
+      // Both pages of a spread share a row: keep the current page if it is one of
+      // them, otherwise the first (right-hand) one wins the tie.
+      if (dist < bestDist || (dist === bestDist && idx === this.activePageIndex)) {
+        bestDist = dist;
+        best = idx;
+      }
+    });
+    return best;
   }
 
   private bindEvents(): void {
@@ -395,5 +535,22 @@ export class SpreadCanvas {
         this.callbacks.onDismissActionHud();
       }
     });
+
+    // Report the page under the viewport center so the status bar and page list follow scrolling.
+    this.element.addEventListener('scroll', () => {
+      if (this.programmaticScroll) {
+        this.armScrollSettle();
+        return;
+      }
+      if (this.scrollRaf) return;
+      this.scrollRaf = requestAnimationFrame(() => {
+        this.scrollRaf = 0;
+        const page = this.findCenteredPage();
+        if (page === null || page === this.lastReportedPage) return;
+        this.lastReportedPage = page;
+        this.activePageIndex = page;
+        this.callbacks.onPageChange(page);
+      });
+    }, { passive: true });
   }
 }

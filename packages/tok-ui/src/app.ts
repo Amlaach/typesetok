@@ -4,17 +4,48 @@ import { ContextualInspector } from './components/ContextualInspector';
 import { ActionHud } from './components/ActionHud';
 import { CommandPalette, PaletteItem } from './components/CommandPalette';
 import { StatusBar } from './components/StatusBar';
-import { SpreadCanvas } from './components/SpreadCanvas';
+import { SpreadCanvas, isRightHandPage } from './components/SpreadCanvas';
 import { WelcomeModal } from './components/WelcomeModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
 import { PluginEngine } from './plugins/PluginEngine';
-import { StoryEditor } from 'tok-story-editor';
+import { StoryEditor, StoryParagraph } from 'tok-story-editor';
 import { PageDescriptor } from 'tok-viewer';
 import { ViewMode } from './types';
-import { i18n, t } from './i18n';
+import { i18n, t, tf } from './i18n';
 import { themeManager } from './theme';
 import { renderIcon } from './icons';
+
+import { toHebrewGematria } from './gematria';
+export { toHebrewGematria };
+
+/** Runs `fn` after the next paint, when the renderer is idle (max ~1s later). */
+function runWhenIdle(fn: () => void): void {
+  const w = window as any;
+  requestAnimationFrame(() => {
+    if (typeof w.requestIdleCallback === 'function') w.requestIdleCallback(fn, { timeout: 1000 });
+    else setTimeout(fn, 0);
+  });
+}
+
+/** i18n keys for the display names of the multi-flow ids used by the structure bar. */
+const FLOW_NAME_KEYS: Record<string, string> = {
+  gemara: 'inspFlowGemara',
+  rashi: 'inspFlowRashi',
+  tosafot: 'inspFlowTosafot',
+  notes: 'inspFlowNotes'
+};
+
+/** Template id → document title shown in the top bar (document names, not UI text). */
+const TEMPLATE_TITLES: Record<string, string> = {
+  gemara: 'מסכת ברכות — צורת הדף.tok',
+  prose: 'ספר קריאה — מהדורה ראשונה.tok',
+  bulletin: 'עלון שבת קודש.tok'
+};
+const BLANK_TEMPLATE_TITLE = 'מסמך ריק.tok';
+const DEMO_PROJECT_TITLE = 'מסכת ברכות — מהדורת מופת.tok';
+
+const countWords = (text: string) => (text.match(/\S+/g) || []).length;
 
 export class TypesetOkApp {
   private root: HTMLElement;
@@ -27,21 +58,25 @@ export class TypesetOkApp {
   private commandPalette!: CommandPalette;
   private storyEditor!: StoryEditor;
   private storyContainer!: HTMLElement;
+  private storyHeader!: HTMLElement;
   private workbench!: HTMLElement;
 
-  // New Feature Modals & Engines
-  private welcomeModal!: WelcomeModal;
-  private settingsModal!: SettingsModal;
-  private aboutModal!: AboutModal;
+  // Feature modals are built on first use (they are hidden at startup).
+  private welcomeModalInstance?: WelcomeModal;
+  private settingsModalInstance?: SettingsModal;
+  private aboutModalInstance?: AboutModal;
   private pluginEngine!: PluginEngine;
 
   private currentViewMode: ViewMode = 'canvas';
   private pages: PageDescriptor[] = [];
+  private activePageIndex = 0;
+  private activeFlowId: string | null = null;
+  private wordCountTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(root: HTMLElement) {
     this.root = root;
     this.root.className = 'tok-workbench-root';
-    this.root.dir = i18n.getLanguage() === 'he' ? 'rtl' : 'ltr';
+    this.root.dir = i18n.getDirection();
     this.root.style.display = 'flex';
     this.root.style.flexDirection = 'column';
     this.root.style.height = '100vh';
@@ -54,25 +89,17 @@ export class TypesetOkApp {
     // Apply theme & language
     themeManager.applyTheme();
 
-    i18n.onChange((lang) => {
-      this.root.dir = lang === 'he' ? 'rtl' : 'ltr';
-      if (this.workbench) {
-        this.workbench.dir = lang === 'he' ? 'rtl' : 'ltr';
-      }
-    });
-
     this.initUI();
+
+    i18n.onChange(() => this.applyLanguage());
   }
 
   private initUI(): void {
     // 1. Initialize Plugin Engine
     this.pluginEngine = new PluginEngine(
-      (cmd) => {
-        this.commandPalette?.registerItem(cmd);
-      },
-      (msg) => {
-        this.showToast(msg);
-      }
+      (cmd) => this.commandPalette?.registerItem(cmd),
+      (msg) => this.showToast(msg),
+      (id) => this.commandPalette?.unregisterItem(id)
     );
 
     // 2. Top System Bar (Modern, seamless, no grey toolbar)
@@ -85,7 +112,7 @@ export class TypesetOkApp {
       onOpenSettings: () => this.settingsModal.show(),
       onOpenAbout: () => this.aboutModal.show(),
       onToggleLanguage: () => {
-        this.showToast(`שפת הממשק הוחלפה ל-${i18n.getLanguage() === 'he' ? 'עברית (RTL)' : 'English (LTR)'}`);
+        this.showToast(tf('toastLangSwitched', { lang: t(i18n.getLanguage() === 'he' ? 'appLangHebrewRtl' : 'appLangEnglishLtr') }));
       }
     });
     this.root.appendChild(this.topBar.element);
@@ -93,7 +120,7 @@ export class TypesetOkApp {
     // 3. Main Workbench Perimeter
     this.workbench = document.createElement('div');
     this.workbench.className = 'tok-workbench-main';
-    this.workbench.dir = i18n.getLanguage() === 'he' ? 'rtl' : 'ltr';
+    this.workbench.dir = i18n.getDirection();
     this.workbench.style.display = 'flex';
     this.workbench.style.flex = '1';
     this.workbench.style.overflow = 'hidden';
@@ -108,22 +135,20 @@ export class TypesetOkApp {
       },
       onAddPage: () => this.addNewPage(),
       onSelectFlow: (flowId) => {
-        this.statusBar.updateStats({ activeFlow: flowId });
-        this.showToast(`תזרים נבחר: ${flowId}`);
+        this.activeFlowId = flowId;
+        const name = this.flowDisplayName(flowId);
+        this.statusBar.updateStats({ activeFlow: name });
+        this.showToast(tf('toastFlowSelected', { name }));
       },
       onSelectStyle: (styleId) => {
         this.inspector.setMode('text-edit');
-        this.showToast(`החלת סגנון: ${styleId}`);
+        this.showToast(tf('toastStyleApplied', { name: styleId }));
       },
       onToggleLayer: (layerId, visible) => {
-        this.showToast(`שכבה ${layerId}: ${visible ? 'מוצגת' : 'מוסתרת'}`);
+        this.showToast(tf('toastLayerToggled', { name: layerId, state: t(visible ? 'appLayerShown' : 'appLayerHidden') }));
       },
-      onOpenSettings: () => {
-        this.settingsModal.show();
-      },
-      onOpenAbout: () => {
-        this.aboutModal.show();
-      }
+      onOpenSettings: () => this.settingsModal.show(),
+      onOpenAbout: () => this.aboutModal.show()
     });
     this.workbench.appendChild(this.structureBar.element);
 
@@ -153,17 +178,18 @@ export class TypesetOkApp {
     this.storyContainer.style.display = 'none';
     this.storyContainer.style.flexDirection = 'column';
 
-    const storyHeader = document.createElement('div');
-    storyHeader.style.padding = '8px 14px';
-    storyHeader.style.background = 'var(--tok-bg-surface-2)';
-    storyHeader.style.borderBottom = '1px solid var(--tok-border-subtle)';
-    storyHeader.style.fontWeight = 'bold';
-    storyHeader.style.fontSize = '12px';
-    storyHeader.style.color = 'var(--tok-text-secondary)';
-    storyHeader.textContent = 'עורך סיפור רציף (Story Editor)';
-    this.storyContainer.appendChild(storyHeader);
+    this.storyHeader = document.createElement('div');
+    this.storyHeader.style.padding = '8px 14px';
+    this.storyHeader.style.background = 'var(--tok-bg-surface-2)';
+    this.storyHeader.style.borderBottom = '1px solid var(--tok-border-subtle)';
+    this.storyHeader.style.fontWeight = 'bold';
+    this.storyHeader.style.fontSize = '12px';
+    this.storyHeader.style.color = 'var(--tok-text-secondary)';
+    this.storyHeader.textContent = t('appStoryEditorTitle');
+    this.storyContainer.appendChild(this.storyHeader);
 
     this.storyEditor = new StoryEditor(this.storyContainer);
+    this.storyEditor.onTextChange(() => this.scheduleWordCountUpdate());
     this.workbench.appendChild(this.storyContainer);
 
     // 3d. Left Side (Trailing in RTL): Contextual Inspector
@@ -178,13 +204,13 @@ export class TypesetOkApp {
         console.log('[TOK] Typography changed:', typo);
       },
       onSyncStyleToken: () => {
-        this.showToast('הסגנון הגלובלי עודכן בהצלחה מכל השינויים המקומיים!');
+        this.showToast(t('toastGlobalStyleSynced'));
       },
       onNormalizeNiqqud: () => {
         this.handleSystemAction('normalize-hebrew');
       },
       onAlignFrames: (alignType) => {
-        this.showToast(`יישור אובייקטים הוחל: ${alignType}`);
+        this.showToast(tf('toastAlignApplied', { type: alignType }));
       }
     });
     this.workbench.appendChild(this.inspector.element);
@@ -195,10 +221,13 @@ export class TypesetOkApp {
       onPageClick: () => this.commandPalette.show(),
       onPreflightClick: () => {
         this.inspector.setMode('zero');
-        this.showToast('דוח קדם-דפוס (Continuous Preflight): תקין ללא חריגות');
+        this.showToast(t('toastPreflightOk'));
       }
     });
     this.root.appendChild(this.statusBar.element);
+    // The structure bar starts on the Gemara flow; show its localized name.
+    this.activeFlowId = 'gemara';
+    this.statusBar.updateStats({ activeFlow: this.flowDisplayName(this.activeFlowId) });
 
     // 5. Action HUD (Floating, anchored)
     this.actionHud = new ActionHud({
@@ -206,149 +235,205 @@ export class TypesetOkApp {
       onSizeChange: (s) => this.inspector.setMode('text-edit', undefined, { fontSizePt: s }),
       onWeightChange: (b) => this.inspector.setMode('text-edit', undefined, { fontWeight: b ? 'bold' : 'normal' }),
       onAlignChange: (a) => this.inspector.setMode('text-edit', undefined, { alignment: a }),
-      onStyleChange: (st) => this.showToast(`הוחל סגנון מהיר: ${st}`),
+      onStyleChange: (st) => this.showToast(tf('toastQuickStyle', { name: st })),
       onDismiss: () => this.inspector.setMode('zero')
     });
     this.root.appendChild(this.actionHud.element);
 
-    // 6. Command Palette (Ctrl+K)
-    this.initCommandPalette();
+    // 6. Command Palette (Ctrl+K). Its global shortcut must be live from the start.
+    this.commandPalette = new CommandPalette(this.buildCommands());
+    this.root.appendChild(this.commandPalette.element);
 
-    // 7. Initialize Feature Modals
-    this.welcomeModal = new WelcomeModal({
-      onSelectTemplate: (tmpl) => this.handleTemplateSelect(tmpl),
-      onOpenProject: () => this.handleSystemAction('open-document'),
-      onLoadDemo: () => this.loadDemoProject(),
-      onClose: () => {},
-      onOpenSettings: () => this.settingsModal.show(),
-      onOpenAbout: () => this.aboutModal.show()
+    // 7. Welcome / Settings / About are created lazily on first open (see getters below).
+
+    // Load plugins once the first frame is on screen: discovery/compilation happens
+    // in the main process and must not compete with the initial paint.
+    runWhenIdle(() => {
+      this.pluginEngine.loadPlugins().catch(console.error);
     });
-    this.root.appendChild(this.welcomeModal.element);
-
-    this.settingsModal = new SettingsModal({
-      onLanguageChange: (lang) => {
-        this.showToast(`שפת הממשק עודכנה: ${lang === 'he' ? 'עברית' : 'English'}`);
-      },
-      onClose: () => {},
-      pluginEngine: this.pluginEngine,
-      showToast: (msg) => this.showToast(msg)
-    });
-    this.root.appendChild(this.settingsModal.element);
-
-    this.aboutModal = new AboutModal({
-      onClose: () => {}
-    });
-    this.root.appendChild(this.aboutModal.element);
-
-    // Load Plugins asynchronously
-    this.pluginEngine.loadPlugins().catch(console.error);
 
     // 8. First launch project picker check
-    const showWelcome = localStorage.getItem('tok_show_welcome');
+    let showWelcome: string | null = null;
+    try {
+      showWelcome = localStorage.getItem('tok_show_welcome');
+    } catch {}
     if (showWelcome !== 'false') {
       setTimeout(() => this.welcomeModal.show(), 100);
     }
   }
 
-  private initCommandPalette(): void {
-    const commands: PaletteItem[] = [
+  /** Re-applies texts owned by the app shell after a language switch. */
+  private applyLanguage(): void {
+    const dir = i18n.getDirection();
+    this.root.dir = dir;
+    this.workbench.dir = dir;
+    this.storyHeader.textContent = t('appStoryEditorTitle');
+    // registerItem replaces by id, so plugin-registered commands are kept.
+    for (const cmd of this.buildCommands()) this.commandPalette.registerItem(cmd);
+    this.refreshThumbnails();
+    this.updatePageStats(this.activePageIndex);
+    if (this.activeFlowId) {
+      this.statusBar.updateStats({ activeFlow: this.flowDisplayName(this.activeFlowId) });
+    }
+  }
+
+  private flowDisplayName(flowId: string): string {
+    const key = FLOW_NAME_KEYS[flowId];
+    return key ? t(key) : flowId;
+  }
+
+  private get welcomeModal(): WelcomeModal {
+    if (!this.welcomeModalInstance) {
+      this.welcomeModalInstance = new WelcomeModal({
+        onSelectTemplate: (tmpl) => this.handleTemplateSelect(tmpl),
+        onOpenProject: () => this.handleSystemAction('open-document'),
+        onLoadDemo: () => this.loadDemoProject(),
+        onClose: () => {},
+        onOpenSettings: () => this.settingsModal.show(),
+        onOpenAbout: () => this.aboutModal.show()
+      });
+      this.root.appendChild(this.welcomeModalInstance.element);
+    }
+    return this.welcomeModalInstance;
+  }
+
+  private get settingsModal(): SettingsModal {
+    if (!this.settingsModalInstance) {
+      this.settingsModalInstance = new SettingsModal({
+        onLanguageChange: (lang) => {
+          this.showToast(tf('toastLangUpdated', { lang: t(lang === 'he' ? 'appLangHebrew' : 'appLangEnglish') }));
+        },
+        onClose: () => {},
+        pluginEngine: this.pluginEngine,
+        showToast: (msg) => this.showToast(msg)
+      });
+      this.root.appendChild(this.settingsModalInstance.element);
+    }
+    return this.settingsModalInstance;
+  }
+
+  private get aboutModal(): AboutModal {
+    if (!this.aboutModalInstance) {
+      this.aboutModalInstance = new AboutModal({
+        onClose: () => {}
+      });
+      this.root.appendChild(this.aboutModalInstance.element);
+    }
+    return this.aboutModalInstance;
+  }
+
+  public openWelcome(): void {
+    this.welcomeModal.show();
+  }
+
+  public openSettings(): void {
+    this.settingsModal.show();
+  }
+
+  public openAbout(): void {
+    this.aboutModal.show();
+  }
+
+  /** Built-in palette commands in the current UI language. */
+  private buildCommands(): PaletteItem[] {
+    return [
       {
         id: 'cmd-open-welcome',
-        category: 'פרויקטים ומסמכים',
-        title: 'מסך בחירת פרויקטים (Welcome Screen)',
-        subtitle: 'בחירת תבנית או פרויקט קיים',
+        category: t('cmdCatProjects'),
+        title: t('cmdWelcomeTitle'),
+        subtitle: t('cmdWelcomeSub'),
         shortcut: 'Ctrl+Shift+P',
         action: () => this.welcomeModal.show()
       },
       {
         id: 'cmd-open-settings',
-        category: 'מערכת והעדפות',
-        title: 'הגדרות המערכת (Settings)',
-        subtitle: 'ערכות עיצוב, שפה, לוגים ותוספים',
+        category: t('cmdCatSystem'),
+        title: t('cmdSettingsTitle'),
+        subtitle: t('cmdSettingsSub'),
         shortcut: 'Ctrl+,',
         action: () => this.settingsModal.show()
       },
       {
         id: 'cmd-open-about',
-        category: 'מערכת והעדפות',
-        title: 'אודות TypesetOK (About)',
-        subtitle: 'גרסה, רישיון ומאגר GitHub',
+        category: t('cmdCatSystem'),
+        title: t('cmdAboutTitle'),
+        subtitle: t('cmdAboutSub'),
         action: () => this.aboutModal.show()
       },
       {
         id: 'cmd-toggle-lang',
-        category: 'מערכת והעדפות',
-        title: 'החלף שפה וכיוון (עברית RTL / English LTR)',
+        category: t('cmdCatSystem'),
+        title: t('cmdToggleLangTitle'),
         shortcut: 'Alt+Shift+L',
         action: () => i18n.toggleLanguage()
       },
       {
         id: 'cmd-full-justify',
-        category: 'פעולות טיפוגרפיה',
-        title: 'יישור עברי מלא (אהלתר"ם + רווחי מילים)',
-        subtitle: 'שילוב 3 שכבות יישור',
+        category: t('cmdCatTypography'),
+        title: t('cmdJustifyTitle'),
+        subtitle: t('cmdJustifySub'),
         shortcut: 'Ctrl+Alt+J',
         action: () => this.handleSystemAction('apply-justification')
       },
       {
         id: 'cmd-norm-niqqud',
-        category: 'פעולות טיפוגרפיה',
-        title: 'נרמל ניקוד וטעמים (ת"י 6100)',
-        subtitle: 'תיקון סדר תווי יוניקוד',
+        category: t('cmdCatTypography'),
+        title: t('cmdNormalizeTitle'),
+        subtitle: t('cmdNormalizeSub'),
         shortcut: 'Ctrl+Shift+N',
         action: () => this.handleSystemAction('normalize-hebrew')
       },
       {
         id: 'cmd-shield-divine',
-        category: 'פעולות טיפוגרפיה',
-        title: 'מגן שמות קדושים (איסור שבירה)',
-        subtitle: 'הגנה על שמות הוי"ה ואדנות',
+        category: t('cmdCatTypography'),
+        title: t('cmdShieldTitle'),
+        subtitle: t('cmdShieldSub'),
         action: () => this.handleSystemAction('shield-divine-names')
       },
       {
         id: 'cmd-recalc-gematria',
-        category: 'פעולות טיפוגרפיה',
-        title: 'סנכרן מספור עמודים עברי (גימטריה)',
-        subtitle: 'החלת גרשיים וכללי טו/טז',
+        category: t('cmdCatTypography'),
+        title: t('cmdGematriaTitle'),
+        subtitle: t('cmdGematriaSub'),
         action: () => this.handleSystemAction('recalculate-gematria')
       },
       {
         id: 'cmd-export-pdf',
-        category: 'מערכת ודפוס',
-        title: 'ייצוא קובץ לדפוס (ISO PDF/X-1a)',
-        subtitle: 'קדם-דפוס רציף 100% K',
+        category: t('cmdCatPrint'),
+        title: t('cmdExportTitle'),
+        subtitle: t('cmdExportSub'),
         shortcut: 'Ctrl+E',
         action: () => this.handleSystemAction('export-pdf')
       },
       {
         id: 'cmd-new-page',
-        category: 'עמודים וניווט',
-        title: 'הוסף עמוד חדש לספר',
+        category: t('cmdCatPages'),
+        title: t('cmdNewPageTitle'),
         shortcut: 'Ctrl+Enter',
         action: () => this.addNewPage()
       },
       {
         id: 'cmd-toggle-margins',
-        category: 'תצוגה ורשת',
-        title: 'הצג/הסתר קווי שוליים (Margins Guide)',
+        category: t('cmdCatView'),
+        title: t('cmdMarginsTitle'),
         action: () => {
           this.canvas.toggleMarginsGuide();
-          this.showToast('מתג קווי שוליים הופעל');
+          this.showToast(t('toastMarginsToggled'));
         }
       },
       {
         id: 'cmd-toggle-baseline',
-        category: 'תצוגה ורשת',
-        title: 'הצג/הסתר רשת שורות בסיס (Baseline Grid)',
+        category: t('cmdCatView'),
+        title: t('cmdBaselineTitle'),
         action: () => {
           this.canvas.toggleBaselineGuide();
-          this.showToast('מתג רשת שורות בסיס הופעל');
+          this.showToast(t('toastBaselineToggled'));
         }
       },
       {
         id: 'cmd-zoom-100',
-        category: 'תצוגה ורשת',
-        title: 'זום 100% (גודל טבעי)',
+        category: t('cmdCatView'),
+        title: t('cmdZoom100Title'),
         shortcut: 'Ctrl+0',
         action: () => {
           this.canvas.setZoom(100);
@@ -356,50 +441,51 @@ export class TypesetOkApp {
         }
       }
     ];
-
-    this.commandPalette = new CommandPalette(commands);
-    this.root.appendChild(this.commandPalette.element);
   }
 
   public loadDocumentPages(pages: PageDescriptor[]): void {
     this.pages = pages;
     this.canvas.setPages(pages);
-
-    const thumbnails = pages.map((p, idx) => ({
-      pageIndex: p.pageIndex,
-      gematria: p.gematriaNumber,
-      label: `דף ${p.gematriaNumber}`,
-      isSpreadRight: idx % 2 === 0
-    }));
-
-    this.structureBar.setPages(thumbnails);
+    this.refreshThumbnails();
     this.updatePageStats(0);
   }
 
-  private handleTemplateSelect(templateId: string): void {
-    let name = 'מסמך חדש';
-    let count = 4;
-    if (templateId === 'gemara') {
-      name = 'מסכת ברכות — צורת הדף.tok';
-      count = 8;
-    } else if (templateId === 'prose') {
-      name = 'ספר קריאה — מהדורה ראשונה.tok';
-      count = 6;
-    } else if (templateId === 'bulletin') {
-      name = 'עלון שבת קודש.tok';
-      count = 4;
-    } else {
-      name = 'מסמך ריק.tok';
-      count = 2;
-    }
+  /** Loads paragraphs into the continuous Story Editor panel. */
+  public loadStory(paragraphs: StoryParagraph[]): void {
+    this.storyEditor.loadStory(paragraphs);
+  }
 
+  private refreshThumbnails(): void {
+    this.structureBar.setPages(
+      this.pages.map((p, idx) => ({
+        pageIndex: p.pageIndex,
+        gematria: p.gematriaNumber,
+        label: tf('appPageThumb', { page: p.gematriaNumber }),
+        isSpreadRight: isRightHandPage(idx)
+      })),
+      this.activePageIndex
+    );
+  }
+
+  /** Story edits update the word count in the status bar (debounced while typing). */
+  private scheduleWordCountUpdate(): void {
+    if (this.wordCountTimer) clearTimeout(this.wordCountTimer);
+    this.wordCountTimer = setTimeout(() => {
+      this.wordCountTimer = null;
+      const words = this.storyEditor.getStory().reduce((sum, p) => sum + countWords(p.text), 0);
+      this.statusBar.updateStats({ wordCount: words });
+    }, 250);
+  }
+
+  private handleTemplateSelect(templateId: string): void {
+    const name = TEMPLATE_TITLES[templateId] || BLANK_TEMPLATE_TITLE;
     this.topBar.setDocumentTitle(name);
-    this.showToast(`נוצר פרויקט חדש מתבנית: ${name}`);
+    this.showToast(tf('toastProjectCreated', { name }));
   }
 
   private loadDemoProject(): void {
-    this.topBar.setDocumentTitle('מסכת ברכות — מהדורת מופת.tok');
-    this.showToast('פרויקט לדוגמה נטען בהצלחה');
+    this.topBar.setDocumentTitle(DEMO_PROJECT_TITLE);
+    this.showToast(t('toastDemoLoaded'));
   }
 
   public setViewMode(mode: ViewMode): void {
@@ -407,6 +493,7 @@ export class TypesetOkApp {
     if (mode === 'canvas') {
       this.canvas.element.style.display = 'flex';
       this.storyContainer.style.display = 'none';
+      this.storyContainer.style.flex = '';
     } else if (mode === 'story') {
       this.canvas.element.style.display = 'none';
       this.storyContainer.style.display = 'flex';
@@ -415,40 +502,53 @@ export class TypesetOkApp {
       this.canvas.element.style.display = 'flex';
       this.canvas.element.style.flex = '1';
       this.storyContainer.style.display = 'flex';
+      // Back to a fixed-width side panel (story mode stretches it with flex: 1).
+      this.storyContainer.style.flex = '';
       this.storyContainer.style.width = '380px';
     }
   }
 
+  public getViewMode(): ViewMode {
+    return this.currentViewMode;
+  }
+
   private addNewPage(): void {
     const newIdx = this.pages.length;
-    const newGematria = this.toGematria(newIdx + 1);
-    const newPage: PageDescriptor = {
+    const newGematria = toHebrewGematria(newIdx + 1);
+    this.pages.push({
       pageIndex: newIdx,
       gematriaNumber: newGematria,
       widthPt: 480,
       heightPt: 680,
       htmlContent: ''
-    };
-    this.pages.push(newPage);
+    });
     this.loadDocumentPages(this.pages);
     this.canvas.scrollToPage(newIdx);
-    this.showToast(`נוסף עמוד חדש: דף ${newGematria} (עמ' ${newIdx + 1})`);
+    this.updatePageStats(newIdx);
+    this.showToast(tf('toastPageAdded', { page: newGematria, index: newIdx + 1 }));
   }
 
   private updatePageStats(idx: number): void {
+    this.activePageIndex = idx;
     const p = this.pages[idx];
-    const gematria = p ? p.gematriaNumber : this.toGematria(idx + 1);
-    const label = `דף ${gematria} (${idx + 1} מתוך ${this.pages.length})`;
-    this.statusBar.updateStats({ pageLabel: label });
+    const gematria = p ? p.gematriaNumber : toHebrewGematria(idx + 1);
+    this.statusBar.updateStats({
+      pageLabel: tf('appPageStatus', { page: gematria, index: idx + 1, total: this.pages.length })
+    });
     this.structureBar.setActivePage(idx);
   }
 
-  private handleSystemAction(action: string, data?: unknown): void {
+  /**
+   * Single entry point for app-level actions: top bar, command palette, the
+   * native menu (via IPC) and `tok-action` DOM events all route through here.
+   */
+  public handleSystemAction(action: string, data?: unknown): void {
     const win = window as any;
 
     switch (action) {
       case 'new-document':
       case 'open-projects':
+      case 'open-welcome':
         this.welcomeModal.show();
         break;
       case 'open-settings':
@@ -457,38 +557,41 @@ export class TypesetOkApp {
       case 'open-about':
         this.aboutModal.show();
         break;
+      case 'toggle-lang':
+        i18n.toggleLanguage();
+        break;
       case 'open-document':
-        this.showToast(`פתיחת קובץ: ${data || ''}`);
+        this.showToast(tf('toastOpenFile', { path: typeof data === 'string' ? data : '' }));
         break;
       case 'save-document':
       case 'save-as':
-        this.showToast('המסמך נשמר בהצלחה בפורמט .tok');
+        this.showToast(t('toastSaved'));
         break;
       case 'export-pdf':
         if (win.tokIpc) {
-          this.showToast('מייצא לקובץ לדפוס ISO PDF/X-1a...');
+          this.showToast(t('toastExporting'));
           win.tokIpc.renderPdf('--demo', 'TypesetOK_Export.pdf')
             .then(() => {
-              this.showToast('הייצוא לדפוס הושלם בהצלחה!');
+              this.showToast(t('toastExportDone'));
             })
             .catch((err: any) => {
-              this.showToast(`שגיאת ייצוא: ${err.message}`, true);
+              this.showToast(tf('toastExportError', { error: err?.message ?? String(err) }), true);
             });
         } else {
-          this.showToast('הדמיית ייצוא: קובץ ISO PDF/X-1a הופק בהצלחה!');
+          this.showToast(t('toastExportSimulated'));
         }
         break;
       case 'normalize-hebrew':
-        this.showToast('נרמול ניקוד וטעמים ת"י 6100 הוחל בהצלחה על כל הפסקאות');
+        this.showToast(t('toastNormalized'));
         break;
       case 'shield-divine-names':
-        this.showToast('מגן שמות קדושים הופעל (איסור שבירה בשמות הויה ואדנות)');
+        this.showToast(t('toastShieldOn'));
         break;
       case 'recalculate-gematria':
-        this.showToast('סנכרון מספור עמודים עברי בגימטריה הושלם');
+        this.showToast(t('toastGematriaSynced'));
         break;
       case 'apply-justification':
-        this.showToast('יישור עברי מלא הוחל: רווחי מילים 85%-125% + מתיחת אהלתר"ם 120%');
+        this.showToast(t('toastJustified'));
         break;
       default:
         console.log('[TOK] Action:', action);
@@ -500,7 +603,11 @@ export class TypesetOkApp {
     toast.className = 'tok-toast';
     toast.style.background = isError ? '#EF4444' : '#1E293B';
     toast.style.borderColor = isError ? '#B91C1C' : '#334155';
-    toast.innerHTML = `${renderIcon(isError ? 'warning' : 'zap', 14)}<span>${msg}</span>`;
+    // Messages can carry file paths, CLI stderr or plugin text: never parse them as HTML.
+    toast.innerHTML = renderIcon(isError ? 'warning' : 'zap', 14);
+    const text = document.createElement('span');
+    text.textContent = msg;
+    toast.appendChild(text);
 
     document.body.appendChild(toast);
     setTimeout(() => {
@@ -508,31 +615,5 @@ export class TypesetOkApp {
       toast.style.transition = 'opacity 0.25s ease';
       setTimeout(() => toast.remove(), 250);
     }, 3200);
-  }
-
-  private toGematria(num: number): string {
-    if (num <= 0) return '';
-    const letters: [number, string][] = [
-      [400, 'ת'], [300, 'ש'], [200, 'ר'], [100, 'ק'],
-      [90, 'צ'], [80, 'פ'], [70, 'ע'], [60, 'ס'],
-      [50, 'נ'], [40, 'מ'], [30, 'ל'], [20, 'כ'],
-      [10, 'י'], [9, 'ט'], [8, 'ח'], [7, 'ז'],
-      [6, 'ו'], [5, 'ה'], [4, 'ד'], [3, 'ג'],
-      [2, 'ב'], [1, 'א']
-    ];
-    let n = num;
-    let res = '';
-    if (n === 15) return 'ט״ו';
-    if (n === 16) return 'ט״ז';
-
-    for (const [val, char] of letters) {
-      while (n >= val) {
-        res += char;
-        n -= val;
-      }
-    }
-    if (res.length === 1) return res + '׳';
-    else if (res.length > 1) return res.slice(0, -1) + '״' + res.slice(-1);
-    return res;
   }
 }

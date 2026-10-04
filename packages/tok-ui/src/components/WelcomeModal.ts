@@ -1,5 +1,19 @@
-import { t, i18n } from '../i18n';
+import { t, tf, i18n } from '../i18n';
 import { renderIcon, IconName } from '../icons';
+import { ModalController } from './ModalController';
+
+/** Makes a non-button element behave like a button for keyboard and assistive tech. */
+function makeActivatable(el: HTMLElement, onActivate: () => void): void {
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  el.addEventListener('click', onActivate);
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onActivate();
+    }
+  });
+}
 
 export interface WelcomeModalCallbacks {
   onSelectTemplate: (templateId: string) => void;
@@ -14,6 +28,7 @@ export class WelcomeModal {
   public element: HTMLElement;
   private callbacks: WelcomeModalCallbacks;
   private isVisible = false;
+  private modal: ModalController;
 
   constructor(callbacks: WelcomeModalCallbacks) {
     this.callbacks = callbacks;
@@ -30,10 +45,16 @@ export class WelcomeModal {
     this.element.style.display = 'none';
     this.element.style.alignItems = 'center';
     this.element.style.justifyContent = 'center';
-    this.element.style.direction = i18n.getLanguage() === 'he' ? 'rtl' : 'ltr';
+    this.element.style.direction = i18n.getDirection();
 
-    i18n.onChange((lang) => {
-      this.element.style.direction = lang === 'he' ? 'rtl' : 'ltr';
+    // Escape behaves like "Continue to Workspace".
+    this.modal = new ModalController(this.element, () => {
+      this.hide();
+      this.callbacks.onClose();
+    });
+
+    i18n.onChange(() => {
+      this.element.style.direction = i18n.getDirection();
       if (this.isVisible) this.render();
     });
   }
@@ -42,14 +63,23 @@ export class WelcomeModal {
     this.isVisible = true;
     this.element.style.display = 'flex';
     this.render();
+    this.modal.opened();
   }
 
   public hide(): void {
+    if (!this.isVisible) return;
     this.isVisible = false;
     this.element.style.display = 'none';
+    this.modal.closed();
   }
 
   private render(): void {
+    const focusKey = this.modal.captureFocus();
+    this.renderContent();
+    this.modal.afterRender(focusKey);
+  }
+
+  private renderContent(): void {
     this.element.innerHTML = '';
 
     const modal = document.createElement('div');
@@ -99,6 +129,7 @@ export class WelcomeModal {
     title.style.color = '#F8FAFC';
     title.style.margin = '0 0 4px 0';
     title.textContent = t('welcomeTitle');
+    title.dataset.modalTitle = '';
     titleWrap.appendChild(title);
 
     const subtitle = document.createElement('p');
@@ -166,6 +197,9 @@ export class WelcomeModal {
     closeBtn.style.alignItems = 'center';
     closeBtn.style.justifyContent = 'center';
     closeBtn.innerHTML = renderIcon('close', 14);
+    closeBtn.title = t('aboutClose');
+    closeBtn.setAttribute('aria-label', t('aboutClose'));
+    closeBtn.dataset.focusKey = 'close';
     closeBtn.addEventListener('click', () => {
       this.hide();
       this.callbacks.onClose();
@@ -227,7 +261,9 @@ export class WelcomeModal {
         card.style.transform = 'none';
       });
 
-      card.addEventListener('click', () => {
+      card.dataset.focusKey = `template-${tmpl.id}`;
+      card.setAttribute('aria-label', `${tmpl.title}: ${tmpl.desc}`);
+      makeActivatable(card, () => {
         this.hide();
         this.callbacks.onSelectTemplate(tmpl.id);
       });
@@ -302,7 +338,7 @@ export class WelcomeModal {
         recItem.style.background = '#131E38';
         recItem.style.borderColor = '#1E293B';
       });
-      recItem.addEventListener('click', () => {
+      makeActivatable(recItem, () => {
         this.hide();
         this.callbacks.onLoadDemo();
       });
@@ -318,7 +354,7 @@ export class WelcomeModal {
       recMeta.style.fontSize = '11px';
       recMeta.style.color = '#64748B';
       recMeta.style.marginTop = '3px';
-      recMeta.textContent = `${rec.time} • ${rec.pages} עמודים`;
+      recMeta.textContent = `${rec.time} • ${tf('welcomePagesCount', { n: rec.pages })}`;
       recItem.appendChild(recMeta);
 
       recentContainer.appendChild(recItem);
@@ -360,6 +396,8 @@ export class WelcomeModal {
     demoBtn.style.alignItems = 'center';
     demoBtn.style.justifyContent = 'center';
     demoBtn.style.gap = '8px';
+    demoBtn.dataset.focusKey = 'demo';
+    demoBtn.dataset.autofocus = '';
     demoBtn.innerHTML = `${renderIcon('sparkle', 14)} <span>${t('demoProject')}</span>`;
     demoBtn.addEventListener('click', () => {
       this.hide();
@@ -390,7 +428,12 @@ export class WelcomeModal {
 
     const check = document.createElement('input');
     check.type = 'checkbox';
-    check.checked = true;
+    // Reflect the saved preference (the app only auto-opens the hub when it isn't 'false').
+    let showOnStartup = true;
+    try {
+      showOnStartup = localStorage.getItem('tok_show_welcome') !== 'false';
+    } catch {}
+    check.checked = showOnStartup;
     check.addEventListener('change', () => {
       try {
         localStorage.setItem('tok_show_welcome', check.checked ? 'true' : 'false');
