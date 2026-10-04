@@ -3,6 +3,7 @@ import { themeManager, ACCENT_PRESETS, CANVAS_TONE_PRESETS, FONT_SCALES, THEME_P
 import { PluginEngine } from '../plugins/PluginEngine';
 import { renderIcon, IconName } from '../icons';
 import { ModalController } from './ModalController';
+import { fillAppVersion, getAppVersion } from '../appInfo';
 
 export interface SettingsModalCallbacks {
   onLanguageChange: (lang: Language) => void;
@@ -902,9 +903,10 @@ export class SettingsModal {
 
     const currentInfo = document.createElement('div');
     currentInfo.innerHTML = `
-      <div style="font-size: 13px; font-weight: 600; color: #F8FAFC;">TypesetOK v0.8.0</div>
+      <div style="font-size: 13px; font-weight: 600; color: #F8FAFC;" data-app-version>TypesetOK</div>
       <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">${t('updatesCurrentChannel')}</div>
     `;
+    fillAppVersion(currentInfo.querySelector('[data-app-version]') as HTMLElement, (v) => `TypesetOK v${v}`);
     currentCard.appendChild(currentInfo);
 
     const checkBtn = document.createElement('button');
@@ -929,6 +931,12 @@ export class SettingsModal {
     resultBox.setAttribute('aria-live', 'polite');
     resultBox.textContent = t('updatesHint');
     container.appendChild(resultBox);
+
+    const showLatest = (version: string) => {
+      resultBox.innerHTML = `<span style="color: #60A5FA; display: inline-flex; align-items: center; gap: 6px;">${renderIcon('check', 14)} <span></span></span>`;
+      const label = resultBox.querySelector('span > span') as HTMLElement;
+      label.textContent = version ? `${t('updatesStatusLatest')} (v${version})` : t('updatesStatusLatest');
+    };
 
     checkBtn.addEventListener('click', async () => {
       if (checkBtn.disabled) return;
@@ -969,14 +977,14 @@ export class SettingsModal {
             });
             resultBox.appendChild(dlBtn);
           } else {
-            resultBox.innerHTML = `<span style="color: #60A5FA; display: inline-flex; align-items: center; gap: 6px;">${renderIcon('check', 14)} <span>${t('updatesStatusLatest')}</span></span>`;
+            showLatest(typeof res?.currentVersion === 'string' && res.currentVersion ? res.currentVersion : await getAppVersion());
           }
         } catch (err: any) {
           resultBox.textContent = `${t('updatesCheckFailed')}: ${err?.message ?? err}`;
         }
       } else {
         await new Promise((r) => setTimeout(r, 300));
-        resultBox.innerHTML = `<span style="color: #60A5FA; display: inline-flex; align-items: center; gap: 6px;">${renderIcon('check', 14)} <span>${t('updatesStatusLatest')}</span></span>`;
+        showLatest(await getAppVersion());
       }
       checkBtn.disabled = false;
       checkBtn.innerHTML = `${renderIcon('refresh', 13)} <span>${t('updatesCheckNow')}</span>`;

@@ -38,27 +38,33 @@ impl MigrationPipeline {
         Ok(())
     }
 
+    /// Validates the schema version a serialized `DocumentRoot` declares and
+    /// returns the JSON ready for deserialization.
+    ///
+    /// The version lives in `metadata.schema_version` (a top-level
+    /// `schema_version` is accepted for older files) and may be written as
+    /// `major.minor` ("1.0"). Version-specific upgrade steps belong here,
+    /// keyed on the normalized version; there are none yet.
     pub fn migrate_document_json(
-        mut json_val: serde_json::Value,
+        json_val: serde_json::Value,
     ) -> Result<serde_json::Value, StorageError> {
-        let version_str = json_val
-            .get("schema_version")
+        let declared = json_val
+            .pointer("/metadata/schema_version")
+            .or_else(|| json_val.get("schema_version"))
             .and_then(|v| v.as_str())
-            .unwrap_or("1.0.0");
+            .unwrap_or(CURRENT_SCHEMA_VERSION);
 
-        Self::validate_version(version_str)?;
-
-        // If from older future migrations (e.g. 0.9.0 -> 1.0.0), apply steps here.
-        if version_str != CURRENT_SCHEMA_VERSION {
-            if let Some(obj) = json_val.as_object_mut() {
-                obj.insert(
-                    "schema_version".to_string(),
-                    serde_json::json!(CURRENT_SCHEMA_VERSION),
-                );
-            }
-        }
-
+        Self::validate_version(&Self::normalize_version(declared))?;
         Ok(json_val)
+    }
+
+    /// "1" -> "1.0.0", "1.0" -> "1.0.0"; anything else is returned unchanged.
+    fn normalize_version(v: &str) -> String {
+        match v.split('.').count() {
+            1 => format!("{v}.0.0"),
+            2 => format!("{v}.0"),
+            _ => v.to_string(),
+        }
     }
 
     fn parse_semver(v: &str) -> Result<(u32, u32, u32), StorageError> {

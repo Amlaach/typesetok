@@ -1,6 +1,7 @@
 import { t, i18n } from '../i18n';
 import { renderIcon } from '../icons';
 import { ModalController } from './ModalController';
+import { fillAppVersion } from '../appInfo';
 
 export interface AboutModalCallbacks {
   onClose: () => void;
@@ -123,7 +124,7 @@ export class AboutModal {
     metaBox.innerHTML = `
       <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
         <span style="color: #64748B;">${t('aboutVersionLabel')}</span>
-        <span style="font-weight: 600; color: #F8FAFC;">v0.7.3 Stable (2026)</span>
+        <span style="font-weight: 600; color: #F8FAFC;" data-app-version>—</span>
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
         <span style="color: #64748B;">${t('aboutCoreLabel')}</span>
@@ -134,6 +135,7 @@ export class AboutModal {
         <span style="color: #F8FAFC;">${t('aboutShellValue')}</span>
       </div>
     `;
+    fillAppVersion(metaBox.querySelector('[data-app-version]') as HTMLElement, (v) => `v${v} Stable`);
     card.appendChild(metaBox);
 
     // GitHub Link Button

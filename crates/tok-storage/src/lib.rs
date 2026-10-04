@@ -192,4 +192,58 @@ mod tests {
         let result = MigrationPipeline::validate_version("2.0.0");
         assert!(result.is_err(), "Future major version must be rejected");
     }
+
+    fn document_json_with_version(version: &str) -> serde_json::Value {
+        let mut doc = serde_json::to_value(DocumentRoot::new("Doc")).unwrap();
+        doc["metadata"]["schema_version"] = serde_json::json!(version);
+        doc
+    }
+
+    #[test]
+    fn migration_reads_the_version_from_document_metadata() {
+        // DocumentRoot writes "1.0" by default; it must load.
+        let current = serde_json::to_value(DocumentRoot::new("Doc")).unwrap();
+        let migrated = MigrationPipeline::migrate_document_json(current.clone()).unwrap();
+        assert_eq!(
+            migrated, current,
+            "a current document passes through unchanged"
+        );
+
+        // A newer major version in metadata used to be ignored (only a top-level key was read).
+        assert!(
+            MigrationPipeline::migrate_document_json(document_json_with_version("2.0")).is_err()
+        );
+        assert!(
+            MigrationPipeline::migrate_document_json(document_json_with_version("2.0.0")).is_err()
+        );
+        assert!(
+            MigrationPipeline::migrate_document_json(document_json_with_version("1.4")).is_ok()
+        );
+        assert!(
+            MigrationPipeline::migrate_document_json(document_json_with_version("x.y")).is_err()
+        );
+    }
+
+    #[test]
+    fn migration_accepts_a_legacy_top_level_version() {
+        let mut doc = serde_json::to_value(DocumentRoot::new("Doc")).unwrap();
+        doc["metadata"]
+            .as_object_mut()
+            .unwrap()
+            .remove("schema_version");
+        doc["schema_version"] = serde_json::json!("3.0.0");
+        assert!(MigrationPipeline::migrate_document_json(doc).is_err());
+    }
+
+    #[test]
+    fn package_with_newer_document_version_is_rejected_on_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("future.tok");
+        let mut root = DocumentRoot::new("Future");
+        root.metadata.schema_version = "9.0".to_string();
+        TokPackage::new()
+            .save_atomic(&DocumentModel::new(root), &path)
+            .unwrap();
+        assert!(TokPackage::open(&path).is_err());
+    }
 }
