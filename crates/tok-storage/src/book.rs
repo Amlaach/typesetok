@@ -1,3 +1,4 @@
+use crate::atomic::write_atomic;
 use crate::error::StorageError;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -54,7 +55,13 @@ impl TokBook {
         file_path: impl Into<PathBuf>,
         page_count: u32,
     ) {
-        let order = self.volumes.len() as u32;
+        // Append after the highest existing order, even if orders have gaps.
+        let order = self
+            .volumes
+            .iter()
+            .map(|v| v.order.saturating_add(1))
+            .max()
+            .unwrap_or(0);
         self.volumes.push(BookVolumeEntry {
             id: Ulid::new(),
             title: title.into(),
@@ -68,7 +75,8 @@ impl TokBook {
     /// Returns: Vec<(volume_id, start_page, end_page)>
     pub fn calculate_pagination_ranges(&self) -> Result<Vec<(Ulid, u32, u32)>, StorageError> {
         let mut ranges = Vec::new();
-        let mut current_page = 1u32;
+        // `None` once the page numbers are exhausted.
+        let mut next_page = Some(1u32);
 
         let mut sorted_vols: Vec<&BookVolumeEntry> = self.volumes.iter().collect();
         sorted_vols.sort_by_key(|v| v.order);
@@ -77,30 +85,25 @@ impl TokBook {
             if vol.page_count == 0 {
                 continue;
             }
-            let start = current_page;
-            let end = current_page
-                .checked_add(vol.page_count)
-                .and_then(|sum| sum.checked_sub(1))
-                .ok_or_else(|| {
-                    StorageError::DocumentModel(format!("Page count overflow in volume {}", vol.id))
-                })?;
-
+            let overflow =
+                || StorageError::DocumentModel(format!("Page count overflow in volume {}", vol.id));
+            let start = next_page.ok_or_else(overflow)?;
+            let end = start.checked_add(vol.page_count - 1).ok_or_else(overflow)?;
             ranges.push((vol.id, start, end));
-            current_page = end
-                .checked_add(1)
-                .ok_or_else(|| StorageError::DocumentModel("Page count overflow".into()))?;
+            next_page = end.checked_add(1);
         }
 
         Ok(ranges)
     }
 
-    /// Saves the `.tokbook` project coordinator to disk.
+    /// Saves the `.tokbook` project coordinator to disk atomically.
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), StorageError> {
-        let file = File::create(path)?;
-        let mut writer = std::io::BufWriter::new(file);
-        serde_json::to_writer_pretty(&mut writer, self)?;
-        writer.flush()?;
-        Ok(())
+        write_atomic(path.as_ref(), |file| {
+            let mut writer = std::io::BufWriter::new(file);
+            serde_json::to_writer_pretty(&mut writer, self)?;
+            writer.flush()?;
+            writer.into_inner().map_err(|e| e.into_error().into())
+        })
     }
 
     /// Opens a `.tokbook` project from disk.
@@ -109,5 +112,48 @@ impl TokBook {
         let reader = std::io::BufReader::new(file);
         let book: Self = serde_json::from_reader(reader)?;
         Ok(book)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn page_ranges_up_to_u32_max() {
+        let mut book = TokBook::new("big");
+        book.add_volume("a", "a.tok", u32::MAX);
+        let ranges = book.calculate_pagination_ranges().unwrap();
+        assert_eq!((ranges[0].1, ranges[0].2), (1, u32::MAX));
+
+        book.add_volume("b", "b.tok", 1);
+        assert!(book.calculate_pagination_ranges().is_err());
+
+        let mut book = TokBook::new("edge");
+        book.add_volume("a", "a.tok", u32::MAX - 1);
+        book.add_volume("b", "b.tok", 1);
+        let ranges = book.calculate_pagination_ranges().unwrap();
+        assert_eq!((ranges[1].1, ranges[1].2), (u32::MAX, u32::MAX));
+    }
+
+    #[test]
+    fn add_volume_after_reordering_keeps_orders_unique() {
+        let mut book = TokBook::new("b");
+        book.add_volume("a", "a.tok", 1);
+        book.add_volume("b", "b.tok", 1);
+        book.volumes.remove(0);
+        book.add_volume("c", "c.tok", 1);
+        let orders: Vec<u32> = book.volumes.iter().map(|v| v.order).collect();
+        assert_eq!(orders, vec![1, 2]);
+    }
+
+    #[test]
+    fn save_replaces_existing_book() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("set.tokbook");
+        TokBook::new("one").save(&path).unwrap();
+        TokBook::new("two").save(&path).unwrap();
+        assert_eq!(TokBook::open(&path).unwrap().title, "two");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 }

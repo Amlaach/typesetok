@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="Open_book_software_logo_icon_20260930192445.jpg" alt="TypesetOK Logo" width="160" style="border-radius: 16px; margin-bottom: 12px;" />
+<img src="assets/logo.jpg" alt="TypesetOK Logo" width="160" style="border-radius: 16px; margin-bottom: 12px;" />
 
 # TypesetOK (TOK)
 ### תוכנת עימוד שולחנית מקצועית בקוד פתוח | Open-Source Professional Desktop Publishing (DTP) System
 
 [![CI Build](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml/badge.svg)](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/Version-0.7.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-0.7.3-blue.svg)]()
 [![Tests](https://img.shields.io/badge/Tests-80%2F80%20Passing-brightgreen.svg)]()
 [![Electron](https://img.shields.io/badge/Electron-29.4%2B-blue.svg?logo=electron)](https://www.electronjs.org)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
@@ -72,7 +72,7 @@ graph TD
   1. *רווחי מילים (Tier 1):* מתיחה מבוקרת (80% עד 130%).
   2. *אותיות התפשטות אהלתר"ם (Tier 2):* זיהוי אותיות מתרחבות (א, ה, ל, ת, ר, ם) והרחבתן הטיפוגרפית.
   3. *מיקרו-טרקינג (Tier 3):* התאמת מרווח גליפים עדינה ($\pm 2\%$ em).
-- **גימטריה עברית דטרמיניסטית:** אכיפת גרש תקני `U+05F3` וגרשיים `U+05F4`, ומנגנון המרות טאבו ושמות קודש (15 ← ט״ו, 16 ← ט״ז, 270 ← ע״ר, 272 ← ער״ב, 275 ← ער״ה, 298 ← חר״צ, 304/314 ← שי״ד, 359 ← נט״ש, 644 ← תשי״ד).
+- **גימטריה עברית דטרמיניסטית:** אכיפת גרש תקני `U+05F3` וגרשיים `U+05F4`, ומנגנון המרות טאבו ושמות קודש (15 ← ט״ו, 16 ← ט״ז, 270 ← ע״ר, 272 ← ער״ב, 275 ← ער״ה, 298 ← חר״צ, 304 ← ד״ש, 344 ← שד״מ, 359 ← נט״ש, 698 ← תרח״צ, 744 ← תשד״מ).
 - **פותר אילוצים רב-תזרימי (Multi-Flow Solver):** עימוד עמוד ש"ס ומקראות גדולות תוך עמידה בחוקי גלישה וסנכרון פסקאות חוצה-עמודים.
 
 #### 3. מנוע קדם-דפוס נייטיב (`tok-pdf`)

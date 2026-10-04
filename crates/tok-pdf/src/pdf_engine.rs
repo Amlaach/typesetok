@@ -3,14 +3,21 @@
 //! Replaces browser print-to-PDF by emitting bit-perfect ISO 15930 PDF/X
 //! directly from Rust with DeviceCMYK, OutputIntents, page boxes,
 //! and TrueType/OpenType font subsetting (Type 0 / CIDFont Type 2).
+//!
+//! Every font referenced by the layout (`LineBox::fonts`) is subset and
+//! embedded separately, so glyph ids are always drawn with the font that
+//! produced them.
 
 use crate::boxes::PrePressPageBoxes;
-use crate::font_subsetter::FontSubsetter;
+use crate::font_subsetter::{fnv1a, FontSubsetter, SubsetFontResult, FNV_OFFSET};
 use crate::tounicode::ToUnicodeCMap;
-use pdf_writer::types::{CidFontType, FontFlags, OutputIntentSubtype, SystemInfo};
+use pdf_writer::types::{CidFontType, FontFlags, OutputIntentSubtype, SystemInfo, TrappingStatus};
 use pdf_writer::{Content, Finish, Name, Pdf, Rect, Ref, Str, TextStr};
-use std::collections::HashSet;
-use tok_typeset::geometry::PageLayoutBox;
+use std::collections::HashMap;
+use std::sync::OnceLock;
+use thiserror::Error;
+use tok_typeset::font::{FontManager, EMBEDDED_NOTO_SERIF_HEBREW};
+use tok_typeset::geometry::{GlyphBox, LineBox, PageLayoutBox, PhysicalRect};
 
 pub enum PdfXStandard {
     PdfX1a2001,
@@ -24,6 +31,9 @@ pub struct PdfExportOptions {
     pub bleed_pt: f32, // default 3mm = 8.504 pt
     pub slug_pt: f32,  // default 10mm = 28.346 pt
     pub draw_crop_marks: bool,
+    /// Font used for glyphs whose font the layout does not record (layouts
+    /// built without font information, or text-only lines). Defaults to the
+    /// embedded Noto Serif Hebrew.
     pub custom_font_data: Option<Vec<u8>>,
 }
 
@@ -41,14 +51,289 @@ impl Default for PdfExportOptions {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum PdfError {
+    #[error("font '{0}' used by the layout is not registered")]
+    MissingFont(String),
+
+    #[error("font '{family}' could not be embedded: {reason}")]
+    FontEmbedding { family: String, reason: String },
+}
+
+/// Number of addressable TrueType glyph ids.
+const GLYPH_SPACE: usize = 1 << 16;
+const NO_CID: u32 = u32::MAX;
+const LEGACY_LABEL: &str = "custom font";
+
+/// A font that will be embedded, with the glyphs the document uses.
+struct FontSlot<'a> {
+    label: &'a str,
+    data: &'a [u8],
+    used: Vec<bool>,
+    chars: Vec<Option<char>>,
+}
+
+impl<'a> FontSlot<'a> {
+    fn new(label: &'a str, data: &'a [u8]) -> Self {
+        Self {
+            label,
+            data,
+            used: vec![false; GLYPH_SPACE],
+            chars: vec![None; GLYPH_SPACE],
+        }
+    }
+
+    fn mark(&mut self, gid: u16, ch: Option<char>) {
+        if gid == 0 {
+            return;
+        }
+        let i = usize::from(gid);
+        self.used[i] = true;
+        if self.chars[i].is_none() {
+            self.chars[i] = ch;
+        }
+    }
+}
+
+/// Fonts in order of first use (deterministic resource names).
+struct FontRegistry<'a> {
+    fonts: &'a FontManager,
+    legacy_data: &'a [u8],
+    slots: Vec<FontSlot<'a>>,
+    by_family: HashMap<&'a str, usize>,
+    legacy: Option<usize>,
+}
+
+impl<'a> FontRegistry<'a> {
+    fn family(&mut self, name: &'a str) -> Result<usize, PdfError> {
+        if let Some(&slot) = self.by_family.get(name) {
+            return Ok(slot);
+        }
+        let data = self
+            .fonts
+            .font_exact(name)
+            .map(|f| f.raw_bytes.as_slice())
+            .ok_or_else(|| PdfError::MissingFont(name.to_string()))?;
+        self.slots.push(FontSlot::new(name, data));
+        self.by_family.insert(name, self.slots.len() - 1);
+        Ok(self.slots.len() - 1)
+    }
+
+    fn legacy(&mut self) -> usize {
+        *self.legacy.get_or_insert_with(|| {
+            self.slots
+                .push(FontSlot::new(LEGACY_LABEL, self.legacy_data));
+            self.slots.len() - 1
+        })
+    }
+}
+
+/// Embedded slot and glyph id of a laid-out glyph. `line_slots` maps the
+/// line's font indices to slots; `legacy` provides the fallback slot.
+fn glyph_target(
+    line: &LineBox,
+    g: &GlyphBox,
+    line_slots: &[usize],
+    mut legacy: impl FnMut() -> Option<usize>,
+    legacy_face: &ttf_parser::Face<'_>,
+) -> Option<(usize, u16)> {
+    if line.fonts.is_empty() {
+        // Layout without font information: ids belong to the legacy font.
+        return Some((legacy()?, u16::try_from(g.glyph_id).ok()?));
+    }
+    match line_slots.get(usize::from(g.font_index)) {
+        Some(&slot) => Some((slot, u16::try_from(g.glyph_id).ok()?)),
+        // Unknown font (heuristic shaping): resolve by character.
+        None => {
+            let gid = legacy_face.glyph_index(g.character?)?.0;
+            Some((legacy()?, gid))
+        }
+    }
+}
+
+struct EmbeddedFont {
+    resource: String,
+    subset: SubsetFontResult,
+    /// Dense glyph id -> CID table (`NO_CID` for unused glyphs).
+    cids: Vec<u32>,
+}
+
+impl EmbeddedFont {
+    fn cid(&self, gid: u16) -> Option<u16> {
+        match self.cids[usize::from(gid)] {
+            NO_CID => None,
+            cid => Some(cid as u16),
+        }
+    }
+}
+
+/// Item of a pending `TJ` array.
+enum TjItem {
+    Adjust(f32),
+    Glyphs(Vec<u8>),
+}
+
+/// Builds the `TJ` arrays of one line while tracking where the PDF pen is.
+#[derive(Default)]
+struct LineTextWriter {
+    /// Current x of the text pen in user space (`None` before the first glyph).
+    pen: Option<f32>,
+    font: Option<(usize, f32)>,
+    rise: f32,
+    items: Vec<TjItem>,
+}
+
+impl LineTextWriter {
+    /// Appends a glyph that must start at `x`; `advance_1000` is the font's
+    /// own advance (which the viewer applies) in thousandths of an em.
+    fn push(&mut self, x: f32, cid: u16, advance_1000: f32, size: f32) {
+        let mut pen = self.pen.unwrap_or(x);
+        // TJ adjustments are subtracted, in thousandths of the font size.
+        // Rounding keeps the stream short; tracking the rounded value keeps
+        // the error from accumulating along the line.
+        let adjust = ((pen - x) * 1000.0 / size * 100.0).round() / 100.0;
+        if adjust != 0.0 {
+            self.items.push(TjItem::Adjust(adjust));
+            pen -= adjust * size / 1000.0;
+        }
+        match self.items.last_mut() {
+            Some(TjItem::Glyphs(bytes)) => bytes.extend_from_slice(&cid.to_be_bytes()),
+            _ => self.items.push(TjItem::Glyphs(cid.to_be_bytes().to_vec())),
+        }
+        self.pen = Some(pen + advance_1000 * size / 1000.0);
+    }
+
+    fn flush(&mut self, content: &mut Content) {
+        if self.items.is_empty() {
+            return;
+        }
+        let mut op = content.show_positioned();
+        let mut array = op.items();
+        for item in self.items.drain(..) {
+            match item {
+                TjItem::Adjust(amount) => array.adjust(amount),
+                TjItem::Glyphs(bytes) => array.show(Str(&bytes)),
+            };
+        }
+    }
+}
+
+fn default_font_manager() -> &'static FontManager {
+    static FONTS: OnceLock<FontManager> = OnceLock::new();
+    FONTS.get_or_init(FontManager::default)
+}
+
 pub struct PdfPrePressEngine;
 
 impl PdfPrePressEngine {
-    /// Generates a complete, compliant PDF/X document from typeset page layout boxes.
-    pub fn export_pdf(pages: &[PageLayoutBox], options: &PdfExportOptions) -> Vec<u8> {
-        let mut pdf = Pdf::new();
+    /// Generates a complete, compliant PDF/X document from typeset page layout
+    /// boxes, resolving fonts with the default [`FontManager`].
+    pub fn export_pdf(
+        pages: &[PageLayoutBox],
+        options: &PdfExportOptions,
+    ) -> Result<Vec<u8>, PdfError> {
+        Self::export_pdf_with_fonts(pages, options, default_font_manager())
+    }
 
-        // Allocate IDs
+    /// Generates a PDF/X document, resolving the fonts recorded in the layout
+    /// through `fonts` (use the manager the layout was typeset with).
+    pub fn export_pdf_with_fonts(
+        pages: &[PageLayoutBox],
+        options: &PdfExportOptions,
+        fonts: &FontManager,
+    ) -> Result<Vec<u8>, PdfError> {
+        let dummy_page;
+        let iter_pages: &[PageLayoutBox] = if pages.is_empty() {
+            dummy_page = [PageLayoutBox {
+                page_index: 0,
+                page_number_gematria: String::new(),
+                dimensions: PhysicalRect::a4_portrait(),
+                frames: Vec::new(),
+                break_token: None,
+            }];
+            &dummy_page
+        } else {
+            pages
+        };
+
+        let legacy_data: &[u8] = options
+            .custom_font_data
+            .as_deref()
+            .unwrap_or(EMBEDDED_NOTO_SERIF_HEBREW);
+        let legacy_face =
+            ttf_parser::Face::parse(legacy_data, 0).map_err(|e| PdfError::FontEmbedding {
+                family: LEGACY_LABEL.to_string(),
+                reason: e.to_string(),
+            })?;
+
+        // 1. Collect used glyphs per font, in order of first use.
+        let mut registry = FontRegistry {
+            fonts,
+            legacy_data,
+            slots: Vec::new(),
+            by_family: HashMap::new(),
+            legacy: None,
+        };
+        for line in iter_pages
+            .iter()
+            .flat_map(|p| &p.frames)
+            .flat_map(|f| &f.lines)
+        {
+            if line.glyphs.is_empty() {
+                // Text-only line: map characters through the legacy font.
+                for ch in line.text.chars() {
+                    if let Some(gid) = legacy_face.glyph_index(ch) {
+                        let slot = registry.legacy();
+                        registry.slots[slot].mark(gid.0, Some(ch));
+                    }
+                }
+                continue;
+            }
+            let line_slots = line
+                .fonts
+                .iter()
+                .map(|name| registry.family(name))
+                .collect::<Result<Vec<_>, _>>()?;
+            for g in &line.glyphs {
+                let mut legacy_slot = None;
+                let target = glyph_target(
+                    line,
+                    g,
+                    &line_slots,
+                    || Some(*legacy_slot.get_or_insert_with(|| registry.legacy())),
+                    &legacy_face,
+                );
+                if let Some((slot, gid)) = target {
+                    registry.slots[slot].mark(gid, g.character);
+                }
+            }
+        }
+
+        // 2. Subset every font.
+        let mut embedded = Vec::with_capacity(registry.slots.len());
+        for (i, slot) in registry.slots.iter().enumerate() {
+            let pairs: Vec<(u16, Option<char>)> = (1..GLYPH_SPACE)
+                .filter(|&g| slot.used[g])
+                .map(|g| (g as u16, slot.chars[g]))
+                .collect();
+            let subset = FontSubsetter::create_subset(slot.data, &pairs).map_err(|reason| {
+                PdfError::FontEmbedding {
+                    family: slot.label.to_string(),
+                    reason,
+                }
+            })?;
+            let mut cids = vec![NO_CID; GLYPH_SPACE];
+            for (&gid, &cid) in &subset.gid_to_cid {
+                cids[usize::from(gid)] = u32::from(cid);
+            }
+            embedded.push(EmbeddedFont {
+                resource: format!("F{}", i + 1),
+                subset,
+                cids,
+            });
+        }
+
+        let mut pdf = Pdf::new();
         let mut next_id = 1;
         let mut alloc = || {
             let id = Ref::new(next_id);
@@ -59,137 +344,42 @@ impl PdfPrePressEngine {
         let catalog_id = alloc();
         let pages_id = alloc();
         let info_id = alloc();
-        let type0_font_id = alloc();
-        let cid_font_id = alloc();
-        let descriptor_id = alloc();
-        let font_file_id = alloc();
-        let tounicode_id = alloc();
 
-        // 1. Info dictionary with PDF/X conformance tag
-        let mut info = pdf.document_info(info_id);
-        info.title(TextStr(&options.title));
-        info.author(TextStr(&options.author));
-        info.creator(TextStr("TypesetOK Native Pre-Press Engine 2026"));
-        match options.standard {
-            PdfXStandard::PdfX1a2001 => {
-                info.pair(Name(b"GTS_PDFXVersion"), TextStr("PDF/X-1a:2001"));
-            }
-            PdfXStandard::PdfX4 => {
-                info.pair(Name(b"GTS_PDFXVersion"), TextStr("PDF/X-4"));
-            }
-        }
-        info.finish();
-
-        // 2. Collect used glyphs and characters across all pages
-        let dummy_page;
-        let iter_pages: &[PageLayoutBox] = if pages.is_empty() {
-            dummy_page = [PageLayoutBox {
-                page_index: 0,
-                page_number_gematria: String::new(),
-                dimensions: tok_typeset::geometry::PhysicalRect::a4_portrait(),
-                frames: Vec::new(),
-                break_token: None,
-            }];
-            &dummy_page
-        } else {
-            pages
-        };
-
-        let raw_font = options
-            .custom_font_data
-            .as_deref()
-            .unwrap_or(tok_typeset::font::EMBEDDED_NOTO_SERIF_HEBREW);
-
-        let parsed_face = ttf_parser::Face::parse(raw_font, 0).ok();
-
-        let mut glyph_char_pairs = Vec::new();
-        let mut seen_glyphs = HashSet::new();
-
-        for p_box in iter_pages {
-            for frame in &p_box.frames {
-                for line in &frame.lines {
-                    if !line.glyphs.is_empty() {
-                        for g in &line.glyphs {
-                            let gid = g.glyph_id as u16;
-                            if gid > 0 && seen_glyphs.insert(gid) {
-                                glyph_char_pairs.push((gid, g.character));
-                            }
-                        }
-                    } else if let Some(face) = parsed_face.as_ref() {
-                        // Fallback: map text characters to glyph indices
-                        for ch in line.text.chars() {
-                            if let Some(gid) = face.glyph_index(ch) {
-                                if gid.0 > 0 && seen_glyphs.insert(gid.0) {
-                                    glyph_char_pairs.push((gid.0, Some(ch)));
-                                }
-                            }
-                        }
-                    }
+        // 3. Info dictionary with PDF/X conformance keys
+        {
+            let mut info = pdf.document_info(info_id);
+            info.title(TextStr(&options.title));
+            info.author(TextStr(&options.author));
+            info.creator(TextStr("TypesetOK Native Pre-Press Engine 2026"));
+            info.trapped(TrappingStatus::NotTrapped);
+            match options.standard {
+                PdfXStandard::PdfX1a2001 => {
+                    info.pair(Name(b"GTS_PDFXVersion"), TextStr("PDF/X-1:2001"));
+                    info.pair(Name(b"GTS_PDFXConformance"), TextStr("PDF/X-1a:2001"));
+                }
+                PdfXStandard::PdfX4 => {
+                    info.pair(Name(b"GTS_PDFXVersion"), TextStr("PDF/X-4"));
                 }
             }
         }
+        // PDF/X-1a:2001 is based on PDF 1.3, PDF/X-4 on PDF 1.6.
+        match options.standard {
+            PdfXStandard::PdfX1a2001 => pdf.set_version(1, 3),
+            PdfXStandard::PdfX4 => pdf.set_version(1, 6),
+        }
 
-        // 3. Perform TrueType Subsetting & Generate Metrics / ToUnicode CMap
-        let subset_result = FontSubsetter::create_subset(raw_font, &glyph_char_pairs)
-            .expect("Font subsetting must succeed for embedded font");
+        // 4. Font objects
+        let mut type0_ids = Vec::with_capacity(embedded.len());
+        let mut id_hash = FNV_OFFSET;
+        for font in &embedded {
+            let ids = [alloc(), alloc(), alloc(), alloc(), alloc()];
+            type0_ids.push(ids[0]);
+            Self::write_font(&mut pdf, &font.subset, ids);
+            id_hash = fnv1a(id_hash, font.subset.font_name.as_bytes());
+        }
 
-        // 4. Write FontFile2 Stream
-        let mut font_stream = pdf.stream(font_file_id, &subset_result.subset_bytes);
-        font_stream.pair(Name(b"Length1"), subset_result.subset_bytes.len() as i32);
-        font_stream.finish();
-
-        // 5. Write FontDescriptor
-        let mut descriptor = pdf.font_descriptor(descriptor_id);
-        descriptor.name(Name(subset_result.font_name.as_bytes()));
-        descriptor.flags(FontFlags::SYMBOLIC);
-        descriptor.bbox(Rect::new(
-            subset_result.bbox_1000[0],
-            subset_result.bbox_1000[1],
-            subset_result.bbox_1000[2],
-            subset_result.bbox_1000[3],
-        ));
-        descriptor.italic_angle(subset_result.italic_angle);
-        descriptor.ascent(subset_result.ascender_1000);
-        descriptor.descent(subset_result.descender_1000);
-        descriptor.cap_height(subset_result.cap_height_1000);
-        descriptor.stem_v(80.0);
-        descriptor.font_file2(font_file_id);
-        descriptor.finish();
-
-        // 6. Write CIDFont (Descendant Font)
-        let mut cid_font = pdf.cid_font(cid_font_id);
-        cid_font.subtype(CidFontType::Type2);
-        cid_font.base_font(Name(subset_result.font_name.as_bytes()));
-        cid_font.system_info(SystemInfo {
-            registry: Str(b"Adobe"),
-            ordering: Str(b"Identity"),
-            supplement: 0,
-        });
-        cid_font.font_descriptor(descriptor_id);
-        cid_font.default_width(1000.0);
-
-        let mut widths = cid_font.widths();
-        widths.consecutive(0, subset_result.cid_widths_1000.clone());
-        widths.finish();
-
-        cid_font.cid_to_gid_map_predefined(Name(b"Identity"));
-        cid_font.finish();
-
-        // 7. Write /ToUnicode CMap Stream
-        let cmap_bytes = ToUnicodeCMap::generate(&subset_result.to_unicode_map);
-        pdf.stream(tounicode_id, &cmap_bytes);
-
-        // 8. Write Type 0 Font
-        let mut type0 = pdf.type0_font(type0_font_id);
-        type0.base_font(Name(subset_result.font_name.as_bytes()));
-        type0.encoding_predefined(Name(b"Identity-H"));
-        type0.descendant_font(cid_font_id);
-        type0.to_unicode(tounicode_id);
-        type0.finish();
-
-        // 9. Pages and Content Streams
-        let mut page_ids = Vec::new();
-
+        // 5. Pages and Content Streams
+        let mut page_ids = Vec::with_capacity(iter_pages.len());
         for p_box in iter_pages {
             let page_id = alloc();
             let content_id = alloc();
@@ -202,110 +392,47 @@ impl PdfPrePressEngine {
                 options.slug_pt,
             );
 
-            // Build page content stream
-            let mut content = Content::new();
+            let content = Self::page_content(
+                p_box,
+                &page_boxes,
+                options.draw_crop_marks,
+                &embedded,
+                &registry,
+                &legacy_face,
+            );
+            // Fingerprint (not a full hash: content streams can be huge).
+            id_hash = fnv1a(id_hash, &(content.len() as u64).to_le_bytes());
+            id_hash = fnv1a(id_hash, &content[..content.len().min(256)]);
+            id_hash = fnv1a(id_hash, &content[content.len().saturating_sub(256)..]);
+            pdf.stream(content_id, &content);
 
-            // Draw crop marks in the slug
-            if options.draw_crop_marks {
-                page_boxes.draw_crop_marks(&mut content);
-            }
-
-            // Set fill color to pure DeviceCMYK black (0 0 0 1 k)
-            content.set_fill_cmyk(0.0, 0.0, 0.0, 1.0);
-
-            // Origin offset by slug_pt to align inside TrimBox
-            let origin_x = page_boxes.trim_box[0];
-            let origin_y = page_boxes.trim_box[1];
-            let page_h = p_box.dimensions.height;
-
-            // Render text frames
-            for frame in &p_box.frames {
-                for line in &frame.lines {
-                    let base_y = origin_y + (page_h - (frame.rect.y + line.baseline_y));
-
-                    if !line.glyphs.is_empty() {
-                        // Position each glyph precisely according to OpenType / Knuth-Plass layout
-                        for g in &line.glyphs {
-                            if let Some(&cid) = subset_result.gid_to_cid.get(&(g.glyph_id as u16)) {
-                                let cid_bytes = cid.to_be_bytes();
-                                let gx = origin_x + frame.rect.x + g.x;
-                                let gy = base_y + g.y;
-
-                                content.begin_text();
-                                content.set_font(Name(b"F1"), g.height);
-                                content.set_text_matrix([1.0, 0.0, 0.0, 1.0, gx, gy]);
-                                content.show(Str(&cid_bytes));
-                                content.end_text();
-                            }
-                        }
-                    } else if let Some(face) = parsed_face.as_ref() {
-                        // Fallback line rendering
-                        let text_x = origin_x + frame.rect.x;
-                        let mut cid_bytes = Vec::new();
-                        for ch in line.text.chars() {
-                            if let Some(gid) = face.glyph_index(ch) {
-                                let cid =
-                                    subset_result.gid_to_cid.get(&gid.0).copied().unwrap_or(0);
-                                cid_bytes.extend_from_slice(&cid.to_be_bytes());
-                            }
-                        }
-
-                        content.begin_text();
-                        content.set_font(Name(b"F1"), line.height);
-                        content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x, base_y]);
-                        content.show(Str(&cid_bytes));
-                        content.end_text();
-                    }
-                }
-            }
-
-            pdf.stream(content_id, &content.finish());
-
-            // Write Page object
             let mut page = pdf.page(page_id);
             page.parent(pages_id);
-            page.media_box(Rect::new(
-                page_boxes.media_box[0],
-                page_boxes.media_box[1],
-                page_boxes.media_box[2],
-                page_boxes.media_box[3],
-            ));
-            page.bleed_box(Rect::new(
-                page_boxes.bleed_box[0],
-                page_boxes.bleed_box[1],
-                page_boxes.bleed_box[2],
-                page_boxes.bleed_box[3],
-            ));
-            page.trim_box(Rect::new(
-                page_boxes.trim_box[0],
-                page_boxes.trim_box[1],
-                page_boxes.trim_box[2],
-                page_boxes.trim_box[3],
-            ));
-            page.crop_box(Rect::new(
-                page_boxes.crop_box[0],
-                page_boxes.crop_box[1],
-                page_boxes.crop_box[2],
-                page_boxes.crop_box[3],
-            ));
+            let rect = |b: [f32; 4]| Rect::new(b[0], b[1], b[2], b[3]);
+            page.media_box(rect(page_boxes.media_box));
+            page.bleed_box(rect(page_boxes.bleed_box));
+            page.trim_box(rect(page_boxes.trim_box));
+            page.crop_box(rect(page_boxes.crop_box));
 
             let mut resources = page.resources();
-            let mut fonts = resources.fonts();
-            fonts.pair(Name(b"F1"), type0_font_id);
-            fonts.finish();
+            let mut font_dict = resources.fonts();
+            for (font, id) in embedded.iter().zip(&type0_ids) {
+                font_dict.pair(Name(font.resource.as_bytes()), *id);
+            }
+            font_dict.finish();
             resources.finish();
 
             page.contents(content_id);
             page.finish();
         }
 
-        // 10. Pages tree
+        // 6. Pages tree
         let mut pages_node = pdf.pages(pages_id);
         pages_node.count(page_ids.len() as i32);
         pages_node.kids(page_ids.iter().copied());
         pages_node.finish();
 
-        // 11. Catalog with OutputIntent (FOGRA39 for PDF/X)
+        // 7. Catalog with OutputIntent (FOGRA39 for PDF/X)
         let mut catalog = pdf.catalog(catalog_id);
         catalog.pages(pages_id);
         let mut catalog_intents = catalog.output_intents();
@@ -318,47 +445,244 @@ impl PdfPrePressEngine {
         catalog_intents.finish();
         catalog.finish();
 
-        pdf.finish()
+        // 8. Deterministic file identifier (required by PDF/X).
+        id_hash = fnv1a(id_hash, options.title.as_bytes());
+        let file_id = [id_hash.to_be_bytes(), fnv1a(id_hash, b"tok").to_be_bytes()].concat();
+        pdf.set_file_id((file_id.clone(), file_id));
+
+        Ok(pdf.finish())
+    }
+
+    fn write_font(pdf: &mut Pdf, subset: &SubsetFontResult, ids: [Ref; 5]) {
+        let [type0_font_id, cid_font_id, descriptor_id, font_file_id, tounicode_id] = ids;
+        let base_font = Name(subset.font_name.as_bytes());
+
+        // FontFile2 Stream
+        let mut font_stream = pdf.stream(font_file_id, &subset.subset_bytes);
+        font_stream.pair(Name(b"Length1"), subset.subset_bytes.len() as i32);
+        font_stream.finish();
+
+        // FontDescriptor
+        let mut descriptor = pdf.font_descriptor(descriptor_id);
+        descriptor.name(base_font);
+        descriptor.flags(FontFlags::SYMBOLIC);
+        descriptor.bbox(Rect::new(
+            subset.bbox_1000[0],
+            subset.bbox_1000[1],
+            subset.bbox_1000[2],
+            subset.bbox_1000[3],
+        ));
+        descriptor.italic_angle(subset.italic_angle);
+        descriptor.ascent(subset.ascender_1000);
+        descriptor.descent(subset.descender_1000);
+        descriptor.cap_height(subset.cap_height_1000);
+        descriptor.stem_v(80.0);
+        descriptor.font_file2(font_file_id);
+        descriptor.finish();
+
+        // CIDFont (Descendant Font)
+        let mut cid_font = pdf.cid_font(cid_font_id);
+        cid_font.subtype(CidFontType::Type2);
+        cid_font.base_font(base_font);
+        cid_font.system_info(SystemInfo {
+            registry: Str(b"Adobe"),
+            ordering: Str(b"Identity"),
+            supplement: 0,
+        });
+        cid_font.font_descriptor(descriptor_id);
+        cid_font.default_width(1000.0);
+        cid_font
+            .widths()
+            .consecutive(0, subset.cid_widths_1000.iter().copied());
+        cid_font.cid_to_gid_map_predefined(Name(b"Identity"));
+        cid_font.finish();
+
+        // /ToUnicode CMap Stream
+        let cmap_bytes = ToUnicodeCMap::generate(&subset.to_unicode_map);
+        pdf.stream(tounicode_id, &cmap_bytes);
+
+        // Type 0 Font
+        let mut type0 = pdf.type0_font(type0_font_id);
+        type0.base_font(base_font);
+        type0.encoding_predefined(Name(b"Identity-H"));
+        type0.descendant_font(cid_font_id);
+        type0.to_unicode(tounicode_id);
+        type0.finish();
+    }
+
+    fn page_content(
+        p_box: &PageLayoutBox,
+        page_boxes: &PrePressPageBoxes,
+        draw_crop_marks: bool,
+        embedded: &[EmbeddedFont],
+        registry: &FontRegistry<'_>,
+        legacy_face: &ttf_parser::Face<'_>,
+    ) -> Vec<u8> {
+        let mut content = Content::new();
+
+        if draw_crop_marks {
+            page_boxes.draw_crop_marks(&mut content);
+        }
+
+        // Set fill color to pure DeviceCMYK black (0 0 0 1 k)
+        content.set_fill_cmyk(0.0, 0.0, 0.0, 1.0);
+
+        // Origin offset by slug_pt to align inside TrimBox
+        let origin_x = page_boxes.trim_box[0];
+        let origin_y = page_boxes.trim_box[1];
+        let page_h = p_box.dimensions.height;
+
+        for frame in &p_box.frames {
+            for line in &frame.lines {
+                let base_y = origin_y + (page_h - (frame.rect.y + line.baseline_y));
+
+                if line.glyphs.is_empty() {
+                    // Text-only line: a single run at the line origin.
+                    let Some(font) = registry.legacy.map(|slot| &embedded[slot]) else {
+                        continue;
+                    };
+                    let cids: Vec<u8> = line
+                        .text
+                        .chars()
+                        .filter_map(|ch| legacy_face.glyph_index(ch))
+                        .filter_map(|gid| font.cid(gid.0))
+                        .flat_map(u16::to_be_bytes)
+                        .collect();
+                    if cids.is_empty() {
+                        continue;
+                    }
+                    content.begin_text();
+                    content.set_font(Name(font.resource.as_bytes()), line.height);
+                    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, origin_x + frame.rect.x, base_y]);
+                    content.show(Str(&cids));
+                    content.end_text();
+                    continue;
+                }
+
+                // Every family was registered in the collection pass.
+                let line_slots: Vec<usize> = line
+                    .fonts
+                    .iter()
+                    .map_while(|name| registry.by_family.get(name.as_str()).copied())
+                    .collect();
+
+                // One text object and one text matrix per line. Glyphs are
+                // placed with TJ adjustments relative to the running pen, and
+                // vertical mark offsets with the text rise, so the stream does
+                // not need a matrix per glyph.
+                content.begin_text();
+                let mut writer = LineTextWriter::default();
+                for g in &line.glyphs {
+                    let Some((slot, gid)) =
+                        glyph_target(line, g, &line_slots, || registry.legacy, legacy_face)
+                    else {
+                        continue;
+                    };
+                    let font = &embedded[slot];
+                    let Some(cid) = font.cid(gid) else {
+                        continue;
+                    };
+                    let size = g.height;
+                    if !(size.is_finite() && size > 0.0) {
+                        continue;
+                    }
+                    let gx = origin_x + frame.rect.x + g.x;
+                    if writer.pen.is_none() {
+                        content.set_text_matrix([1.0, 0.0, 0.0, 1.0, gx, base_y]);
+                        writer.pen = Some(gx);
+                    }
+                    if writer.font != Some((slot, size)) {
+                        writer.flush(&mut content);
+                        content.set_font(Name(font.resource.as_bytes()), size);
+                        writer.font = Some((slot, size));
+                    }
+                    if writer.rise != g.y {
+                        writer.flush(&mut content);
+                        content.set_rise(g.y);
+                        writer.rise = g.y;
+                    }
+                    let advance_1000 = font
+                        .subset
+                        .cid_widths_1000
+                        .get(usize::from(cid))
+                        .copied()
+                        .unwrap_or(0.0);
+                    writer.push(gx, cid, advance_1000, size);
+                }
+                writer.flush(&mut content);
+                if writer.rise != 0.0 {
+                    // Text rise is graphics state: do not leak it to the next line.
+                    content.set_rise(0.0);
+                }
+                content.end_text();
+            }
+        }
+
+        content.finish()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tok_typeset::geometry::{LineBox, PhysicalRect, TextFrameBox};
+    use tok_core::id::FractionalIndex;
+    use tok_core::model::ParagraphNode;
+    use tok_typeset::engine::{TypesettingEngine, TypesettingEngineConfig};
+    use tok_typeset::geometry::TextFrameBox;
 
-    #[test]
-    fn test_pdf_export_structure() {
-        let frame = TextFrameBox {
-            frame_id: "frame_1".to_string(),
-            flow_id: "main".to_string(),
-            rect: PhysicalRect::new(50.0, 50.0, 400.0, 600.0),
-            lines: vec![LineBox {
-                line_index: 0,
-                paragraph_id: None,
-                baseline_y: 20.0,
-                height: 14.5,
-                width: 300.0,
-                glyphs: Vec::new(),
-                text: "שלום עולם".to_string(),
-                is_rtl: true,
-            }],
-        };
-
-        let page = PageLayoutBox {
+    fn page_with(lines: Vec<LineBox>) -> PageLayoutBox {
+        PageLayoutBox {
             page_index: 0,
             page_number_gematria: "א׳".to_string(),
             dimensions: PhysicalRect::a4_portrait(),
-            frames: vec![frame],
+            frames: vec![TextFrameBox {
+                frame_id: "frame_1".to_string(),
+                flow_id: "main".to_string(),
+                rect: PhysicalRect::new(50.0, 50.0, 400.0, 600.0),
+                lines,
+            }],
             break_token: None,
+        }
+    }
+
+    fn typeset(text: &str, family: &str) -> Vec<LineBox> {
+        let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
+        let para = ParagraphNode::new(FractionalIndex::initial(), "default-body", text);
+        engine.typeset_paragraph_with_font(&para, family, 400.0, 12.0, 16.0)
+    }
+
+    fn count(haystack: &[u8], needle: &[u8]) -> usize {
+        haystack
+            .windows(needle.len())
+            .filter(|w| *w == needle)
+            .count()
+    }
+
+    #[test]
+    fn test_pdf_export_structure() {
+        let line = LineBox {
+            line_index: 0,
+            paragraph_id: None,
+            baseline_y: 20.0,
+            height: 14.5,
+            width: 300.0,
+            glyphs: Vec::new(),
+            text: "שלום עולם".to_string(),
+            is_rtl: true,
+            fonts: Vec::new(),
         };
 
-        let bytes = PdfPrePressEngine::export_pdf(&[page], &PdfExportOptions::default());
+        let bytes =
+            PdfPrePressEngine::export_pdf(&[page_with(vec![line])], &PdfExportOptions::default())
+                .unwrap();
 
         assert!(!bytes.is_empty());
         let s = String::from_utf8_lossy(&bytes);
-        assert!(s.contains("%PDF-1."));
+        assert!(s.starts_with("%PDF-1.3"));
         assert!(s.contains("GTS_PDFX"));
+        assert!(s.contains("/GTS_PDFXConformance (PDF/X-1a:2001)"));
+        assert!(s.contains("/Trapped /False"));
+        assert!(s.contains("/ID ["));
         assert!(s.contains("/TrimBox"));
         assert!(s.contains("/BleedBox"));
         assert!(s.contains("FOGRA39"));
@@ -366,43 +690,116 @@ mod tests {
         assert!(s.contains("/CIDFontType2"), "Must embed CIDFont Type 2");
         assert!(s.contains("/FontDescriptor"), "Must embed FontDescriptor");
         assert!(s.contains("/Identity-H"), "Must use Identity-H encoding");
+        assert_eq!(count(&bytes, b"BT\n"), 1);
     }
 
     #[test]
     fn test_pdf_export_with_typeset_glyphs() {
-        use tok_core::id::FractionalIndex;
-        use tok_core::model::ParagraphNode;
-        use tok_typeset::engine::{TypesettingEngine, TypesettingEngineConfig};
-
-        let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
-        let para = ParagraphNode::new(
-            FractionalIndex::initial(),
-            "default-body",
-            "מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית?",
-        );
-        let lines = engine.typeset_paragraph(&para, 400.0, 12.0, 16.0);
+        let lines = typeset("מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית?", "Noto Serif Hebrew");
         assert!(!lines.is_empty());
         assert!(!lines[0].glyphs.is_empty());
 
-        let frame = TextFrameBox {
-            frame_id: "frame_1".to_string(),
-            flow_id: "main".to_string(),
-            rect: PhysicalRect::new(50.0, 50.0, 400.0, 600.0),
-            lines,
-        };
-
-        let page = PageLayoutBox {
-            page_index: 0,
-            page_number_gematria: "א׳".to_string(),
-            dimensions: PhysicalRect::a4_portrait(),
-            frames: vec![frame],
-            break_token: None,
-        };
-
-        let bytes = PdfPrePressEngine::export_pdf(&[page], &PdfExportOptions::default());
+        let bytes =
+            PdfPrePressEngine::export_pdf(&[page_with(lines)], &PdfExportOptions::default())
+                .unwrap();
         assert!(!bytes.is_empty());
         let s = String::from_utf8_lossy(&bytes);
         assert!(s.contains("/CIDToGIDMap"));
         assert!(s.contains("/ToUnicode"));
+    }
+
+    /// Regression: glyph ids shaped with David Libre (the style default, and
+    /// the fallback for punctuation/Latin) were drawn with Noto Serif Hebrew.
+    #[test]
+    fn each_layout_font_is_embedded() {
+        let mut lines = typeset("שלום עולם", "David CLM");
+        lines.extend(typeset("שלום עולם", "Noto Serif Hebrew"));
+        let bytes =
+            PdfPrePressEngine::export_pdf(&[page_with(lines)], &PdfExportOptions::default())
+                .unwrap();
+        assert_eq!(count(&bytes, b"/Subtype /Type0"), 2);
+        let s = String::from_utf8_lossy(&bytes);
+        assert!(s.contains("+DavidLibre"), "David Libre must be embedded");
+        assert!(s.contains("+NotoSerifHebrew"), "Noto must be embedded");
+        assert!(s.contains("/F1 ") && s.contains("/F2 "));
+    }
+
+    #[test]
+    fn unknown_layout_font_is_an_error() {
+        let mut lines = typeset("שלום", "Noto Serif Hebrew");
+        lines[0].fonts = vec!["No Such Font".to_string()];
+        let result =
+            PdfPrePressEngine::export_pdf(&[page_with(lines)], &PdfExportOptions::default());
+        assert!(matches!(result, Err(PdfError::MissingFont(_))));
+    }
+
+    /// Regression: invalid `custom_font_data` panicked inside the exporter.
+    #[test]
+    fn invalid_custom_font_is_an_error_not_a_panic() {
+        let options = PdfExportOptions {
+            custom_font_data: Some(b"definitely not a font".to_vec()),
+            ..Default::default()
+        };
+        let result = PdfPrePressEngine::export_pdf(&[], &options);
+        assert!(matches!(result, Err(PdfError::FontEmbedding { .. })));
+    }
+
+    #[test]
+    fn oversized_and_unknown_glyphs_are_skipped() {
+        let glyph = |id: u32, font_index: u16, ch: char| GlyphBox {
+            glyph_id: id,
+            cluster: 0,
+            x: 0.0,
+            y: 0.0,
+            width: 5.0,
+            height: 12.0,
+            character: Some(ch),
+            font_index,
+        };
+        let line = LineBox {
+            line_index: 0,
+            paragraph_id: None,
+            baseline_y: 20.0,
+            height: 14.5,
+            width: 10.0,
+            glyphs: vec![
+                glyph(70_000, 0, 'x'),
+                glyph(0x05D0, tok_typeset::geometry::UNKNOWN_FONT, 'א'),
+            ],
+            text: "xא".to_string(),
+            is_rtl: true,
+            fonts: vec!["Noto Serif Hebrew".to_string()],
+        };
+        let bytes =
+            PdfPrePressEngine::export_pdf(&[page_with(vec![line])], &PdfExportOptions::default())
+                .unwrap();
+        assert!(bytes.starts_with(b"%PDF-"));
+        // The heuristic glyph is drawn through the legacy font by character.
+        assert_eq!(count(&bytes, b"TJ"), 1);
+    }
+
+    #[test]
+    fn export_is_deterministic_and_text_objects_are_per_line() {
+        let lines = typeset(
+            "בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ TypesetOK 2026",
+            "Noto Serif Hebrew",
+        );
+        let n_lines = lines.len();
+        let pages = [page_with(lines)];
+        let a = PdfPrePressEngine::export_pdf(&pages, &PdfExportOptions::default()).unwrap();
+        let b = PdfPrePressEngine::export_pdf(&pages, &PdfExportOptions::default()).unwrap();
+        assert_eq!(a, b);
+        assert_eq!(count(&a, b"BT\n"), n_lines);
+    }
+
+    #[test]
+    fn pdf_x4_header() {
+        let options = PdfExportOptions {
+            standard: PdfXStandard::PdfX4,
+            ..Default::default()
+        };
+        let bytes = PdfPrePressEngine::export_pdf(&[], &options).unwrap();
+        assert!(bytes.starts_with(b"%PDF-1.6"));
+        assert!(String::from_utf8_lossy(&bytes).contains("/GTS_PDFXVersion (PDF/X-4)"));
     }
 }

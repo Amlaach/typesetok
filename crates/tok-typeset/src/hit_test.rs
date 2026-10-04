@@ -27,21 +27,28 @@ pub struct HitTestResult {
     pub is_leading_edge: bool,
 }
 
+/// (glyph index, cluster, character, caret x relative to the frame, leading edge)
+type GlyphHit = (Option<usize>, u32, Option<char>, f32, bool);
+
 pub struct HitTester;
 
 impl HitTester {
     /// Hit-tests a physical coordinate (x_pt, y_pt) within a PageLayoutBox.
     /// Returns the exact text target and visual caret placement.
     pub fn hit_test(page: &PageLayoutBox, x_pt: f32, y_pt: f32) -> Option<HitTestResult> {
-        if page.frames.is_empty() {
+        if !x_pt.is_finite() || !y_pt.is_finite() {
             return None;
         }
 
         // 1. Find target frame: prioritize frames containing the point, or closest frame
         let target_frame = Self::find_best_frame(&page.frames, x_pt, y_pt)?;
 
-        // If the frame has no lines, place caret at the start of the frame
-        if target_frame.lines.is_empty() {
+        // Relative coordinates inside the frame
+        let frame_rel_y = y_pt - target_frame.rect.y;
+        let frame_rel_x = x_pt - target_frame.rect.x;
+
+        // 2. Find best matching line; an empty frame puts the caret at its start
+        let Some((line_idx, line)) = Self::find_best_line(&target_frame.lines, frame_rel_y) else {
             return Some(HitTestResult {
                 page_index: page.page_index,
                 frame_id: target_frame.frame_id.clone(),
@@ -57,14 +64,7 @@ impl HitTester {
                 is_rtl: true,
                 is_leading_edge: true,
             });
-        }
-
-        // Relative coordinates inside the frame
-        let frame_rel_y = y_pt - target_frame.rect.y;
-        let frame_rel_x = x_pt - target_frame.rect.x;
-
-        // 2. Find best matching line
-        let (line_idx, line) = Self::find_best_line(&target_frame.lines, frame_rel_y);
+        };
 
         // 3. Resolve glyph and caret within the line
         let (glyph_idx, cluster, ch, glyph_rel_x, is_leading) =
@@ -97,83 +97,89 @@ impl HitTester {
         start_pt: PhysicalPoint,
         end_pt: PhysicalPoint,
     ) -> Vec<PhysicalRect> {
-        let hit_a = match Self::hit_test(page, start_pt.x, start_pt.y) {
-            Some(h) => h,
-            None => return Vec::new(),
+        let Some(hit_a) = Self::hit_test(page, start_pt.x, start_pt.y) else {
+            return Vec::new();
         };
-        let hit_b = match Self::hit_test(page, end_pt.x, end_pt.y) {
-            Some(h) => h,
-            None => return Vec::new(),
+        let Some(hit_b) = Self::hit_test(page, end_pt.x, end_pt.y) else {
+            return Vec::new();
+        };
+
+        let Some(target_frame) = page.frames.iter().find(|f| f.frame_id == hit_a.frame_id) else {
+            return Vec::new();
+        };
+        // Line indices of a hit in another frame do not index this frame.
+        let hit_b = if hit_b.frame_id == hit_a.frame_id {
+            hit_b
+        } else {
+            let last = target_frame.lines.len().saturating_sub(1);
+            HitTestResult {
+                line_index: last,
+                visual_x_pt: target_frame
+                    .lines
+                    .get(last)
+                    .map(|l| {
+                        let (left, right) = l.horizontal_extent();
+                        target_frame.rect.x + if l.is_rtl { left } else { right }
+                    })
+                    .unwrap_or(target_frame.rect.x),
+                ..hit_b
+            }
+        };
+
+        let (min_hit, max_hit) = if hit_a.line_index <= hit_b.line_index {
+            (&hit_a, &hit_b)
+        } else {
+            (&hit_b, &hit_a)
         };
 
         let mut rects = Vec::new();
-        let target_frame = match page.frames.iter().find(|f| f.frame_id == hit_a.frame_id) {
-            Some(f) => f,
-            None => return Vec::new(),
-        };
-
-        let (min_hit, max_hit) = if hit_a.line_index < hit_b.line_index {
-            (&hit_a, &hit_b)
-        } else if hit_a.line_index > hit_b.line_index {
-            (&hit_b, &hit_a)
-        } else {
-            (&hit_a, &hit_b)
-        };
+        let frame_x = target_frame.rect.x;
 
         if min_hit.line_index == max_hit.line_index {
             // Single-line selection
-            let line = match target_frame.lines.get(min_hit.line_index) {
-                Some(l) => l,
-                None => return Vec::new(),
+            let Some(line) = target_frame.lines.get(min_hit.line_index) else {
+                return Vec::new();
             };
             let left_x = hit_a.visual_x_pt.min(hit_b.visual_x_pt);
             let right_x = hit_a.visual_x_pt.max(hit_b.visual_x_pt);
             let width = (right_x - left_x).max(2.0);
             let y = target_frame.rect.y + line.baseline_y - line.height;
             rects.push(PhysicalRect::new(left_x, y, width, line.height));
-        } else {
-            // Multi-line selection
-            for l_idx in min_hit.line_index..=max_hit.line_index {
-                let line = match target_frame.lines.get(l_idx) {
-                    Some(l) => l,
-                    None => continue,
-                };
-                let y = target_frame.rect.y + line.baseline_y - line.height;
+            return rects;
+        }
 
-                if l_idx == min_hit.line_index {
-                    // Top line
-                    let (x, w) = if line.is_rtl {
-                        let left = target_frame.rect.x;
-                        let right = min_hit.visual_x_pt;
-                        (left, (right - left).max(2.0))
-                    } else {
-                        let left = min_hit.visual_x_pt;
-                        let right = target_frame.rect.x + line.width;
-                        (left, (right - left).max(2.0))
-                    };
-                    rects.push(PhysicalRect::new(x, y, w, line.height));
-                } else if l_idx == max_hit.line_index {
-                    // Bottom line
-                    let (x, w) = if line.is_rtl {
-                        let left = max_hit.visual_x_pt;
-                        let right = target_frame.rect.x + line.width;
-                        (left, (right - left).max(2.0))
-                    } else {
-                        let left = target_frame.rect.x;
-                        let right = max_hit.visual_x_pt;
-                        (left, (right - left).max(2.0))
-                    };
-                    rects.push(PhysicalRect::new(x, y, w, line.height));
+        // Multi-line selection
+        for l_idx in min_hit.line_index..=max_hit.line_index {
+            let Some(line) = target_frame.lines.get(l_idx) else {
+                continue;
+            };
+            let y = target_frame.rect.y + line.baseline_y - line.height;
+            let (extent_left, extent_right) = line.horizontal_extent();
+            let (line_left, line_right) = (frame_x + extent_left, frame_x + extent_right);
+
+            let (left, right) = if l_idx == min_hit.line_index {
+                // First line: from the hit to the logical end of the line.
+                if line.is_rtl {
+                    (line_left, min_hit.visual_x_pt)
                 } else {
-                    // Full intermediate line
-                    rects.push(PhysicalRect::new(
-                        target_frame.rect.x,
-                        y,
-                        line.width.max(target_frame.rect.width),
-                        line.height,
-                    ));
+                    (min_hit.visual_x_pt, line_right)
                 }
-            }
+            } else if l_idx == max_hit.line_index {
+                // Last line: from the logical start of the line to the hit.
+                if line.is_rtl {
+                    (max_hit.visual_x_pt, line_right)
+                } else {
+                    (line_left, max_hit.visual_x_pt)
+                }
+            } else {
+                (line_left, line_right)
+            };
+            rects.push(PhysicalRect::new(
+                left,
+                y,
+                (right - left).max(2.0),
+                line.height,
+            ));
         }
 
         rects
@@ -181,121 +187,48 @@ impl HitTester {
 
     fn find_best_frame(frames: &[TextFrameBox], x: f32, y: f32) -> Option<&TextFrameBox> {
         let pt = PhysicalPoint { x, y };
-        for frame in frames {
-            if frame.rect.contains_point(pt) {
-                return Some(frame);
-            }
+        if let Some(frame) = frames.iter().find(|f| f.rect.contains_point(pt)) {
+            return Some(frame);
         }
 
         frames.iter().min_by(|a, b| {
-            let dist_a = Self::dist_sq_to_rect(x, y, &a.rect);
-            let dist_b = Self::dist_sq_to_rect(x, y, &b.rect);
-            dist_a
-                .partial_cmp(&dist_b)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            Self::dist_sq_to_rect(x, y, &a.rect).total_cmp(&Self::dist_sq_to_rect(x, y, &b.rect))
         })
     }
 
+    /// Squared distance from the point to the nearest point of the rectangle.
     fn dist_sq_to_rect(x: f32, y: f32, rect: &PhysicalRect) -> f32 {
-        let cx = rect.x + rect.width / 2.0;
-        let cy = rect.y + rect.height / 2.0;
-        (x - cx).powi(2) + (y - cy).powi(2)
+        let dx = (rect.x - x).max(0.0).max(x - (rect.x + rect.width));
+        let dy = (rect.y - y).max(0.0).max(y - (rect.y + rect.height));
+        dx * dx + dy * dy
     }
 
-    fn find_best_line(lines: &[LineBox], frame_rel_y: f32) -> (usize, &LineBox) {
-        if lines.is_empty() {
-            panic!("lines cannot be empty");
-        }
-
-        let first_top = lines[0].baseline_y - lines[0].height;
-        if frame_rel_y <= first_top {
-            return (0, &lines[0]);
+    fn find_best_line(lines: &[LineBox], frame_rel_y: f32) -> Option<(usize, &LineBox)> {
+        let first = lines.first()?;
+        if frame_rel_y <= first.baseline_y - first.height {
+            return Some((0, first));
         }
 
         let last_idx = lines.len() - 1;
-        let last_bottom = lines[last_idx].baseline_y;
-        if frame_rel_y >= last_bottom {
-            return (last_idx, &lines[last_idx]);
+        if frame_rel_y >= lines[last_idx].baseline_y {
+            return Some((last_idx, &lines[last_idx]));
         }
 
-        for (i, line) in lines.iter().enumerate() {
-            let top = line.baseline_y - line.height;
-            let bottom = line.baseline_y;
-            if frame_rel_y >= top && frame_rel_y <= bottom {
-                return (i, line);
-            }
+        if let Some(hit) = lines.iter().enumerate().find(|(_, line)| {
+            frame_rel_y >= line.baseline_y - line.height && frame_rel_y <= line.baseline_y
+        }) {
+            return Some(hit);
         }
 
-        let best_idx = lines
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                let da = (a.baseline_y - frame_rel_y).abs();
-                let db = (b.baseline_y - frame_rel_y).abs();
-                da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|(i, _)| i)
-            .unwrap_or(0);
-
-        (best_idx, &lines[best_idx])
+        lines.iter().enumerate().min_by(|(_, a), (_, b)| {
+            (a.baseline_y - frame_rel_y)
+                .abs()
+                .total_cmp(&(b.baseline_y - frame_rel_y).abs())
+        })
     }
 
-    fn hit_test_line_glyphs(
-        line: &LineBox,
-        frame_rel_x: f32,
-    ) -> (Option<usize>, u32, Option<char>, f32, bool) {
-        if line.glyphs.is_empty() {
-            return (None, 0, None, 0.0, true);
-        }
-
-        let first_g = &line.glyphs[0];
-        if frame_rel_x <= first_g.x {
-            return (Some(0), first_g.cluster, first_g.character, first_g.x, true);
-        }
-
-        let last_idx = line.glyphs.len() - 1;
-        let last_g = &line.glyphs[last_idx];
-        if frame_rel_x >= last_g.x + last_g.width {
-            return (
-                Some(last_idx),
-                last_g.cluster,
-                last_g.character,
-                last_g.x + last_g.width,
-                false,
-            );
-        }
-
-        for (idx, g) in line.glyphs.iter().enumerate() {
-            let start = g.x;
-            let end = g.x + g.width;
-            if frame_rel_x >= start && frame_rel_x <= end {
-                let mid = start + g.width / 2.0;
-                let is_leading = if line.is_rtl {
-                    frame_rel_x >= mid
-                } else {
-                    frame_rel_x <= mid
-                };
-
-                let caret_x = if frame_rel_x < mid { start } else { end };
-
-                return (Some(idx), g.cluster, g.character, caret_x, is_leading);
-            }
-        }
-
-        let (idx, g) = line
-            .glyphs
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                let ca = a.x + a.width / 2.0;
-                let cb = b.x + b.width / 2.0;
-                (ca - frame_rel_x)
-                    .abs()
-                    .partial_cmp(&(cb - frame_rel_x).abs())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .unwrap_or((0, &line.glyphs[0]));
-
+    fn caret_for(line: &LineBox, idx: usize, frame_rel_x: f32) -> GlyphHit {
+        let g = &line.glyphs[idx];
         let mid = g.x + g.width / 2.0;
         let caret_x = if frame_rel_x < mid {
             g.x
@@ -307,8 +240,59 @@ impl HitTester {
         } else {
             frame_rel_x <= mid
         };
-
         (Some(idx), g.cluster, g.character, caret_x, is_leading)
+    }
+
+    fn hit_test_line_glyphs(line: &LineBox, frame_rel_x: f32) -> GlyphHit {
+        let (Some(first_g), Some(last_g)) = (line.glyphs.first(), line.glyphs.last()) else {
+            return (None, 0, None, 0.0, true);
+        };
+
+        if frame_rel_x <= first_g.x {
+            // Left of the line: the left edge is the leading edge only for LTR.
+            return (
+                Some(0),
+                first_g.cluster,
+                first_g.character,
+                first_g.x,
+                !line.is_rtl,
+            );
+        }
+
+        let last_idx = line.glyphs.len() - 1;
+        if frame_rel_x >= last_g.x + last_g.width {
+            return (
+                Some(last_idx),
+                last_g.cluster,
+                last_g.character,
+                last_g.x + last_g.width,
+                line.is_rtl,
+            );
+        }
+
+        // Prefer glyphs with an advance: zero-width marks sit on top of their base.
+        if let Some(idx) = line
+            .glyphs
+            .iter()
+            .position(|g| g.width > 0.0 && frame_rel_x >= g.x && frame_rel_x <= g.x + g.width)
+        {
+            return Self::caret_for(line, idx, frame_rel_x);
+        }
+
+        let idx = line
+            .glyphs
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| {
+                let ca = a.x + a.width / 2.0;
+                let cb = b.x + b.width / 2.0;
+                (ca - frame_rel_x)
+                    .abs()
+                    .total_cmp(&(cb - frame_rel_x).abs())
+            })
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        Self::caret_for(line, idx, frame_rel_x)
     }
 }
 
@@ -317,77 +301,50 @@ mod tests {
     use super::*;
     use crate::geometry::GlyphBox;
 
+    fn glyph(id: u32, cluster: u32, x: f32, width: f32, ch: char) -> GlyphBox {
+        GlyphBox {
+            glyph_id: id,
+            cluster,
+            x,
+            y: 0.0,
+            width,
+            height: 12.0,
+            character: Some(ch),
+            font_index: 0,
+        }
+    }
+
+    fn line(index: usize, baseline: f32, glyphs: Vec<GlyphBox>, text: &str) -> LineBox {
+        LineBox {
+            line_index: index,
+            paragraph_id: Some(NodeId::new()),
+            baseline_y: baseline,
+            height: 14.0,
+            width: 30.0,
+            glyphs,
+            text: text.to_string(),
+            is_rtl: true,
+            fonts: Vec::new(),
+        }
+    }
+
     fn create_test_page() -> PageLayoutBox {
-        let glyphs_line0 = vec![
-            GlyphBox {
-                glyph_id: 1,
-                cluster: 0,
-                x: 0.0,
-                y: 0.0,
-                width: 10.0,
-                height: 12.0,
-                character: Some('א'),
-            },
-            GlyphBox {
-                glyph_id: 2,
-                cluster: 1,
-                x: 10.0,
-                y: 0.0,
-                width: 10.0,
-                height: 12.0,
-                character: Some('ב'),
-            },
-            GlyphBox {
-                glyph_id: 3,
-                cluster: 2,
-                x: 20.0,
-                y: 0.0,
-                width: 10.0,
-                height: 12.0,
-                character: Some('ג'),
-            },
-        ];
-
-        let line0 = LineBox {
-            line_index: 0,
-            paragraph_id: Some(NodeId::new()),
-            baseline_y: 14.0,
-            height: 14.0,
-            width: 30.0,
-            glyphs: glyphs_line0,
-            text: "אבג".to_string(),
-            is_rtl: true,
-        };
-
-        let line1 = LineBox {
-            line_index: 1,
-            paragraph_id: Some(NodeId::new()),
-            baseline_y: 28.0,
-            height: 14.0,
-            width: 30.0,
-            glyphs: vec![
-                GlyphBox {
-                    glyph_id: 4,
-                    cluster: 0,
-                    x: 0.0,
-                    y: 0.0,
-                    width: 15.0,
-                    height: 12.0,
-                    character: Some('ד'),
-                },
-                GlyphBox {
-                    glyph_id: 5,
-                    cluster: 1,
-                    x: 15.0,
-                    y: 0.0,
-                    width: 15.0,
-                    height: 12.0,
-                    character: Some('ה'),
-                },
+        let line0 = line(
+            0,
+            14.0,
+            vec![
+                glyph(1, 0, 0.0, 10.0, 'א'),
+                glyph(2, 1, 10.0, 10.0, 'ב'),
+                glyph(3, 2, 20.0, 10.0, 'ג'),
             ],
-            text: "דה".to_string(),
-            is_rtl: true,
-        };
+            "אבג",
+        );
+        let line1 = line(
+            1,
+            28.0,
+            vec![glyph(4, 0, 0.0, 15.0, 'ד'), glyph(5, 1, 15.0, 15.0, 'ה')],
+            "דה",
+        );
 
         let frame = TextFrameBox {
             frame_id: "frame_1".to_string(),
@@ -434,5 +391,51 @@ mod tests {
         assert_eq!(rects.len(), 1);
         assert!(rects[0].width >= 20.0);
         assert_eq!(rects[0].height, 14.0);
+    }
+
+    #[test]
+    fn empty_page_and_frame_and_nan_points() {
+        let mut page = create_test_page();
+        assert!(HitTester::hit_test(&page, f32::NAN, 10.0).is_none());
+        page.frames[0].lines.clear();
+        let hit = HitTester::hit_test(&page, 60.0, 60.0).unwrap();
+        assert_eq!(hit.glyph_index, None);
+        page.frames.clear();
+        assert!(HitTester::hit_test(&page, 60.0, 60.0).is_none());
+    }
+
+    /// Regression: a right-aligned RTL line was selected from the frame's left
+    /// edge instead of from where its glyphs actually start.
+    #[test]
+    fn multi_line_rtl_selection_uses_line_extents() {
+        let mut page = create_test_page();
+        // Shift line 1 to the right, like a short last line of an RTL paragraph.
+        for g in &mut page.frames[0].lines[1].glyphs {
+            g.x += 100.0;
+        }
+        let rects = HitTester::hit_test_range(
+            &page,
+            PhysicalPoint { x: 65.0, y: 55.0 },
+            PhysicalPoint { x: 170.0, y: 70.0 },
+        );
+        assert_eq!(rects.len(), 2);
+        // First line (RTL): from its left extent (frame x) to the hit.
+        assert_eq!(rects[0].x, 50.0);
+        // Last line (RTL): from the hit to the right extent of its glyphs.
+        let right = rects[1].x + rects[1].width;
+        assert!((right - (50.0 + 130.0)).abs() < 1e-3, "right = {right}");
+    }
+
+    #[test]
+    fn closest_frame_is_measured_to_its_edge() {
+        let mut page = create_test_page();
+        let mut small = page.frames[0].clone();
+        small.frame_id = "small".to_string();
+        small.rect = PhysicalRect::new(300.0, 440.0, 10.0, 10.0);
+        page.frames.push(small);
+        // Just right of the big frame's edge: the big frame is nearer by edge
+        // distance even though the small frame's center is closer.
+        let hit = HitTester::hit_test(&page, 255.0, 440.0).unwrap();
+        assert_eq!(hit.frame_id, "frame_1");
     }
 }

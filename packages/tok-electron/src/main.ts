@@ -11,21 +11,40 @@ let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
 
 function getTokCliPath(): string {
-  // Check custom local target directory first
-  const localDebug = 'C:/Users/USER/AppData/Local/tok_target/debug/tok-cli.exe';
-  if (fs.existsSync(localDebug)) {
-    return localDebug;
+  const isWin = process.platform === 'win32';
+  const exeName = isWin ? 'tok-cli.exe' : 'tok-cli';
+
+  // 1. Packaged application resources/bin
+  const bundled = path.join(process.resourcesPath, 'bin', exeName);
+  if (fs.existsSync(bundled)) {
+    return bundled;
   }
-  const localRelease = 'C:/Users/USER/AppData/Local/tok_target/release/tok-cli.exe';
-  if (fs.existsSync(localRelease)) {
-    return localRelease;
+
+  // 2. Custom local target directory via CARGO_TARGET_DIR or LOCALAPPDATA env
+  if (process.env.CARGO_TARGET_DIR) {
+    const customRelease = path.join(process.env.CARGO_TARGET_DIR, 'release', exeName);
+    if (fs.existsSync(customRelease)) return customRelease;
+    const customDebug = path.join(process.env.CARGO_TARGET_DIR, 'debug', exeName);
+    if (fs.existsSync(customDebug)) return customDebug;
   }
-  // Standard cargo target directory
-  const rootTarget = path.join(__dirname, '../../../../target/debug/tok-cli.exe');
-  if (fs.existsSync(rootTarget)) {
-    return rootTarget;
+  if (process.env.LOCALAPPDATA) {
+    const localRelease = path.join(process.env.LOCALAPPDATA, 'tok_target', 'release', exeName);
+    if (fs.existsSync(localRelease)) return localRelease;
+    const localDebug = path.join(process.env.LOCALAPPDATA, 'tok_target', 'debug', exeName);
+    if (fs.existsSync(localDebug)) return localDebug;
   }
-  return path.join(process.resourcesPath, 'bin', 'tok-cli.exe');
+
+  // 3. Monorepo workspace target directories
+  const rootRelease = path.join(__dirname, '../../../../target/release', exeName);
+  if (fs.existsSync(rootRelease)) {
+    return rootRelease;
+  }
+  const rootDebug = path.join(__dirname, '../../../../target/debug', exeName);
+  if (fs.existsSync(rootDebug)) {
+    return rootDebug;
+  }
+
+  return bundled;
 }
 
 /**

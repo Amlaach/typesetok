@@ -42,7 +42,9 @@ impl HebrewNormalizer {
             0x0591..=0x05AF => Some(HebrewMarkCategory::Teamin),
 
             // Other Hebrew dots/accents
-            0x05C4 | 0x05C5 => Some(HebrewMarkCategory::OtherMark),
+            // Upper / lower dots and the Judeo-Spanish varika (survives
+            // presentation-form decomposition, which has no mapping for it).
+            0x05C4 | 0x05C5 | 0xFB1E => Some(HebrewMarkCategory::OtherMark),
 
             _ => None,
         }
@@ -171,6 +173,31 @@ mod tests {
         let once = HebrewNormalizer::normalize(input);
         let twice = HebrewNormalizer::normalize(&once);
         assert_eq!(once, twice, "Normalization must be idempotent");
+    }
+
+    #[test]
+    fn varika_stays_attached_to_its_letter() {
+        // Regression: U+FB1E was treated as a base character, so marks after it
+        // were sorted as a separate cluster.
+        let input = "\u{05D2}\u{FB1E}\u{05B8}\u{05BC}";
+        let normalized = HebrewNormalizer::normalize(input);
+        assert_eq!(normalized, "\u{05D2}\u{05BC}\u{05B8}\u{FB1E}");
+        assert_eq!(HebrewNormalizer::normalize(&normalized), normalized);
+    }
+
+    #[test]
+    fn normalization_is_idempotent_on_mixed_text() {
+        let samples = [
+            "\u{05E9}\u{05B8}\u{05BC}\u{05C1}\u{0591}\u{05BD}",
+            "\u{FB2C}\u{05B8}\u{05D1}\u{05B7}\u{0591}\u{05BC}",
+            "\u{05B8}\u{05BC} leading marks",
+            "e\u{0301}\u{05D0}\u{05B7}\u{034F}\u{05B8}",
+        ];
+        for s in samples {
+            let once = HebrewNormalizer::normalize(s);
+            assert_eq!(HebrewNormalizer::normalize(&once), once, "input {s:?}");
+            assert!(once.chars().count() >= s.chars().count());
+        }
     }
 
     #[test]
