@@ -5,9 +5,15 @@ import { ActionHud } from './components/ActionHud';
 import { CommandPalette, PaletteItem } from './components/CommandPalette';
 import { StatusBar } from './components/StatusBar';
 import { SpreadCanvas } from './components/SpreadCanvas';
+import { WelcomeModal } from './components/WelcomeModal';
+import { SettingsModal } from './components/SettingsModal';
+import { AboutModal } from './components/AboutModal';
+import { PluginEngine } from './plugins/PluginEngine';
 import { StoryEditor } from 'tok-story-editor';
 import { PageDescriptor } from 'tok-viewer';
-import { ViewMode, SelectionMode } from './types';
+import { ViewMode } from './types';
+import { i18n, t } from './i18n';
+import { themeManager } from './theme';
 
 export class TypesetOkApp {
   private root: HTMLElement;
@@ -22,13 +28,19 @@ export class TypesetOkApp {
   private storyContainer!: HTMLElement;
   private workbench!: HTMLElement;
 
+  // New Feature Modals & Engines
+  private welcomeModal!: WelcomeModal;
+  private settingsModal!: SettingsModal;
+  private aboutModal!: AboutModal;
+  private pluginEngine!: PluginEngine;
+
   private currentViewMode: ViewMode = 'canvas';
   private pages: PageDescriptor[] = [];
 
   constructor(root: HTMLElement) {
     this.root = root;
     this.root.className = 'tok-workbench-root';
-    this.root.dir = 'rtl';
+    this.root.dir = i18n.getLanguage() === 'he' ? 'rtl' : 'ltr';
     this.root.style.display = 'flex';
     this.root.style.flexDirection = 'column';
     this.root.style.height = '100vh';
@@ -38,29 +50,54 @@ export class TypesetOkApp {
     this.root.style.fontFamily = 'var(--tok-font-system)';
     this.root.style.position = 'relative';
 
+    // Apply theme & language
+    themeManager.applyTheme();
+
+    i18n.onChange((lang) => {
+      this.root.dir = lang === 'he' ? 'rtl' : 'ltr';
+      if (this.workbench) {
+        this.workbench.dir = lang === 'he' ? 'rtl' : 'ltr';
+      }
+    });
+
     this.initUI();
   }
 
   private initUI(): void {
-    // 1. Top System Bar (44px)
+    // 1. Initialize Plugin Engine
+    this.pluginEngine = new PluginEngine(
+      (cmd) => {
+        this.commandPalette?.registerItem(cmd);
+      },
+      (msg) => {
+        this.showToast(msg);
+      }
+    );
+
+    // 2. Top System Bar (Modern, seamless, no grey toolbar)
     this.topBar = new TopSystemBar({
       onMenuAction: (action, data) => this.handleSystemAction(action, data),
       onOpenCommandPalette: () => this.commandPalette.show(),
       onViewModeChange: (mode) => this.setViewMode(mode),
-      onExportPdf: () => this.handleSystemAction('export-pdf')
+      onExportPdf: () => this.handleSystemAction('export-pdf'),
+      onOpenProjects: () => this.welcomeModal.show(),
+      onToggleLanguage: () => {
+        this.showToast(`שפת הממשק הוחלפה ל-${i18n.getLanguage() === 'he' ? 'עברית (RTL)' : 'English (LTR)'}`);
+      }
     });
     this.root.appendChild(this.topBar.element);
 
-    // 2. Main Workbench Perimeter
+    // 3. Main Workbench Perimeter
     this.workbench = document.createElement('div');
     this.workbench.className = 'tok-workbench-main';
+    this.workbench.dir = i18n.getLanguage() === 'he' ? 'rtl' : 'ltr';
     this.workbench.style.display = 'flex';
     this.workbench.style.flex = '1';
     this.workbench.style.overflow = 'hidden';
     this.workbench.style.position = 'relative';
     this.root.appendChild(this.workbench);
 
-    // 2a. Right Side (Leading in RTL): Structure Bar (250px)
+    // 3a. Right Side (Leading in RTL): Structure Bar with spacer & bottom Settings/About
     this.structureBar = new StructureBar({
       onSelectPage: (idx) => {
         this.canvas.scrollToPage(idx);
@@ -77,11 +114,17 @@ export class TypesetOkApp {
       },
       onToggleLayer: (layerId, visible) => {
         this.showToast(`שכבה ${layerId}: ${visible ? 'מוצגת' : 'מוסתרת'}`);
+      },
+      onOpenSettings: () => {
+        this.settingsModal.show();
+      },
+      onOpenAbout: () => {
+        this.aboutModal.show();
       }
     });
     this.workbench.appendChild(this.structureBar.element);
 
-    // 2b. Center: Spread Canvas
+    // 3b. Center: Spread Canvas
     this.canvas = new SpreadCanvas({
       onSelectionModeChange: (mode, frameData) => {
         this.inspector.setMode(mode, frameData);
@@ -98,7 +141,7 @@ export class TypesetOkApp {
     });
     this.workbench.appendChild(this.canvas.element);
 
-    // 2c. Continuous Story Editor Panel (Hidden in pure canvas mode)
+    // 3c. Continuous Story Editor Panel (Hidden in pure canvas mode)
     this.storyContainer = document.createElement('div');
     this.storyContainer.className = 'tok-story-panel';
     this.storyContainer.style.width = '360px';
@@ -120,7 +163,7 @@ export class TypesetOkApp {
     this.storyEditor = new StoryEditor(this.storyContainer);
     this.workbench.appendChild(this.storyContainer);
 
-    // 2d. Left Side (Trailing in RTL): Contextual Inspector (320px)
+    // 3d. Left Side (Trailing in RTL): Contextual Inspector
     this.inspector = new ContextualInspector({
       onDocumentChange: (settings) => {
         console.log('[TOK] Document settings changed:', settings);
@@ -143,7 +186,7 @@ export class TypesetOkApp {
     });
     this.workbench.appendChild(this.inspector.element);
 
-    // 3. Status Bar (26px)
+    // 4. Status Bar (26px)
     this.statusBar = new StatusBar({
       onZoomChange: (z) => this.canvas.setZoom(z),
       onPageClick: () => this.commandPalette.show(),
@@ -154,7 +197,7 @@ export class TypesetOkApp {
     });
     this.root.appendChild(this.statusBar.element);
 
-    // 4. Action HUD (Floating, anchored)
+    // 5. Action HUD (Floating, anchored)
     this.actionHud = new ActionHud({
       onFontChange: (f) => this.inspector.setMode('text-edit', undefined, { fontFamily: f }),
       onSizeChange: (s) => this.inspector.setMode('text-edit', undefined, { fontSizePt: s }),
@@ -165,21 +208,82 @@ export class TypesetOkApp {
     });
     this.root.appendChild(this.actionHud.element);
 
-    // 5. Command Palette (Ctrl+K)
+    // 6. Command Palette (Ctrl+K)
     this.initCommandPalette();
+
+    // 7. Initialize Feature Modals
+    this.welcomeModal = new WelcomeModal({
+      onSelectTemplate: (tmpl) => this.handleTemplateSelect(tmpl),
+      onOpenProject: () => this.handleSystemAction('open-document'),
+      onLoadDemo: () => this.loadDemoProject(),
+      onClose: () => {}
+    });
+    this.root.appendChild(this.welcomeModal.element);
+
+    this.settingsModal = new SettingsModal({
+      onLanguageChange: (lang) => {
+        this.showToast(`שפת הממשק עודכנה: ${lang === 'he' ? 'עברית' : 'English'}`);
+      },
+      onClose: () => {},
+      pluginEngine: this.pluginEngine,
+      showToast: (msg) => this.showToast(msg)
+    });
+    this.root.appendChild(this.settingsModal.element);
+
+    this.aboutModal = new AboutModal({
+      onClose: () => {}
+    });
+    this.root.appendChild(this.aboutModal.element);
+
+    // Load Plugins asynchronously
+    this.pluginEngine.loadPlugins().catch(console.error);
+
+    // 8. First launch project picker check
+    const showWelcome = localStorage.getItem('tok_show_welcome');
+    if (showWelcome !== 'false') {
+      setTimeout(() => this.welcomeModal.show(), 100);
+    }
   }
 
   private initCommandPalette(): void {
     const commands: PaletteItem[] = [
+      {
+        id: 'cmd-open-welcome',
+        category: 'פרויקטים ומסמכים',
+        title: 'מסך בחירת פרויקטים (Welcome Screen)',
+        subtitle: 'בחירת תבנית או פרויקט קיים',
+        shortcut: 'Ctrl+Shift+P',
+        action: () => this.welcomeModal.show()
+      },
+      {
+        id: 'cmd-open-settings',
+        category: 'מערכת והעדפות',
+        title: 'הגדרות המערכת (Settings)',
+        subtitle: 'ערכות עיצוב, שפה, לוגים ותוספים',
+        shortcut: 'Ctrl+,',
+        action: () => this.settingsModal.show()
+      },
+      {
+        id: 'cmd-open-about',
+        category: 'מערכת והעדפות',
+        title: 'אודות TypesetOK (About)',
+        subtitle: 'גרסה, רישיון ומאגר GitHub',
+        action: () => this.aboutModal.show()
+      },
+      {
+        id: 'cmd-toggle-lang',
+        category: 'מערכת והעדפות',
+        title: 'החלף שפה וכיוון (עברית RTL / English LTR)',
+        shortcut: 'Alt+Shift+L',
+        action: () => i18n.toggleLanguage()
+      },
       {
         id: 'cmd-full-justify',
         category: 'פעולות טיפוגרפיה',
         title: 'יישור עברי מלא (אהלתר"ם + רווחי מילים)',
         subtitle: 'שילוב 3 שכבות יישור',
         shortcut: 'Ctrl+Alt+J',
-        action: () => {
-          this.handleSystemAction('apply-justification');
-        }
+        action: () => this.handleSystemAction('apply-justification')
       },
       {
         id: 'cmd-norm-niqqud',
@@ -187,27 +291,21 @@ export class TypesetOkApp {
         title: 'נרמל ניקוד וטעמים (ת"י 6100)',
         subtitle: 'תיקון סדר תווי יוניקוד',
         shortcut: 'Ctrl+Shift+N',
-        action: () => {
-          this.handleSystemAction('normalize-hebrew');
-        }
+        action: () => this.handleSystemAction('normalize-hebrew')
       },
       {
         id: 'cmd-shield-divine',
         category: 'פעולות טיפוגרפיה',
         title: 'מגן שמות קדושים (איסור שבירה)',
         subtitle: 'הגנה על שמות הוי"ה ואדנות',
-        action: () => {
-          this.handleSystemAction('shield-divine-names');
-        }
+        action: () => this.handleSystemAction('shield-divine-names')
       },
       {
         id: 'cmd-recalc-gematria',
         category: 'פעולות טיפוגרפיה',
         title: 'סנכרן מספור עמודים עברי (גימטריה)',
         subtitle: 'החלת גרשיים וכללי טו/טז',
-        action: () => {
-          this.handleSystemAction('recalculate-gematria');
-        }
+        action: () => this.handleSystemAction('recalculate-gematria')
       },
       {
         id: 'cmd-export-pdf',
@@ -215,18 +313,14 @@ export class TypesetOkApp {
         title: 'ייצוא קובץ לדפוס (ISO PDF/X-1a)',
         subtitle: 'קדם-דפוס רציף 100% K',
         shortcut: 'Ctrl+E',
-        action: () => {
-          this.handleSystemAction('export-pdf');
-        }
+        action: () => this.handleSystemAction('export-pdf')
       },
       {
         id: 'cmd-new-page',
         category: 'עמודים וניווט',
         title: 'הוסף עמוד חדש לספר',
         shortcut: 'Ctrl+Enter',
-        action: () => {
-          this.addNewPage();
-        }
+        action: () => this.addNewPage()
       },
       {
         id: 'cmd-toggle-margins',
@@ -255,24 +349,6 @@ export class TypesetOkApp {
           this.canvas.setZoom(100);
           this.statusBar.updateStats({ zoom: 100 });
         }
-      },
-      {
-        id: 'cmd-style-gemara',
-        category: 'סגנונות מסמך',
-        title: 'החל סגנון פסקה: גמרא ראשי',
-        subtitle: 'וילנא 15pt הדגשה',
-        action: () => {
-          this.showToast('הוחל סגנון גמרא ראשי');
-        }
-      },
-      {
-        id: 'cmd-style-rashi',
-        category: 'סגנונות מסמך',
-        title: 'החל סגנון פסקה: רש"י רציף',
-        subtitle: 'כתב רש"י 12pt',
-        action: () => {
-          this.showToast('הוחל סגנון רש"י רציף');
-        }
       }
     ];
 
@@ -293,6 +369,32 @@ export class TypesetOkApp {
 
     this.structureBar.setPages(thumbnails);
     this.updatePageStats(0);
+  }
+
+  private handleTemplateSelect(templateId: string): void {
+    let name = 'מסמך חדש';
+    let count = 4;
+    if (templateId === 'gemara') {
+      name = 'מסכת ברכות — צורת הדף.tok';
+      count = 8;
+    } else if (templateId === 'prose') {
+      name = 'ספר קריאה — מהדורה ראשונה.tok';
+      count = 6;
+    } else if (templateId === 'bulletin') {
+      name = 'עלון שבת קודש.tok';
+      count = 4;
+    } else {
+      name = 'מסמך ריק.tok';
+      count = 2;
+    }
+
+    this.topBar.setDocumentTitle(name);
+    this.showToast(`נוצר פרויקט חדש מתבנית: ${name}`);
+  }
+
+  private loadDemoProject(): void {
+    this.topBar.setDocumentTitle('מסכת ברכות — מהדורת מופת.tok');
+    this.showToast('פרויקט לדוגמה נטען בהצלחה');
   }
 
   public setViewMode(mode: ViewMode): void {
@@ -341,7 +443,7 @@ export class TypesetOkApp {
 
     switch (action) {
       case 'new-document':
-        this.showToast('יצירת מסמך חדש...');
+        this.welcomeModal.show();
         break;
       case 'open-document':
         this.showToast(`פתיחת קובץ: ${data || ''}`);
@@ -381,7 +483,7 @@ export class TypesetOkApp {
     }
   }
 
-  private showToast(msg: string, isError = false): void {
+  public showToast(msg: string, isError = false): void {
     const toast = document.createElement('div');
     toast.className = 'tok-toast';
     toast.style.background = isError ? '#EF4444' : '#1E293B';

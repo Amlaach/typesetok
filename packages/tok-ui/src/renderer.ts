@@ -141,6 +141,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   console.log('[TOK] Initializing TypesetOK Desktop Workbench...');
   const app = new TypesetOkApp(appContainer);
+  (window as any).tokApp = app;
 
   // Load Initial Hebrew demo document
   const demoPages = generateDemoPageDescriptors(12);
@@ -183,8 +184,18 @@ window.addEventListener('DOMContentLoaded', async () => {
   function handleAction(action: string, data?: any) {
     switch (action) {
       case 'new-document':
-        showNotification('יצירת מסמך חדש...');
-        app.loadDocumentPages(generateDemoPageDescriptors(4));
+      case 'open-welcome':
+        showNotification('פתיחת מסך פרויקטים...');
+        (window as any).tokApp?.welcomeModal?.show?.();
+        break;
+      case 'open-settings':
+        (window as any).tokApp?.settingsModal?.show?.();
+        break;
+      case 'open-about':
+        (window as any).tokApp?.aboutModal?.show?.();
+        break;
+      case 'toggle-lang':
+        (window as any).tokApp?.toggleLanguage?.();
         break;
       case 'open-document':
         showNotification(`פתיחת קובץ: ${data || ''}`);

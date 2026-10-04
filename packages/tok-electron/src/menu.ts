@@ -6,6 +6,11 @@ export function buildApplicationMenu(mainWindow: BrowserWindow): Menu {
       label: 'קובץ',
       submenu: [
         {
+          label: 'מסך פרויקטים...',
+          accelerator: 'CmdOrCtrl+Shift+P',
+          click: () => mainWindow.webContents.send('menu:action', 'open-welcome'),
+        },
+        {
           label: 'מסמך חדש...',
           accelerator: 'CmdOrCtrl+N',
           click: () => mainWindow.webContents.send('menu:action', 'new-document'),
@@ -33,6 +38,17 @@ export function buildApplicationMenu(mainWindow: BrowserWindow): Menu {
           label: 'שמור בשם...',
           accelerator: 'CmdOrCtrl+Shift+S',
           click: () => mainWindow.webContents.send('menu:action', 'save-as'),
+        },
+        { type: 'separator' },
+        {
+          label: 'הגדרות המערכת...',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => mainWindow.webContents.send('menu:action', 'open-settings'),
+        },
+        {
+          label: 'החלף שפה וכיווניות (עברית/EN)...',
+          accelerator: 'Alt+Shift+L',
+          click: () => mainWindow.webContents.send('menu:action', 'toggle-lang'),
         },
         { type: 'separator' },
         {

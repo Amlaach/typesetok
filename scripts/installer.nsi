@@ -1,0 +1,75 @@
+; NSIS Modern User Interface
+; Multilingual TypesetOK Installer (Hebrew & English)
+
+!include "MUI2.nsh"
+!include "FileFunc.nsh"
+
+Name "TypesetOK"
+OutFile "..\dist\TypesetOK-v0.8.0-NSIS-Setup.exe"
+InstallDir "$PROGRAMFILES64\TypesetOK"
+InstallDirRegKey HKLM "Software\TypesetOK" "Install_Dir"
+RequestExecutionLevel admin
+
+; Interface Settings
+!define MUI_ABORTWARNING
+!define MUI_ICON "..\assets\icons\icon.ico"
+!define MUI_UNICON "..\assets\icons\icon.ico"
+
+; Language Selection Dialog
+!define MUI_LANGDLL_REGISTRY_ROOT "HKLM"
+!define MUI_LANGDLL_REGISTRY_KEY "Software\TypesetOK"
+!define MUI_LANGDLL_REGISTRY_VALUENAME "Installer Language"
+
+; Pages
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_LICENSE "..\LICENSE.md"
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!define MUI_FINISHPAGE_RUN "$INSTDIR\TypesetOK.exe"
+!insertmacro MUI_PAGE_FINISH
+
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+
+; Languages (Hebrew and English)
+!insertmacro MUI_LANGUAGE "Hebrew"
+!insertmacro MUI_LANGUAGE "English"
+
+; Setup functions
+Function .onInit
+  !insertmacro MUI_LANGDLL_DISPLAY
+FunctionEnd
+
+Section "TypesetOK Application (Required)" SecApp
+  SectionIn RO
+  SetOutPath "$INSTDIR"
+  File /r "..\dist\TypesetOK-v0.8.0-windows-x64\*.*"
+
+  ; Create shortcuts
+  CreateDirectory "$SMPROGRAMS\TypesetOK"
+  CreateShortcut "$SMPROGRAMS\TypesetOK\TypesetOK.lnk" "$INSTDIR\TypesetOK.exe"
+  CreateShortcut "$SMPROGRAMS\TypesetOK\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
+  CreateShortcut "$DESKTOP\TypesetOK.lnk" "$INSTDIR\TypesetOK.exe"
+
+  ; File Associations (.tok)
+  WriteRegStr HKCR ".tok" "" "TypesetOK.Document"
+  WriteRegStr HKCR "TypesetOK.Document" "" "TypesetOK Document"
+  WriteRegStr HKCR "TypesetOK.Document\shell\open\command" "" '"$INSTDIR\TypesetOK.exe" "%1"'
+
+  ; Write Uninstaller
+  WriteUninstaller "$INSTDIR\Uninstall.exe"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "DisplayName" "TypesetOK (TOK)"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "DisplayIcon" '"$INSTDIR\TypesetOK.exe"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "Publisher" "TypesetOK Team"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "DisplayVersion" "0.8.0"
+SectionEnd
+
+Section "Uninstall"
+  RMDir /r "$INSTDIR"
+  Delete "$DESKTOP\TypesetOK.lnk"
+  RMDir /r "$SMPROGRAMS\TypesetOK"
+  DeleteRegKey HKCR ".tok"
+  DeleteRegKey HKCR "TypesetOK.Document"
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK"
+SectionEnd

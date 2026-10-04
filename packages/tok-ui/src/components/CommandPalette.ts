@@ -33,6 +33,16 @@ export class CommandPalette {
     this.filter('');
   }
 
+  public registerItem(item: PaletteItem): void {
+    const existingIdx = this.items.findIndex(i => i.id === item.id);
+    if (existingIdx >= 0) {
+      this.items[existingIdx] = item;
+    } else {
+      this.items.push(item);
+    }
+    this.filter(this.inputEl ? this.inputEl.value : '');
+  }
+
   public show(): void {
     this.element.style.display = 'flex';
     this.isVisible = true;

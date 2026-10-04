@@ -5,6 +5,26 @@ export interface TokIpcBridge {
   onEvent: (callback: (event: unknown) => void) => () => void;
   renderPdf: (inputPath: string, outputPath: string) => Promise<string>;
   renderHtml: (inputPath: string, outputPath: string) => Promise<string>;
+
+  // Logger
+  getRecentLogs: () => Promise<string[]>;
+  openLogsFolder: () => Promise<boolean>;
+  cleanOldLogs: (days?: number) => Promise<number>;
+  setLogRetention: (days: number) => Promise<void>;
+
+  // Updater
+  checkForUpdates: () => Promise<unknown>;
+  openReleaseUrl: (url?: string) => Promise<void>;
+
+  // Plugins
+  getPlugins: () => Promise<unknown[]>;
+  togglePlugin: (pluginId: string, enabled: boolean) => Promise<boolean>;
+  openPluginsFolder: () => Promise<void>;
+  reloadPlugins: () => Promise<unknown[]>;
+
+  // System & Utilities
+  openExternal: (url: string) => Promise<void>;
+  getAppInfo: () => Promise<{ version: string; name: string }>;
 }
 
 const tokIpc: TokIpcBridge = {
@@ -31,6 +51,50 @@ const tokIpc: TokIpcBridge = {
   renderHtml: async (inputPath: string, outputPath: string) => {
     return await ipcRenderer.invoke('tok:render-html', { inputPath, outputPath });
   },
+
+  // Logger APIs
+  getRecentLogs: async () => {
+    return await ipcRenderer.invoke('tok:get-recent-logs');
+  },
+  openLogsFolder: async () => {
+    return await ipcRenderer.invoke('tok:open-logs-folder');
+  },
+  cleanOldLogs: async (days?: number) => {
+    return await ipcRenderer.invoke('tok:clean-old-logs', days);
+  },
+  setLogRetention: async (days: number) => {
+    return await ipcRenderer.invoke('tok:set-log-retention', days);
+  },
+
+  // Updater APIs
+  checkForUpdates: async () => {
+    return await ipcRenderer.invoke('tok:check-for-updates');
+  },
+  openReleaseUrl: async (url?: string) => {
+    return await ipcRenderer.invoke('tok:open-release-url', url);
+  },
+
+  // Plugin APIs
+  getPlugins: async () => {
+    return await ipcRenderer.invoke('tok:get-plugins');
+  },
+  togglePlugin: async (pluginId: string, enabled: boolean) => {
+    return await ipcRenderer.invoke('tok:toggle-plugin', { pluginId, enabled });
+  },
+  openPluginsFolder: async () => {
+    return await ipcRenderer.invoke('tok:open-plugins-folder');
+  },
+  reloadPlugins: async () => {
+    return await ipcRenderer.invoke('tok:reload-plugins');
+  },
+
+  // System
+  openExternal: async (url: string) => {
+    return await ipcRenderer.invoke('tok:open-external', url);
+  },
+  getAppInfo: async () => {
+    return await ipcRenderer.invoke('tok:get-app-info');
+  }
 };
 
 contextBridge.exposeInMainWorld('tokIpc', tokIpc);

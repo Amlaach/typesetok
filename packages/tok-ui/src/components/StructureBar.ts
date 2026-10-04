@@ -1,4 +1,5 @@
 import { MultiFlowItem, StyleToken, PageThumbnailItem } from '../types';
+import { t, i18n } from '../i18n';
 
 export interface StructureBarCallbacks {
   onSelectPage: (pageIndex: number) => void;
@@ -6,6 +7,8 @@ export interface StructureBarCallbacks {
   onSelectFlow: (flowId: string) => void;
   onSelectStyle: (styleId: string) => void;
   onToggleLayer: (layerId: string, visible: boolean) => void;
+  onOpenSettings?: () => void;
+  onOpenAbout?: () => void;
 }
 
 export class StructureBar {
@@ -15,6 +18,7 @@ export class StructureBar {
   private activePageIndex = 0;
   private activeFlowId = 'gemara';
   private pages: PageThumbnailItem[] = [];
+  private contentContainer!: HTMLElement;
 
   private flows: MultiFlowItem[] = [
     { id: 'gemara', name: 'גמרא (ראשי)', color: '#3B82F6', role: 'מרכז העמוד', wordCount: 2450, isActive: true },
@@ -43,15 +47,23 @@ export class StructureBar {
     this.callbacks = callbacks;
     this.element = document.createElement('aside');
     this.element.className = 'tok-structure-bar';
-    this.element.dir = 'rtl';
+    this.element.dir = i18n.getLanguage() === 'he' ? 'rtl' : 'ltr';
     this.element.style.width = 'var(--tok-structure-width)';
     this.element.style.minWidth = 'var(--tok-structure-width)';
     this.element.style.background = 'var(--tok-bg-surface-1)';
-    this.element.style.borderLeft = '1px solid var(--tok-border-subtle)';
+    this.element.style.borderLeft = i18n.getLanguage() === 'he' ? '1px solid var(--tok-border-subtle)' : 'none';
+    this.element.style.borderRight = i18n.getLanguage() === 'en' ? '1px solid var(--tok-border-subtle)' : 'none';
     this.element.style.display = 'flex';
     this.element.style.flexDirection = 'column';
     this.element.style.overflow = 'hidden';
     this.element.style.userSelect = 'none';
+
+    i18n.onChange((lang) => {
+      this.element.dir = lang === 'he' ? 'rtl' : 'ltr';
+      this.element.style.borderLeft = lang === 'he' ? '1px solid var(--tok-border-subtle)' : 'none';
+      this.element.style.borderRight = lang === 'en' ? '1px solid var(--tok-border-subtle)' : 'none';
+      this.render();
+    });
 
     this.render();
   }
@@ -74,36 +86,35 @@ export class StructureBar {
   private render(): void {
     this.element.innerHTML = '';
 
-    // Tab Bar Header
+    // 1. Tab Bar Header
     const tabHeader = document.createElement('div');
     tabHeader.style.display = 'flex';
     tabHeader.style.borderBottom = '1px solid var(--tok-border-subtle)';
     tabHeader.style.background = 'var(--tok-bg-app)';
+    tabHeader.style.flexShrink = '0';
 
     const tabs: { id: 'pages' | 'flows' | 'styles' | 'layers'; label: string; icon: string }[] = [
-      { id: 'pages', label: 'עמודים', icon: '📄' },
-      { id: 'flows', label: 'תזרימים', icon: '🌊' },
-      { id: 'styles', label: 'סגנונות', icon: '🔤' },
-      { id: 'layers', label: 'שכבות', icon: '📑' }
+      { id: 'pages', label: t('sidebarPages'), icon: '📄' },
+      { id: 'flows', label: t('sidebarFlows'), icon: '🌊' },
+      { id: 'styles', label: t('sidebarStyles'), icon: '🔤' },
+      { id: 'layers', label: t('sidebarLayers'), icon: '📑' }
     ];
 
-    for (const t of tabs) {
+    for (const tItem of tabs) {
       const tabBtn = document.createElement('button');
       tabBtn.style.flex = '1';
       tabBtn.style.padding = '8px 4px';
-      tabBtn.style.background = this.activeTab === t.id ? 'var(--tok-bg-surface-1)' : 'transparent';
-      tabBtn.style.color = this.activeTab === t.id ? '#FFFFFF' : 'var(--tok-text-secondary)';
+      tabBtn.style.background = this.activeTab === tItem.id ? 'var(--tok-bg-surface-1)' : 'transparent';
+      tabBtn.style.color = this.activeTab === tItem.id ? '#FFFFFF' : 'var(--tok-text-secondary)';
       tabBtn.style.border = 'none';
-      tabBtn.style.borderBottom = this.activeTab === t.id ? '2px solid var(--tok-accent-primary)' : '2px solid transparent';
+      tabBtn.style.borderBottom = this.activeTab === tItem.id ? '2px solid var(--tok-accent-primary)' : '2px solid transparent';
       tabBtn.style.cursor = 'pointer';
       tabBtn.style.fontSize = '11px';
-      tabBtn.style.fontWeight = this.activeTab === t.id ? '600' : 'normal';
-      tabBtn.style.fontFamily = 'inherit';
-      tabBtn.title = t.label;
-      tabBtn.textContent = `${t.icon} ${t.label}`;
+      tabBtn.style.fontWeight = this.activeTab === tItem.id ? '600' : 'normal';
+      tabBtn.innerHTML = `<span>${tItem.icon}</span> <span>${tItem.label}</span>`;
 
       tabBtn.addEventListener('click', () => {
-        this.activeTab = t.id;
+        this.activeTab = tItem.id;
         this.render();
       });
 
@@ -111,13 +122,94 @@ export class StructureBar {
     }
     this.element.appendChild(tabHeader);
 
-    // Body content wrapper
+    // 2. Tab Content Area (fills available space)
     const bodyWrapper = document.createElement('div');
     bodyWrapper.className = 'tok-structure-body';
     bodyWrapper.style.flex = '1';
     bodyWrapper.style.overflowY = 'auto';
     bodyWrapper.style.padding = '10px';
     this.element.appendChild(bodyWrapper);
+
+    // 3. Bottom Spacer & Bottom Section (Settings & About)
+    const bottomSection = document.createElement('div');
+    bottomSection.className = 'tok-structure-bottom';
+    bottomSection.style.flexShrink = '0';
+    bottomSection.style.borderTop = '1px solid var(--tok-border-subtle)';
+    bottomSection.style.background = 'var(--tok-bg-app)';
+    bottomSection.style.padding = '8px 10px';
+    bottomSection.style.display = 'flex';
+    bottomSection.style.flexDirection = 'column';
+    bottomSection.style.gap = '4px';
+
+    // Settings Button
+    const settingsBtn = document.createElement('button');
+    settingsBtn.className = 'tok-btn';
+    settingsBtn.style.width = '100%';
+    settingsBtn.style.height = '30px';
+    settingsBtn.style.display = 'flex';
+    settingsBtn.style.alignItems = 'center';
+    settingsBtn.style.justifyContent = 'flex-start';
+    settingsBtn.style.gap = '8px';
+    settingsBtn.style.fontSize = '12px';
+    settingsBtn.style.background = 'transparent';
+    settingsBtn.style.border = '1px solid transparent';
+    settingsBtn.style.color = 'var(--tok-text-secondary)';
+    settingsBtn.style.cursor = 'pointer';
+    settingsBtn.style.padding = '0 10px';
+    settingsBtn.style.borderRadius = '6px';
+    settingsBtn.style.transition = 'all 0.15s';
+    settingsBtn.innerHTML = `<span>⚙️</span><span>${t('sidebarSettings')}</span>`;
+
+    settingsBtn.addEventListener('mouseenter', () => {
+      settingsBtn.style.background = 'var(--tok-bg-surface-2)';
+      settingsBtn.style.color = '#FFFFFF';
+      settingsBtn.style.borderColor = 'var(--tok-border-subtle)';
+    });
+    settingsBtn.addEventListener('mouseleave', () => {
+      settingsBtn.style.background = 'transparent';
+      settingsBtn.style.color = 'var(--tok-text-secondary)';
+      settingsBtn.style.borderColor = 'transparent';
+    });
+    settingsBtn.addEventListener('click', () => {
+      if (this.callbacks.onOpenSettings) this.callbacks.onOpenSettings();
+    });
+    bottomSection.appendChild(settingsBtn);
+
+    // About Button
+    const aboutBtn = document.createElement('button');
+    aboutBtn.className = 'tok-btn';
+    aboutBtn.style.width = '100%';
+    aboutBtn.style.height = '30px';
+    aboutBtn.style.display = 'flex';
+    aboutBtn.style.alignItems = 'center';
+    aboutBtn.style.justifyContent = 'flex-start';
+    aboutBtn.style.gap = '8px';
+    aboutBtn.style.fontSize = '12px';
+    aboutBtn.style.background = 'transparent';
+    aboutBtn.style.border = '1px solid transparent';
+    aboutBtn.style.color = 'var(--tok-text-secondary)';
+    aboutBtn.style.cursor = 'pointer';
+    aboutBtn.style.padding = '0 10px';
+    aboutBtn.style.borderRadius = '6px';
+    aboutBtn.style.transition = 'all 0.15s';
+    aboutBtn.innerHTML = `<span>ℹ️</span><span>${t('sidebarAbout')}</span>`;
+
+    aboutBtn.addEventListener('mouseenter', () => {
+      aboutBtn.style.background = 'var(--tok-bg-surface-2)';
+      aboutBtn.style.color = '#FFFFFF';
+      aboutBtn.style.borderColor = 'var(--tok-border-subtle)';
+    });
+    aboutBtn.addEventListener('mouseleave', () => {
+      aboutBtn.style.background = 'transparent';
+      aboutBtn.style.color = 'var(--tok-text-secondary)';
+      aboutBtn.style.borderColor = 'transparent';
+    });
+    aboutBtn.addEventListener('click', () => {
+      if (this.callbacks.onOpenAbout) this.callbacks.onOpenAbout();
+    });
+    bottomSection.appendChild(aboutBtn);
+
+    this.element.appendChild(bottomSection);
 
     this.renderTabContent();
   }
