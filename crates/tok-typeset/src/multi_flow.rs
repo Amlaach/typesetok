@@ -43,11 +43,54 @@ pub struct DynamicTalmudPageResult {
     pub has_l_shape_expansion: bool,
 }
 
+/// Column a flow is placed in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FlowRole {
+    Main,
+    Rashi,
+    Tosafot,
+}
+
+impl FlowRole {
+    fn of(spec: &FlowGeometrySpec) -> Self {
+        if spec.flow_id.0 == "main" || spec.priority == 1 {
+            FlowRole::Main
+        } else if spec.flow_id.0.contains("rashi") || spec.priority == 2 {
+            FlowRole::Rashi
+        } else {
+            FlowRole::Tosafot
+        }
+    }
+}
+
+/// Clamps a length to a finite, non-negative value.
+fn non_negative(v: f32) -> f32 {
+    if v.is_finite() {
+        v.max(0.0)
+    } else {
+        0.0
+    }
+}
+
 pub struct MultiFlowSolver;
 
 impl MultiFlowSolver {
     pub const MAX_ITERATIONS: usize = 1000;
     pub const DEFAULT_GUTTER_PT: f32 = 12.0;
+    /// Minimum gap between Gemara bottom and the free space that triggers the L-shape.
+    const L_SHAPE_MIN_GAP_PT: f32 = 30.0;
+
+    fn margins(margin_inner_pt: f32, margin_outer_pt: f32, side: SpreadSide) -> (f32, f32) {
+        match side {
+            SpreadSide::Recto => (margin_inner_pt, margin_outer_pt),
+            SpreadSide::Verso => (margin_outer_pt, margin_inner_pt),
+        }
+    }
+
+    /// Gutter between columns, shrunk on pages too narrow for the default.
+    fn gutter_for(content_width: f32) -> f32 {
+        Self::DEFAULT_GUTTER_PT.min(content_width * 0.05)
+    }
 
     /// Solves the geometric partitioning for a classic Talmudic page layout:
     /// Center: Main Gemara text
@@ -78,6 +121,9 @@ impl MultiFlowSolver {
     ///   Inner margin = Left (Rashi), Outer margin = Right (Tosafot).
     /// - Verso (Left page): Spine is on the RIGHT.
     ///   Inner margin = Right (Rashi), Outer margin = Left (Tosafot).
+    ///
+    /// Widths and heights are never negative, and the columns plus gutters
+    /// always fit in the content width.
     pub fn solve_talmud_spread(
         page_width_pt: f32,
         page_height_pt: f32,
@@ -91,89 +137,52 @@ impl MultiFlowSolver {
             return Vec::new();
         }
 
-        let (margin_left, margin_right) = match side {
-            SpreadSide::Recto => (margin_inner_pt, margin_outer_pt),
-            SpreadSide::Verso => (margin_outer_pt, margin_inner_pt),
+        let (margin_left, margin_right) = Self::margins(margin_inner_pt, margin_outer_pt, side);
+        let content_width = non_negative(page_width_pt - margin_left - margin_right);
+        let content_height = non_negative(page_height_pt - 2.0 * margin_y_pt);
+
+        let alloc = |flow_id: &FlowId, x: f32, w: f32| SolvedFlowAllocation {
+            flow_id: flow_id.clone(),
+            allocated_x_pt: x,
+            allocated_y_pt: margin_y_pt,
+            allocated_width_pt: w,
+            allocated_height_pt: content_height,
         };
 
-        let content_width = page_width_pt - margin_left - margin_right;
-        let content_height = page_height_pt - 2.0 * margin_y_pt;
-
         if flows.len() == 1 {
-            return vec![SolvedFlowAllocation {
-                flow_id: flows[0].flow_id.clone(),
-                allocated_x_pt: margin_left,
-                allocated_y_pt: margin_y_pt,
-                allocated_width_pt: content_width,
-                allocated_height_pt: content_height,
-            }];
+            return vec![alloc(&flows[0].flow_id, margin_left, content_width)];
         }
 
-        let gutter = Self::DEFAULT_GUTTER_PT;
-        let available_cols_width = (content_width - 2.0 * gutter).max(50.0);
+        let gutter = Self::gutter_for(content_width);
+        let available_cols_width = content_width - 2.0 * gutter;
 
         let rashi_width = available_cols_width * 0.28;
         let main_width = available_cols_width * 0.40;
         let tosafot_width = available_cols_width * 0.32;
 
-        let mut allocations = Vec::new();
-
-        // Determine column placement depending on spread side
         // On Verso (Left page): [Tosafot (Left)] [Gutter] [Gemara (Center)] [Gutter] [Rashi (Right)]
         // On Recto (Right page): [Rashi (Left)] [Gutter] [Gemara (Center)] [Gutter] [Tosafot (Right)]
-        let (left_flow_role, _right_flow_role) = match side {
-            SpreadSide::Verso => ("tosafot", "rashi"),
-            SpreadSide::Recto => ("rashi", "tosafot"),
-        };
-
         let (left_w, right_w) = match side {
             SpreadSide::Verso => (tosafot_width, rashi_width),
             SpreadSide::Recto => (rashi_width, tosafot_width),
         };
-
         let x_left = margin_left;
         let x_center = x_left + left_w + gutter;
         let x_right = x_center + main_width + gutter;
 
-        for f in flows {
-            if f.flow_id.0 == "main" || f.priority == 1 {
-                allocations.push(SolvedFlowAllocation {
-                    flow_id: f.flow_id.clone(),
-                    allocated_x_pt: x_center,
-                    allocated_y_pt: margin_y_pt,
-                    allocated_width_pt: main_width,
-                    allocated_height_pt: content_height,
-                });
-            } else if f.flow_id.0.contains("rashi") || f.priority == 2 {
-                let (x, w) = if left_flow_role == "rashi" {
-                    (x_left, left_w)
-                } else {
-                    (x_right, right_w)
+        flows
+            .iter()
+            .map(|f| {
+                let (x, w) = match (FlowRole::of(f), side) {
+                    (FlowRole::Main, _) => (x_center, main_width),
+                    (FlowRole::Rashi, SpreadSide::Recto)
+                    | (FlowRole::Tosafot, SpreadSide::Verso) => (x_left, left_w),
+                    (FlowRole::Rashi, SpreadSide::Verso)
+                    | (FlowRole::Tosafot, SpreadSide::Recto) => (x_right, right_w),
                 };
-                allocations.push(SolvedFlowAllocation {
-                    flow_id: f.flow_id.clone(),
-                    allocated_x_pt: x,
-                    allocated_y_pt: margin_y_pt,
-                    allocated_width_pt: w,
-                    allocated_height_pt: content_height,
-                });
-            } else {
-                let (x, w) = if left_flow_role == "tosafot" {
-                    (x_left, left_w)
-                } else {
-                    (x_right, right_w)
-                };
-                allocations.push(SolvedFlowAllocation {
-                    flow_id: f.flow_id.clone(),
-                    allocated_x_pt: x,
-                    allocated_y_pt: margin_y_pt,
-                    allocated_width_pt: w,
-                    allocated_height_pt: content_height,
-                });
-            }
-        }
-
-        allocations
+                alloc(&f.flow_id, x, w)
+            })
+            .collect()
     }
 
     /// Solves dynamic Talmud layout with L-shaped commentary expansion below Gemara
@@ -190,21 +199,18 @@ impl MultiFlowSolver {
         gemara_target_height_pt: Option<f32>,
         footnote_target_height_pt: Option<f32>,
     ) -> DynamicTalmudPageResult {
-        let (margin_left, margin_right) = match side {
-            SpreadSide::Recto => (margin_inner_pt, margin_outer_pt),
-            SpreadSide::Verso => (margin_outer_pt, margin_inner_pt),
-        };
+        let (margin_left, margin_right) = Self::margins(margin_inner_pt, margin_outer_pt, side);
 
-        let content_width = page_width_pt - margin_left - margin_right;
-        let mut available_height = page_height_pt - 2.0 * margin_y_pt;
-        let gutter = Self::DEFAULT_GUTTER_PT;
+        let content_width = non_negative(page_width_pt - margin_left - margin_right);
+        let mut available_height = non_negative(page_height_pt - 2.0 * margin_y_pt);
+        let gutter = Self::gutter_for(content_width);
 
         // 1. Allocate Floating Footnotes at bottom
-        let footnote_allocation = if let Some(fn_height) = footnote_target_height_pt {
-            if fn_height > 0.0 {
+        let footnote_allocation = match footnote_target_height_pt.map(non_negative) {
+            Some(fn_height) if fn_height > 0.0 => {
                 let actual_fn_height = fn_height.min(available_height * 0.40);
                 let fn_y = margin_y_pt + available_height - actual_fn_height;
-                available_height -= actual_fn_height + gutter;
+                available_height = non_negative(available_height - actual_fn_height - gutter);
 
                 Some(SolvedFlowAllocation {
                     flow_id: FlowId::new("footnote"),
@@ -213,11 +219,8 @@ impl MultiFlowSolver {
                     allocated_width_pt: content_width,
                     allocated_height_pt: actual_fn_height,
                 })
-            } else {
-                None
             }
-        } else {
-            None
+            _ => None,
         };
 
         // 2. Compute 3-column allocation
@@ -231,34 +234,39 @@ impl MultiFlowSolver {
             side,
         );
 
-        // 3. Dynamic L-Shaped expansion if Gemara ends before the bottom
+        // 3. Dynamic L-Shaped expansion if Gemara ends before the bottom and
+        //    there is a commentary to flow into the freed space.
+        let main_index = flows.iter().position(|f| FlowRole::of(f) == FlowRole::Main);
+        let has_commentary = flows.iter().any(|f| FlowRole::of(f) != FlowRole::Main);
         let mut has_l_shape = false;
-        let gemara_h = if let Some(target_h) = gemara_target_height_pt {
-            let actual_gemara_h = target_h.min(available_height);
-            // If Gemara finishes at least 20% before available height
-            if actual_gemara_h < available_height - 30.0 {
-                if let Some(gemara_alloc) = allocations.iter_mut().find(|a| a.flow_id.0 == "main") {
-                    gemara_alloc.allocated_height_pt = actual_gemara_h;
+        let gemara_h = match gemara_target_height_pt {
+            Some(target_h) => {
+                let actual_gemara_h = non_negative(target_h).min(available_height);
+                if actual_gemara_h < available_height - Self::L_SHAPE_MIN_GAP_PT {
+                    if let (Some(main_index), true) = (main_index, has_commentary) {
+                        let gemara_alloc = &mut allocations[main_index];
+                        gemara_alloc.allocated_height_pt = actual_gemara_h;
+                        let (gx, gw) =
+                            (gemara_alloc.allocated_x_pt, gemara_alloc.allocated_width_pt);
+
+                        // Commentary continues in the space freed under the
+                        // Gemara column (classic Tzurat HaDaf), without
+                        // overlapping the side columns.
+                        let expansion_y = margin_y_pt + actual_gemara_h + gutter;
+                        let expansion_h = non_negative(available_height - actual_gemara_h - gutter);
+                        allocations.push(SolvedFlowAllocation {
+                            flow_id: FlowId::new("rashi_expansion"),
+                            allocated_x_pt: gx,
+                            allocated_y_pt: expansion_y,
+                            allocated_width_pt: gw,
+                            allocated_height_pt: expansion_h,
+                        });
+                        has_l_shape = true;
+                    }
                 }
-
-                // Expand Rashi or Tosafot into the lower space under Gemara
-                let expansion_y = margin_y_pt + actual_gemara_h + gutter;
-                let expansion_h = (available_height - actual_gemara_h - gutter).max(10.0);
-
-                // Add lower wide expansion block for Rashi (classic Tzurat HaDaf)
-                allocations.push(SolvedFlowAllocation {
-                    flow_id: FlowId::new("rashi_expansion"),
-                    allocated_x_pt: margin_left + content_width * 0.25,
-                    allocated_y_pt: expansion_y,
-                    allocated_width_pt: content_width * 0.50,
-                    allocated_height_pt: expansion_h,
-                });
-
-                has_l_shape = true;
+                actual_gemara_h
             }
-            actual_gemara_h
-        } else {
-            available_height
+            None => available_height,
         };
 
         DynamicTalmudPageResult {
@@ -274,32 +282,31 @@ impl MultiFlowSolver {
 mod tests {
     use super::*;
 
+    fn spec(id: &str, priority: u8) -> FlowGeometrySpec {
+        FlowGeometrySpec {
+            flow_id: FlowId::new(id),
+            priority,
+            min_width_pt: 50.0,
+            max_width_pt: 300.0,
+            target_height_pt: 500.0,
+        }
+    }
+
+    fn talmud_flows() -> Vec<FlowGeometrySpec> {
+        vec![spec("main", 1), spec("rashi", 2), spec("tosafot", 3)]
+    }
+
+    fn overlaps(a: &SolvedFlowAllocation, b: &SolvedFlowAllocation) -> bool {
+        let eps = 1e-3;
+        a.allocated_x_pt + eps < b.allocated_x_pt + b.allocated_width_pt
+            && b.allocated_x_pt + eps < a.allocated_x_pt + a.allocated_width_pt
+            && a.allocated_y_pt + eps < b.allocated_y_pt + b.allocated_height_pt
+            && b.allocated_y_pt + eps < a.allocated_y_pt + a.allocated_height_pt
+    }
+
     #[test]
     fn test_multi_flow_partitioning() {
-        let flows = vec![
-            FlowGeometrySpec {
-                flow_id: FlowId::new("main"),
-                priority: 1,
-                min_width_pt: 100.0,
-                max_width_pt: 300.0,
-                target_height_pt: 500.0,
-            },
-            FlowGeometrySpec {
-                flow_id: FlowId::new("rashi"),
-                priority: 2,
-                min_width_pt: 50.0,
-                max_width_pt: 150.0,
-                target_height_pt: 500.0,
-            },
-            FlowGeometrySpec {
-                flow_id: FlowId::new("tosafot"),
-                priority: 3,
-                min_width_pt: 50.0,
-                max_width_pt: 150.0,
-                target_height_pt: 500.0,
-            },
-        ];
-
+        let flows = talmud_flows();
         let allocs = MultiFlowSolver::solve_talmud_page(595.0, 842.0, 36.0, 36.0, &flows, 0.03);
         assert_eq!(allocs.len(), 3);
         let content_width = 595.0 - 72.0;
@@ -315,13 +322,7 @@ mod tests {
 
     #[test]
     fn test_multi_flow_single_flow() {
-        let flows = vec![FlowGeometrySpec {
-            flow_id: FlowId::new("main"),
-            priority: 1,
-            min_width_pt: 100.0,
-            max_width_pt: 500.0,
-            target_height_pt: 700.0,
-        }];
+        let flows = vec![spec("main", 1)];
         let allocations =
             MultiFlowSolver::solve_talmud_page(595.0, 842.0, 42.52, 56.69, &flows, 0.1);
         assert_eq!(allocations.len(), 1);
@@ -329,29 +330,7 @@ mod tests {
 
     #[test]
     fn test_talmud_facing_spreads_recto_verso() {
-        let flows = vec![
-            FlowGeometrySpec {
-                flow_id: FlowId::new("main"),
-                priority: 1,
-                min_width_pt: 100.0,
-                max_width_pt: 300.0,
-                target_height_pt: 500.0,
-            },
-            FlowGeometrySpec {
-                flow_id: FlowId::new("rashi"),
-                priority: 2,
-                min_width_pt: 50.0,
-                max_width_pt: 150.0,
-                target_height_pt: 500.0,
-            },
-            FlowGeometrySpec {
-                flow_id: FlowId::new("tosafot"),
-                priority: 3,
-                min_width_pt: 50.0,
-                max_width_pt: 150.0,
-                target_height_pt: 500.0,
-            },
-        ];
+        let flows = talmud_flows();
 
         // Recto (Right page): Rashi should be on the LEFT (inner margin near spine)
         let recto = MultiFlowSolver::solve_talmud_spread(
@@ -384,29 +363,7 @@ mod tests {
 
     #[test]
     fn test_dynamic_talmud_l_shape_and_footnotes() {
-        let flows = vec![
-            FlowGeometrySpec {
-                flow_id: FlowId::new("main"),
-                priority: 1,
-                min_width_pt: 100.0,
-                max_width_pt: 300.0,
-                target_height_pt: 500.0,
-            },
-            FlowGeometrySpec {
-                flow_id: FlowId::new("rashi"),
-                priority: 2,
-                min_width_pt: 50.0,
-                max_width_pt: 150.0,
-                target_height_pt: 500.0,
-            },
-            FlowGeometrySpec {
-                flow_id: FlowId::new("tosafot"),
-                priority: 3,
-                min_width_pt: 50.0,
-                max_width_pt: 150.0,
-                target_height_pt: 500.0,
-            },
-        ];
+        let flows = talmud_flows();
 
         // Gemara finishes at 300 pt (out of 770 pt available height)
         // Footnote needs 80 pt
@@ -433,5 +390,121 @@ mod tests {
             .allocations
             .iter()
             .any(|a| a.flow_id.0 == "rashi_expansion"));
+    }
+
+    /// Regression: the expansion box spanned 25%-75% of the page and overlapped
+    /// the full-height side columns.
+    #[test]
+    fn l_shape_expansion_overlaps_nothing() {
+        for side in [SpreadSide::Recto, SpreadSide::Verso] {
+            let result = MultiFlowSolver::solve_talmud_dynamic_with_footnotes(
+                595.0,
+                842.0,
+                40.0,
+                30.0,
+                36.0,
+                &talmud_flows(),
+                side,
+                Some(300.0),
+                Some(80.0),
+            );
+            assert!(result.has_l_shape_expansion);
+            let mut all = result.allocations.clone();
+            all.extend(result.footnote_allocation.clone());
+            for (i, a) in all.iter().enumerate() {
+                for b in &all[i + 1..] {
+                    assert!(!overlaps(a, b), "{:?} overlaps {:?}", a.flow_id, b.flow_id);
+                }
+            }
+        }
+    }
+
+    /// Regression: a main flow identified by priority (not by the id "main")
+    /// kept its full height while the expansion was drawn on top of it.
+    #[test]
+    fn l_shape_shrinks_main_flow_found_by_priority() {
+        let flows = vec![spec("gemara", 1), spec("rashi", 2), spec("tosafot", 3)];
+        let result = MultiFlowSolver::solve_talmud_dynamic_with_footnotes(
+            595.0,
+            842.0,
+            36.0,
+            36.0,
+            36.0,
+            &flows,
+            SpreadSide::Recto,
+            Some(200.0),
+            None,
+        );
+        let gemara = result
+            .allocations
+            .iter()
+            .find(|a| a.flow_id.0 == "gemara")
+            .unwrap();
+        assert_eq!(gemara.allocated_height_pt, 200.0);
+        assert!(result.has_l_shape_expansion);
+    }
+
+    #[test]
+    fn no_expansion_without_commentary() {
+        for flows in [vec![], vec![spec("main", 1)]] {
+            let result = MultiFlowSolver::solve_talmud_dynamic_with_footnotes(
+                595.0,
+                842.0,
+                36.0,
+                36.0,
+                36.0,
+                &flows,
+                SpreadSide::Recto,
+                Some(100.0),
+                None,
+            );
+            assert!(!result.has_l_shape_expansion);
+            assert!(result
+                .allocations
+                .iter()
+                .all(|a| a.flow_id.0 != "rashi_expansion"));
+        }
+    }
+
+    #[test]
+    fn degenerate_pages_produce_no_negative_sizes() {
+        let cases = [
+            (100.0, 100.0, 60.0, 60.0, 60.0),
+            (20.0, 900.0, 5.0, 5.0, 10.0),
+            (595.0, 842.0, 36.0, 36.0, f32::NAN),
+        ];
+        for (w, h, mi, mo, my) in cases {
+            let result = MultiFlowSolver::solve_talmud_dynamic_with_footnotes(
+                w,
+                h,
+                mi,
+                mo,
+                my,
+                &talmud_flows(),
+                SpreadSide::Verso,
+                Some(-50.0),
+                Some(10_000.0),
+            );
+            for a in result.allocations.iter().chain(&result.footnote_allocation) {
+                assert!(a.allocated_width_pt >= 0.0, "{a:?}");
+                assert!(a.allocated_height_pt >= 0.0, "{a:?}");
+            }
+            assert!(result.gemara_height_pt >= 0.0);
+        }
+        // Narrow page: columns and gutters still fit inside the content box.
+        let allocs = MultiFlowSolver::solve_talmud_spread(
+            60.0,
+            400.0,
+            5.0,
+            5.0,
+            10.0,
+            &talmud_flows(),
+            SpreadSide::Recto,
+        );
+        let right = allocs
+            .iter()
+            .map(|a| a.allocated_x_pt + a.allocated_width_pt)
+            .fold(0.0f32, f32::max);
+        assert!(right <= 55.0 + 1e-3, "right edge {right}");
     }
 }

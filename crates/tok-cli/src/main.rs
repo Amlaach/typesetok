@@ -88,7 +88,8 @@ fn handle_render_pdf(input: &str, output: &str) -> Result<(), Box<dyn std::error
         custom_font_data: None,
     };
 
-    let pdf_bytes = PdfPrePressEngine::export_pdf(&pages, &options);
+    let pdf_bytes =
+        PdfPrePressEngine::export_pdf_with_fonts(&pages, &options, &engine.font_manager)?;
     fs::write(output, &pdf_bytes)?;
     let pdf_dur = start_pdf.elapsed();
     println!(
@@ -129,13 +130,34 @@ fn handle_render_html(input: &str, output: &str) -> Result<(), Box<dyn std::erro
 }
 
 fn handle_benchmark(pages_target: usize) -> Result<(), Box<dyn std::error::Error>> {
+    if pages_target == 0 {
+        return Err("--pages must be at least 1".into());
+    }
     println!("================================================================================");
     println!("  TypesetOK (TOK) - Phase 6 Stress Test & Performance Benchmark (Gate 1)");
     println!("================================================================================");
     println!("Target Page Count: {}", pages_target);
 
-    // Estimate paragraphs needed: ~3-4 paragraphs per page
-    let total_paragraphs = pages_target * 4;
+    let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
+
+    // Calibrate the corpus size on a sample so the run really produces about
+    // `pages_target` pages (the corpus cycles through a few fixed texts).
+    const SAMPLE_PARAGRAPHS: usize = 100;
+    let sample = engine.typeset_document(create_sample_hebrew_document(SAMPLE_PARAGRAPHS).root());
+    let sample_lines: usize = sample
+        .iter()
+        .flat_map(|p| &p.frames)
+        .map(|f| f.lines.len())
+        .sum();
+    let lines_per_page = sample
+        .first()
+        .map(|p| p.frames.iter().map(|f| f.lines.len()).sum::<usize>())
+        .unwrap_or(1)
+        .max(1);
+    let lines_per_paragraph = (sample_lines as f64 / SAMPLE_PARAGRAPHS as f64).max(1e-3);
+    let total_paragraphs = ((pages_target * lines_per_page) as f64 / lines_per_paragraph)
+        .ceil()
+        .max(1.0) as usize;
     println!(
         "Generating synthetic holy text corpus ({} paragraphs with full Niqqud)...",
         total_paragraphs
@@ -143,8 +165,6 @@ fn handle_benchmark(pages_target: usize) -> Result<(), Box<dyn std::error::Error
     let gen_start = Instant::now();
     let doc = create_sample_hebrew_document(total_paragraphs);
     println!("Corpus generated in {:.2?}", gen_start.elapsed());
-
-    let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
 
     // 1. Full Document Typeset Benchmark
     println!("\n[Benchmark 1: Full Document Typesetting]");
@@ -178,17 +198,17 @@ fn handle_benchmark(pages_target: usize) -> Result<(), Box<dyn std::error::Error
         actual_pages
     );
 
-    let cascade_start = Instant::now();
     // In TOK's architecture, editing a paragraph requires re-breaking only until line count converges
-    let mut modified_root = (*doc.root()).clone();
-    let target_para = &mut modified_root.sections[0]
-        .main_flow_mut()
-        .unwrap()
-        .paragraphs[40];
+    let mut target_para = doc.root().sections[0]
+        .main_flow()
+        .and_then(|flow| flow.paragraphs.get(40).or(flow.paragraphs.last()))
+        .ok_or("benchmark corpus has no paragraphs")?
+        .clone();
+    let cascade_start = Instant::now();
     target_para.text.push_str(" הֶסְבֵּר נוֹסָף לְפֵרוּשׁ רַשִׁ\"י הַקָּדוֹשׁ.");
 
     // Typeset modified single paragraph
-    let _rebroken = engine.typeset_paragraph(target_para, 453.55, 11.0, 14.5);
+    let _rebroken = engine.typeset_paragraph(&target_para, 453.55, 11.0, 14.5);
     let cascade_dur = cascade_start.elapsed();
 
     println!("  - Re-breaking & Justification Time: {:.3?}", cascade_dur);
@@ -215,9 +235,12 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
     let doc = create_sample_hebrew_document(50);
     let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
 
+    let fonts = &engine.font_manager;
+
     // Pass 1
     let pages1 = engine.typeset_document(doc.root());
-    let pdf1 = PdfPrePressEngine::export_pdf(&pages1, &PdfExportOptions::default());
+    let pdf1 =
+        PdfPrePressEngine::export_pdf_with_fonts(&pages1, &PdfExportOptions::default(), fonts)?;
     let html1 = HtmlProjectionCompiler::compile_to_html(&pages1, 210.0, 297.0);
 
     let mut hasher1 = Sha256::new();
@@ -230,7 +253,8 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
 
     // Pass 2
     let pages2 = engine.typeset_document(doc.root());
-    let pdf2 = PdfPrePressEngine::export_pdf(&pages2, &PdfExportOptions::default());
+    let pdf2 =
+        PdfPrePressEngine::export_pdf_with_fonts(&pages2, &PdfExportOptions::default(), fonts)?;
     let html2 = HtmlProjectionCompiler::compile_to_html(&pages2, 210.0, 297.0);
 
     let mut hasher2 = Sha256::new();
@@ -246,15 +270,15 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Pass 1 HTML SHA-256: {}", html_hash1);
     println!("  Pass 2 HTML SHA-256: {}", html_hash2);
 
-    assert_eq!(
-        pdf_hash1, pdf_hash2,
-        "PDF outputs must be bit-for-bit identical"
-    );
-    assert_eq!(
-        html_hash1, html_hash2,
-        "HTML outputs must be bit-for-bit identical"
-    );
-    assert_eq!(pages1.len(), pages2.len(), "Page counts must be identical");
+    if pdf_hash1 != pdf_hash2 {
+        return Err("PDF outputs must be bit-for-bit identical".into());
+    }
+    if html_hash1 != html_hash2 {
+        return Err("HTML outputs must be bit-for-bit identical".into());
+    }
+    if pages1 != pages2 {
+        return Err("Layouts must be identical".into());
+    }
 
     println!("  [SUCCESS] Bit-for-bit absolute determinism verified across all pipelines!");
     Ok(())
@@ -277,14 +301,23 @@ fn handle_inspect_package(input: &str) -> Result<(), Box<dyn std::error::Error>>
         .sum();
     println!("  Total Paragraphs: {}", total_paras);
     println!("  Embedded Assets:  {}", pkg.assets.len());
-    for asset in pkg.assets.keys() {
+    let mut asset_names: Vec<&String> = pkg.assets.keys().collect();
+    asset_names.sort();
+    for asset in asset_names {
         println!("    - assets/{}", asset);
     }
     println!("  Page Previews:    {}", pkg.previews.len());
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         print_usage();
@@ -309,7 +342,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "benchmark-typeset" => {
             let mut pages = 1000;
             if args.len() >= 4 && args[2] == "--pages" {
-                pages = args[3].parse().unwrap_or(1000);
+                pages = match args[3].parse() {
+                    Ok(n) => n,
+                    Err(_) => {
+                        eprintln!("Invalid --pages value: {}", args[3]);
+                        std::process::exit(1);
+                    }
+                };
             }
             handle_benchmark(pages)?;
         }

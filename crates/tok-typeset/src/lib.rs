@@ -18,7 +18,7 @@ pub use geometry::{
 };
 pub use hebrew_justify::{HebrewJustifier, JustificationTier, JustifiedLine, AHALTERM_LETTERS};
 pub use hit_test::{HitTestResult, HitTester};
-pub use knuth_plass::{BrokenLine, KnuthPlassBreaker, LayoutItem, LineBreak};
+pub use knuth_plass::{BrokenLine, KnuthPlassBreaker, LayoutItem, LineSpan};
 pub use multi_flow::{
     DynamicTalmudPageResult, FlowGeometrySpec, MultiFlowSolver, SolvedFlowAllocation, SpreadSide,
 };
