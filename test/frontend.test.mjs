@@ -113,6 +113,52 @@ describe('Canvas Overlay & Optimistic RTL Advance (Section 9.2)', () => {
     assert.equal(rects.length, 1);
     assert.equal(rects[0].width, 250);
   });
+
+  test('Interactive drag selection computes normalized bounding box', () => {
+    const dragStart = { x: 350, y: 120 };
+    const dragCurrent = { x: 200, y: 150 };
+
+    const minX = Math.min(dragStart.x, dragCurrent.x);
+    const maxX = Math.max(dragStart.x, dragCurrent.x);
+    const minY = Math.min(dragStart.y, dragCurrent.y);
+    const maxY = Math.max(dragStart.y, dragCurrent.y);
+
+    const selection = {
+      pageIndex: 0,
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY
+    };
+
+    assert.equal(selection.x, 200);
+    assert.equal(selection.y, 120);
+    assert.equal(selection.width, 150);
+    assert.equal(selection.height, 30);
+  });
+
+  test('Spatial hit-test snapped coordinate calculation', () => {
+    const lineBoxes = [
+      { baselineY: 50, height: 16, glyphs: [{ x: 100, width: 20 }, { x: 120, width: 25 }] },
+      { baselineY: 80, height: 16, glyphs: [{ x: 100, width: 15 }, { x: 115, width: 30 }] }
+    ];
+
+    function snapToLine(clickY) {
+      let closest = lineBoxes[0];
+      let minDiff = Math.abs(closest.baselineY - clickY);
+      for (const line of lineBoxes) {
+        const diff = Math.abs(line.baselineY - clickY);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closest = line;
+        }
+      }
+      return closest;
+    }
+
+    const clickedLine = snapToLine(75);
+    assert.equal(clickedLine.baselineY, 80);
+  });
 });
 
 describe('Build Artifacts & Distribution Packaging', () => {
