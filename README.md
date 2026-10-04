@@ -144,7 +144,14 @@ cargo build --workspace
 cargo test --workspace
 ```
 
-### Launch Desktop Workbench (Electron + UI Shell)
+### 📥 הרצה ישירה ללא התקנה מוקדמת (Portable Desktop Binary)
+למשתמשי Windows המעוניינים להריץ את התוכנה ישירות ללא צורך בהתקנת Node.js או Rust:
+1. הורידו את `TypesetOK-v0.6.0-windows-desktop-app.zip` מתוך דף ה-[GitHub Releases](https://github.com/TypesetOK/typesetok/releases/tag/v0.6.0).
+2. חלצו את קובץ ה-ZIP.
+3. הפעילו ישירות בלחיצה כפולה את `TypesetOK.exe`.
+(התוכנה מגיעה כחבילת Standalone עצמאית הכוללת את מעטפת ה-UI, מנוע ה-Electron, ובינארי ה-CLI המובנה).
+
+### Launch Desktop Workbench (Development Environment)
 ```bash
 # Install frontend dependencies
 npm install
@@ -152,8 +159,11 @@ npm install
 # Build all TypeScript packages and bundle UI
 npm run build
 
-# Run frontend test suite (13 passing tests)
+# Run frontend test suite (15 passing tests)
 npm test
+
+# Build Standalone Desktop App bundle
+npm run package:desktop
 
 # Launch TypesetOK Desktop Application
 npm start
