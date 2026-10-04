@@ -63,7 +63,7 @@ impl MigrationPipeline {
 
     fn parse_semver(v: &str) -> Result<(u32, u32, u32), StorageError> {
         let parts: Vec<&str> = v.split('.').collect();
-        if parts.len() < 3 {
+        if parts.len() != 3 {
             return Err(StorageError::SchemaVersionMismatch {
                 expected: "x.y.z format".to_string(),
                 found: v.to_string(),

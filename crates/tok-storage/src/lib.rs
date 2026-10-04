@@ -6,6 +6,7 @@
 //! - `TokBook`: Multi-document coordinator for complex multi-volume holy books.
 //! - `MigrationPipeline`: Forward/backward schema compatibility.
 
+mod atomic;
 pub mod book;
 pub mod error;
 pub mod migration;
@@ -177,6 +178,13 @@ mod tests {
     fn test_migration_invalid_version() {
         let result = MigrationPipeline::validate_version("invalid");
         assert!(result.is_err(), "Invalid version string must return error");
+    }
+
+    #[test]
+    fn test_migration_rejects_extra_version_parts() {
+        assert!(MigrationPipeline::validate_version("1.0.0").is_ok());
+        assert!(MigrationPipeline::validate_version("1.0.0.7").is_err());
+        assert!(MigrationPipeline::validate_version("1.0").is_err());
     }
 
     #[test]
