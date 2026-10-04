@@ -264,7 +264,10 @@ pub fn parse_pdf_date(s: &str) -> Option<Date> {
                     let tz_rest = &tz_part[1..];
                     if let Some(colon_pos) = tz_rest.find(':') {
                         let tz_h: i8 = tz_rest[..colon_pos].parse().ok()?;
-                        let tz_m: u8 = tz_rest[colon_pos + 1..colon_pos + 1 + 2.min(tz_rest.len() - colon_pos - 1)].parse().ok()?;
+                        let tz_m: u8 = tz_rest
+                            [colon_pos + 1..colon_pos + 1 + 2.min(tz_rest.len() - colon_pos - 1)]
+                            .parse()
+                            .ok()?;
                         date = date.utc_offset_hour(sign * tz_h).utc_offset_minute(tz_m);
                     } else if tz_rest.len() >= 2 {
                         let tz_h: i8 = tz_rest[..2].parse().ok()?;
@@ -275,7 +278,12 @@ pub fn parse_pdf_date(s: &str) -> Option<Date> {
                 }
             }
         } else {
-            date = date.hour(0).minute(0).second(0).utc_offset_hour(0).utc_offset_minute(0);
+            date = date
+                .hour(0)
+                .minute(0)
+                .second(0)
+                .utc_offset_hour(0)
+                .utc_offset_minute(0);
         }
         return Some(date);
     }
@@ -506,7 +514,8 @@ impl PdfPrePressEngine {
             id_hash = fnv1a(id_hash, &content[content.len().saturating_sub(256)..]);
             if options.compress_streams {
                 let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&content, 6);
-                pdf.stream(content_id, &compressed).filter(Filter::FlateDecode);
+                pdf.stream(content_id, &compressed)
+                    .filter(Filter::FlateDecode);
             } else {
                 pdf.stream(content_id, &content);
             }
@@ -560,12 +569,7 @@ impl PdfPrePressEngine {
         Ok(pdf.finish())
     }
 
-    fn write_font(
-        pdf: &mut Pdf,
-        subset: &SubsetFontResult,
-        ids: [Ref; 5],
-        compress: bool,
-    ) {
+    fn write_font(pdf: &mut Pdf, subset: &SubsetFontResult, ids: [Ref; 5], compress: bool) {
         let [type0_font_id, cid_font_id, descriptor_id, font_file_id, tounicode_id] = ids;
         let base_font = Name(subset.font_name.as_bytes());
 
@@ -845,7 +849,10 @@ mod tests {
         assert!(s.contains("/CIDFontType2"), "Must embed CIDFont Type 2");
         assert!(s.contains("/FontDescriptor"), "Must embed FontDescriptor");
         assert!(s.contains("/Identity-H"), "Must use Identity-H encoding");
-        assert!(s.contains("/Filter /FlateDecode"), "Must use FlateDecode compression");
+        assert!(
+            s.contains("/Filter /FlateDecode"),
+            "Must use FlateDecode compression"
+        );
         let decompressed = decompress_flate_streams(&bytes);
         let bt_count: usize = decompressed.iter().map(|st| count(st, b"BT\n")).sum();
         assert_eq!(bt_count, 1);
@@ -975,7 +982,10 @@ mod tests {
         let d_tz = parse_pdf_date("2026-10-04T20:14:37+02:00").unwrap();
         let mut buf_tz = Vec::new();
         pdf_writer::Primitive::write(d_tz, &mut buf_tz);
-        assert_eq!(std::str::from_utf8(&buf_tz).unwrap(), "(D:20261004201437+02'00)");
+        assert_eq!(
+            std::str::from_utf8(&buf_tz).unwrap(),
+            "(D:20261004201437+02'00)"
+        );
 
         let d_pdf = parse_pdf_date("D:20261004201437Z").unwrap();
         assert_eq!(d, d_pdf);

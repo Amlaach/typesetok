@@ -474,7 +474,12 @@ impl TypesettingEngine {
                 .paragraph_styles
                 .iter()
                 .find(|s| s.id == p.style_id)
-                .map(|style| (style.space_before_pt.max(0.0), style.space_after_pt.max(0.0)))
+                .map(|style| {
+                    (
+                        style.space_before_pt.max(0.0),
+                        style.space_after_pt.max(0.0),
+                    )
+                })
                 .unwrap_or((0.0, 0.0));
 
             if p_lines.is_empty() {
@@ -797,9 +802,21 @@ mod tests {
         doc.paragraph_styles = vec![s1, s2, s3];
 
         let flow = doc.sections[0].main_flow_mut().unwrap();
-        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p1"), "s1", "פסקה אחת"));
-        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p2"), "s2", "פסקה שתיים"));
-        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p3"), "s3", "פסקה שלוש"));
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("p1"),
+            "s1",
+            "פסקה אחת",
+        ));
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("p2"),
+            "s2",
+            "פסקה שתיים",
+        ));
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("p3"),
+            "s3",
+            "פסקה שלוש",
+        ));
 
         let pages = engine().typeset_document(&doc);
         assert_eq!(pages.len(), 1);
@@ -833,7 +850,11 @@ mod tests {
         doc.paragraph_styles = vec![style];
 
         let flow = doc.sections[0].main_flow_mut().unwrap();
-        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p1"), "styled", "פסקה ראשונה בעמוד"));
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("p1"),
+            "styled",
+            "פסקה ראשונה בעמוד",
+        ));
 
         let pages = engine().typeset_document(&doc);
         assert_eq!(pages.len(), 1);
@@ -871,9 +892,21 @@ mod tests {
         doc.paragraph_styles = vec![s1, s_empty, s2];
 
         let flow = doc.sections[0].main_flow_mut().unwrap();
-        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p01"), "s1", "פסקה ראשונה"));
-        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p02"), "s_empty", ""));
-        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p03"), "s2", "פסקה שנייה"));
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("p01"),
+            "s1",
+            "פסקה ראשונה",
+        ));
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("p02"),
+            "s_empty",
+            "",
+        ));
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("p03"),
+            "s2",
+            "פסקה שנייה",
+        ));
 
         let pages = engine().typeset_document(&doc);
         let lines = &pages[0].frames[0].lines;

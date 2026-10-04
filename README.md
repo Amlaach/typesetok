@@ -6,8 +6,8 @@
 ### תוכנת עימוד שולחנית מקצועית בקוד פתוח | Open-Source Professional Desktop Publishing (DTP) System
 
 [![CI Build](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml/badge.svg)](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/Version-0.7.3-blue.svg)]()
-[![Tests](https://img.shields.io/badge/Tests-80%2F80%20Passing-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/Version-0.8.0-blue.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-183%2F183%20Passing-brightgreen.svg)]()
 [![Electron](https://img.shields.io/badge/Electron-29.4%2B-blue.svg?logo=electron)](https://www.electronjs.org)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
 [![Standard](https://img.shields.io/badge/Standard-ת"י%206100%20(SI%206100)-blue.svg)]()
@@ -68,6 +68,7 @@ graph TD
 #### 2. טיפוגרפיה, ניקוד ועימוד עברי (`tok-typeset`)
 - **נרמול קפדני לפי ת"י 6100 (SI 6100):** אכיפת סדר יוניקוד דטרמיניסטי: `אות בסיס ← נקודת שין/שין ← דגש/מפיק ← ניקוד ← מתג ← טעמי מקרא`.
 - **מנוע שבירת שורות Knuth-Plass:** אופטימיזציה דינמית למזעור פגמים (Demerits) לאורך הפסקה, מניעת שורות רפויות ויתומות.
+- **מרווחי פסקאות ו-Margin Collapsing:** תמיכה מלאה ב-`space_before` ו-`space_after` ברמת הפסקה עם קריסת מרווחים (Margin Collapsing) תקנית בין פסקאות, איפוס מרווח בראש עמוד, מניעת גלישת רווח במעבר עמודים, וקריסה חכמה של פסקאות ריקות.
 - **יישור עברי תלת-שלבי (3-Tier Hebrew Justification):**
   1. *רווחי מילים (Tier 1):* מתיחה מבוקרת (80% עד 130%).
   2. *אותיות התפשטות אהלתר"ם (Tier 2):* זיהוי אותיות מתרחבות (א, ה, ל, ת, ר, ם) והרחבתן הטיפוגרפית.
@@ -77,6 +78,8 @@ graph TD
 
 #### 3. מנוע קדם-דפוס נייטיב (`tok-pdf`)
 - **תאימות ISO 15930 (PDF/X-1a:2001 ו-PDF/X-4):** שחור `100% K` (DeviceCMYK), תמיכה בצבעי ספוט (Spot/Pantone), והזרקת פרופילי Fogra 39 / Fogra 51.
+- **דחיסת זרמים FlateDecode:** דחיסת zlib FlateDecode מובנית לזרמי תוכן עמודים (`/Contents`), גופני TrueType (`/FontFile2`) וטבלאות מיפוי `/ToUnicode` לפלט PDF קומפקטי.
+- **מטא-נתונים ותאריכים דטרמיניסטיים:** חילוץ `CreationDate` ו-`ModDate` מתוך ה-Manifest של המסמך בהתאם לתקן, תוך שמירה מוחלטת על שחזור ביט-אחר-ביט דטרמיניסטי.
 - **תיבות דפוס מקצועיות וסימני חיתוך:** יצירת MediaBox, BleedBox (3 מ"מ), TrimBox, CropBox וציור וקטורי של צלבי רישום וסימני חיתוך.
 - **טבלאות `/ToUnicode`:** שיבוץ טבלאות מיפוי PostScript המבטיחות חיפוש, הדגשה והעתקת טקסט מנוקד ללא שיבושים.
 
@@ -108,8 +111,8 @@ typesetok/
 │
 ├── crates/                          # Rust Engine Crates (100% Tested)
 │   ├── tok-core/                    # Semantic Document AST, ULID, Fractional Index, SI 6100, Transactions
-│   ├── tok-typeset/                 # Knuth-Plass Line Breaking, 3-Tier Hebrew Justification, Gematria, Bidi
-│   ├── tok-pdf/                     # ISO PDF/X-1a & PDF/X-4 Native Engine, ToUnicode CMaps, HTML Export
+│   ├── tok-typeset/                 # Knuth-Plass Line Breaking, Paragraph Margins, 3-Tier Hebrew Justification, Bidi
+│   ├── tok-pdf/                     # ISO PDF/X Pre-Press Engine, FlateDecode Compression, Deterministic Dates, HTML Export
 │   ├── tok-storage/                 # ACID WAL Storage (redb), Atomic Safe-Save (.tok), Multi-Doc (.tokbook)
 │   ├── tok-ipc/                     # Binary Framed IPC Schema & Geometry Hit-Testing
 │   ├── tok-plugin-host/             # Sandboxed Extension Host (catch_unwind), Holy Name Guardian, GREP
@@ -190,13 +193,16 @@ cargo run -p tok-cli -- inspect-package document.tok
 
 ---
 
-## 📊 Verification & Benchmark Status (v0.7.0)
+## 📊 Verification & Benchmark Status (v0.8.0)
 
 | Metric | Architectural Target | Actual Result | Status |
-| :--- | :--- | :--- | :---: |
-| **Rust Engine Tests** | 100% Pass Across All 7 Crates | **65 / 65 Tests Passing** | **PASSED** |
+| :--- | :--- | :--- | :--- |
+| **Rust Engine Tests** | 100% Pass Across All 7 Crates | **160 / 160 Tests Passing** | **PASSED** |
 | **Frontend Shell Tests** | Gematria, Virtualizer, Tokens & Interaction Triad | **23 / 23 Tests Passing** | **PASSED** |
-| **Total Automated Tests** | Rust + TypeScript CI Matrix | **88 / 88 Tests Passing** | **PASSED** |
+| **Total Automated Tests** | Rust + TypeScript CI Matrix | **183 / 183 Tests Passing** | **PASSED** |
+| **Stream Compression** | zlib FlateDecode for Contents, Fonts & CMaps | **Enabled (Smaller PDF Output)** | **PASSED** |
+| **Deterministic Dates** | Manifest Timestamps in PDF/X Metadata | **Pass 1 Hash == Pass 2 Hash** | **PASSED** |
+| **Margin Collapsing** | Paragraph Space Before / After Collapsing | **Full Top/Bottom/Split Collapsing** | **PASSED** |
 | **TrueType Font Subsetting** | TrueType OpenType Subsetting in PDF | **Identity-H & /ToUnicode** | **PASSED** |
 | **Spatial Hit-Testing** | Sub-pixel glyph snap & selection range | **100% RTL & Bidi Coordinated** | **PASSED** |
 | **Talmud Tzurat HaDaf** | L-Shape expansion & Recto/Verso spreads | **Tested & Validated** | **PASSED** |

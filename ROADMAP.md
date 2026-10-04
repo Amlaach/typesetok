@@ -1,5 +1,5 @@
 # מפת קוד ויעדי פיתוח — TypesetOK (TOK) Code Map & Roadmap
-**גרסה נוכחית:** v0.7.3  
+**גרסה נוכחית:** v0.8.0  
 **תאריך עדכון:** אוקטובר 2026
 
 ---
@@ -20,7 +20,7 @@ crates/
 │
 ├── tok-typeset/                 # מנוע העימוד, הטיפוגרפיה והחישוב המרחבי
 │   ├── src/bidi.rs              # חלוקת ריצות BiDi וכיווניות ימין-לשמאל
-│   ├── src/engine.rs            # מתאם העימוד המרכזי וחלוקה לעמודים (TypesettingEngine)
+│   ├── src/engine.rs            # מתאם העימוד המרכזי, מרווחי פסקאות עם Margin Collapsing וחלוקה לעמודים
 │   ├── src/font.rs              # ניהול גופני TrueType/OpenType ועיצוב rustybuzz/HarfBuzz
 │   ├── src/gematria.rs          # גימטריה דטרמיניסטית עם תווי גרש/גרשיים וטבלת טאבו
 │   ├── src/geometry.rs          # תיבות פריסה: PageLayoutBox, TextFrameBox, LineBox, GlyphBox
@@ -35,7 +35,7 @@ crates/
 │   ├── src/color.rs             # תמיכה ב-DeviceCMYK וצבעי ספוט
 │   ├── src/font_subsetter.rs    # גזירת תת-קבוצות גופנים TrueType/OpenType Subsetting
 │   ├── src/html_projection.rs   # מחולל Pre-paginated HTML לתצוגת דפדפן ו-Vivliostyle
-│   ├── src/pdf_engine.rs        # פולט PDF/X-1a תקני עם Identity-H וסימני חיתוך
+│   ├── src/pdf_engine.rs        # פולט PDF/X תקני: דחיסת FlateDecode, תאריכי Manifest דטרמיניסטיים וסימני חיתוך
 │   └── src/tounicode.rs         # מפות CMap /ToUnicode להעתקה וחיפוש של טקסט מנוקד
 │
 ├── tok-storage/                 # מנוע אחסון עמיד קריסות ופורמט .tok
