@@ -146,8 +146,7 @@ export class SettingsModal {
       const on = this.activeTab === tab.id;
       const b = el('button', 'tok-settings-nav-btn', {
         type: 'button', role: 'tab', 'aria-selected': String(on), tabindex: on ? '0' : '-1',
-        'aria-controls': 'tok-settings-panel', 'data-focus-key': `tab-${tab.id}`,
-        'data-autofocus': on ? '' : undefined
+        'aria-controls': 'tok-settings-panel', 'data-focus-key': `tab-${tab.id}`
       });
       b.appendChild(icon(tab.icon, 17));
       b.appendChild(el('span', undefined, undefined, tab.label));

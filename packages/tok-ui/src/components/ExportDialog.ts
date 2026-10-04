@@ -256,7 +256,7 @@ export class ExportDialog {
     foot.appendChild(button(t('exportGo'), {
       className: 'tok-btn tok-btn-primary',
       icon: 'upload',
-      attrs: { 'data-focus-key': 'export', 'data-autofocus': '' },
+      attrs: { 'data-focus-key': 'export' },
       onClick: () => {
         let name = o.fileName.trim() || defaultExportFileName(this.context.documentTitle);
         if (!/\.pdf$/i.test(name)) name += '.pdf';

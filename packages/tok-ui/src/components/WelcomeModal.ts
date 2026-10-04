@@ -213,7 +213,7 @@ export class WelcomeModal {
     firstRun.appendChild(button(t('demoProject'), {
       className: 'tok-btn tok-btn-primary',
       icon: 'sparkle',
-      attrs: { 'data-focus-key': 'demo', 'data-autofocus': '' },
+      attrs: { 'data-focus-key': 'demo' },
       onClick: () => {
         this.hide();
         this.callbacks.onLoadDemo();

@@ -98,7 +98,7 @@ export class AboutModal {
     foot.appendChild(el('span', 'tok-grow'));
     foot.appendChild(button(t('aboutClose'), {
       className: 'tok-btn tok-btn-primary',
-      attrs: { 'data-focus-key': 'close', 'data-autofocus': '' },
+      attrs: { 'data-focus-key': 'close' },
       onClick: () => this.hide()
     }));
     card.appendChild(foot);

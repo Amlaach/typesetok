@@ -99,6 +99,8 @@ export class SpreadCanvas {
   private pages: PageDescriptor[] = [];
   private selectedFrameId: string | null = null;
   private innerContainer!: HTMLElement;
+  /** Takes the scaled size of the pages so the scroll area matches what is drawn. */
+  private zoomBox!: HTMLElement;
   private zoomPill!: HTMLElement;
   private zoomValue!: HTMLButtonElement;
   private lastReportedPage = -1;
@@ -192,10 +194,12 @@ export class SpreadCanvas {
   public setZoom(zoom: number): void {
     this.zoomPercent = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round(zoom)));
     if (this.innerContainer) {
-      // CSS `zoom` (unlike `transform: scale`) changes the layout size, so the scroll
-      // area grows/shrinks with the pages and every part of a zoomed page stays reachable.
-      this.innerContainer.style.transform = '';
-      this.innerContainer.style.setProperty('zoom', String(this.zoomPercent / 100));
+      // transform: scale (not CSS `zoom`): Chromium before v128 (Electron 29) reports
+      // wrong element positions inside a `zoom`ed box, which sent "go to page" and the
+      // current-page tracking to the wrong page whenever the zoom was not 100%.
+      // The zoom box gets the scaled size so the whole page stays scrollable.
+      this.innerContainer.style.transform = `scale(${this.zoomPercent / 100})`;
+      this.updateZoomBox();
     }
     if (this.zoomValue) {
       this.zoomValue.textContent = `${this.zoomPercent}%`;
@@ -241,8 +245,17 @@ export class SpreadCanvas {
   private renderContainer(): void {
     this.scroller.innerHTML = '';
     this.scroller.setAttribute('aria-label', t('canvasAria'));
+    this.zoomBox = el('div', 'tok-zoom-box');
     this.innerContainer = el('div', 'tok-spreads-wrapper');
-    this.scroller.appendChild(this.innerContainer);
+    this.zoomBox.appendChild(this.innerContainer);
+    this.scroller.appendChild(this.zoomBox);
+  }
+
+  /** offsetWidth/Height are the unscaled layout size (transforms don't change them). */
+  private updateZoomBox(): void {
+    const z = this.zoomPercent / 100;
+    this.zoomBox.style.width = `${this.innerContainer.offsetWidth * z}px`;
+    this.zoomBox.style.height = `${this.innerContainer.offsetHeight * z}px`;
   }
 
   private renderZoomPill(): void {
@@ -283,6 +296,7 @@ export class SpreadCanvas {
       this.innerContainer.appendChild(spreadRow);
     }
 
+    this.updateZoomBox();
     this.updateGuides();
   }
 
@@ -468,7 +482,7 @@ export class SpreadCanvas {
   private bindEvents(): void {
     // Canvas background click clears selection.
     this.scroller.addEventListener('click', (e) => {
-      if (e.target === this.scroller || e.target === this.innerContainer) {
+      if (e.target === this.scroller || e.target === this.innerContainer || e.target === this.zoomBox) {
         this.clearFrameSelection();
         this.callbacks.onSelectionModeChange('zero');
         this.callbacks.onDismissActionHud();

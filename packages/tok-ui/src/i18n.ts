@@ -272,9 +272,9 @@ export const strings: Translations = {
   aboutTitle: { he: 'אודות TypesetOK', en: 'About TypesetOK' },
   aboutVersionLabel: { he: 'גרסה', en: 'Version' },
   aboutCoreLabel: { he: 'מנוע עימוד', en: 'Typesetting engine' },
-  aboutRustVersion: { he: 'Rust Native (אלגוריתם Knuth-Plass ויישור אהלתר״ם)', en: 'Rust Native (Knuth-Plass & Ahalterm Justifier)' },
+  aboutRustVersion: { he: 'Rust · שבירת שורות Knuth-Plass ויישור אהלת״ם', en: 'Rust Native (Knuth-Plass & Ahalterm Justifier)' },
   aboutShellLabel: { he: 'מעטפת', en: 'Desktop shell' },
-  aboutShellValue: { he: 'Electron + Chromium Pre-Press Platform', en: 'Electron + Chromium Pre-Press Platform' },
+  aboutShellValue: { he: 'Electron ו-Chromium', en: 'Electron + Chromium Pre-Press Platform' },
   aboutGithubBtn: { he: 'מאגר הפרויקט ב-GitHub', en: 'Project on GitHub' },
   aboutClose: { he: 'סגירה', en: 'Close' },
 

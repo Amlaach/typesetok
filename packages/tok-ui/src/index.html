@@ -136,6 +136,7 @@
 
     /* Keyboard focus is always visible; mouse clicks don't draw rings. */
     :focus { outline: none; }
+    [data-modal-title]:focus, [data-modal-title]:focus-visible { outline: none; }
     :focus-visible { outline: 2px solid var(--tok-border-focus); outline-offset: 2px; border-radius: 4px; }
     .tok-enhanced-focus :focus-visible { outline-width: 3px; outline-offset: 3px; box-shadow: 0 0 0 6px var(--tok-accent-soft); }
 
@@ -328,7 +329,7 @@
     .tok-rail-btn:hover { background: var(--tok-bg-surface-hover); color: var(--tok-text-primary); }
     .tok-rail-btn[aria-pressed="true"] { background: var(--tok-accent-soft); color: var(--tok-accent-text); }
     .tok-rail-spacer { flex: 1; }
-    .tok-structure-bottom { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .tok-structure-bottom { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 8px; border-top: 1px solid var(--tok-border-subtle); width: 52px; }
 
     .tok-structure-bar {
       width: var(--tok-structure-width); min-width: var(--tok-structure-width); flex: none;
@@ -382,7 +383,8 @@
        Canvas & pages
        ========================================================================== */
     .tok-canvas-container { flex: 1; min-width: 0; position: relative; overflow: auto; background: var(--tok-bg-canvas); display: flex; flex-direction: column; align-items: flex-start; padding: 40px 40px 96px; }
-    .tok-spreads-wrapper { display: flex; flex-direction: column; gap: 48px; margin-inline: auto; }
+    .tok-zoom-box { position: relative; flex: none; margin-inline: auto; }
+    .tok-spreads-wrapper { position: absolute; top: 0; left: 0; transform-origin: 0 0; display: flex; flex-direction: column; gap: 48px; }
     .tok-spread-row { display: flex; position: relative; box-shadow: var(--tok-shadow-page); }
     .tok-spread-row.tok-single { box-shadow: none; }
     .tok-spread-row.tok-single .tok-page-sheet { box-shadow: var(--tok-shadow-page); }
