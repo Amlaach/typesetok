@@ -70,8 +70,15 @@ impl Flow {
     }
 
     pub fn add_paragraph(&mut self, p: ParagraphNode) {
-        self.paragraphs.push(p);
-        self.paragraphs.sort_by(|a, b| a.index.cmp(&b.index));
+        if self.paragraphs.is_sorted_by(|a, b| a.index <= b.index) {
+            // O(n) insertion after any paragraphs with an equal index
+            // (same placement as push + stable sort).
+            let pos = self.paragraphs.partition_point(|q| q.index <= p.index);
+            self.paragraphs.insert(pos, p);
+        } else {
+            self.paragraphs.push(p);
+            self.paragraphs.sort_by(|a, b| a.index.cmp(&b.index));
+        }
     }
 }
 
