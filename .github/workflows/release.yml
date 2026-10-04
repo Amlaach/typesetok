@@ -17,56 +17,50 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  CARGO_BUILD_TARGET_DIR: target
 
 jobs:
   # ──────────────────────────────────────────────
   # 1. Build tok-cli native binaries for all platforms
   # ──────────────────────────────────────────────
   build-binaries:
-    name: Build Binary (${{ matrix.target }})
+    name: Build Binary (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
             binary_name: tok-cli
-            asset_name: tok-cli-v0.6.0-x86_64-unknown-linux-gnu.tar.gz
+            asset_name: tok-cli-v0.6.0-linux-x64.tar.gz
           - os: windows-latest
-            target: x86_64-pc-windows-msvc
             binary_name: tok-cli.exe
-            asset_name: tok-cli-v0.6.0-x86_64-pc-windows-msvc.zip
+            asset_name: tok-cli-v0.6.0-windows-x64.zip
           - os: macos-latest
-            target: x86_64-apple-darwin
             binary_name: tok-cli
-            asset_name: tok-cli-v0.6.0-x86_64-apple-darwin.tar.gz
+            asset_name: tok-cli-v0.6.0-macos.tar.gz
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Build tok-cli (Release)
-        run: cargo build --release -p tok-cli --target ${{ matrix.target }}
+        run: cargo build --release -p tok-cli
 
       - name: Package binary (Unix)
         if: matrix.os != 'windows-latest'
         run: |
-          cd target/${{ matrix.target }}/release
-          tar -czvf ../../../${{ matrix.asset_name }} ${{ matrix.binary_name }}
-          cd ../../..
+          tar -czvf ${{ matrix.asset_name }} -C target/release ${{ matrix.binary_name }}
 
       - name: Package binary (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          Compress-Archive -Path target/${{ matrix.target }}/release/${{ matrix.binary_name }} -DestinationPath ${{ matrix.asset_name }}
+          Compress-Archive -Path target/release/${{ matrix.binary_name }} -DestinationPath ${{ matrix.asset_name }}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -152,7 +146,7 @@ jobs:
             - **100% כיסוי בדיקות:** 65 בדיקות Rust ו-15 בדיקות Frontend (סה"כ 80/80 בדיקות עוברות).
 
             ### 📦 קבצים להורדה (Pre-built Binaries):
-            - **Windows (x64):** `tok-cli-v0.6.0-x86_64-pc-windows-msvc.zip`
-            - **Linux (x64):** `tok-cli-v0.6.0-x86_64-unknown-linux-gnu.tar.gz`
-            - **macOS (x64):** `tok-cli-v0.6.0-x86_64-apple-darwin.tar.gz`
+            - **Windows (x64):** `tok-cli-v0.6.0-windows-x64.zip`
+            - **Linux (x64):** `tok-cli-v0.6.0-linux-x64.tar.gz`
+            - **macOS:** `tok-cli-v0.6.0-macos.tar.gz`
             - **Desktop UI Workbench Bundle:** `typesetok-desktop-workbench-v0.6.0.tar.gz`
