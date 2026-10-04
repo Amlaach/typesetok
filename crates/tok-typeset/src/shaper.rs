@@ -5,8 +5,8 @@
 //! - OpenType GPOS/GSUB features: `mark`, `mkmk`, `kern`, `liga`, `ccmp`
 //! - Full support for TrueType and OpenType fonts
 
+use rustybuzz::ttf_parser::Tag;
 use rustybuzz::{BufferClusterLevel, Direction, Face, Feature, UnicodeBuffer};
-use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PositionedGlyph {
@@ -47,20 +47,24 @@ impl TextShaper {
         buffer.push_str(text);
 
         // Standard OpenType typography features
-        let features = [
-            Feature::from_str("kern=1").unwrap(),
-            Feature::from_str("liga=1").unwrap(),
-            Feature::from_str("mark=1").unwrap(),
-            Feature::from_str("mkmk=1").unwrap(),
-            Feature::from_str("ccmp=1").unwrap(),
-        ];
+        let features = [b"kern", b"liga", b"mark", b"mkmk", b"ccmp"]
+            .map(|tag| Feature::new(Tag::from_bytes(tag), 1, ..));
 
         let glyph_buffer = rustybuzz::shape(face, &features, buffer);
         let infos = glyph_buffer.glyph_infos();
         let positions = glyph_buffer.glyph_positions();
 
-        let upem = face.units_per_em() as f32;
-        let scale = font_size_pt / upem;
+        let upem = face.units_per_em();
+        let scale = if upem <= 0 {
+            0.0
+        } else {
+            font_size_pt / upem as f32
+        };
+
+        // Cluster boundaries, to find the source text of each cluster.
+        let mut boundaries: Vec<u32> = infos.iter().map(|i| i.cluster).collect();
+        boundaries.sort_unstable();
+        boundaries.dedup();
 
         let mut glyphs = Vec::with_capacity(infos.len());
         let mut total_width_pt = 0.0;
@@ -74,7 +78,22 @@ impl TextShaper {
             total_width_pt += x_adv;
 
             // rustybuzz clusters are UTF-8 byte offsets, not Unicode scalar indices.
-            let character = cluster_character(text, info.cluster);
+            // A grapheme cluster holds a base letter and its marks; attribute each
+            // glyph to the character it encodes (so niqqud glyphs report the mark,
+            // not their base letter), falling back to the cluster's first character
+            // for ligatures and other substituted glyphs.
+            let start = info.cluster as usize;
+            let end = boundaries
+                .get(boundaries.partition_point(|&b| b <= info.cluster))
+                .map_or(text.len(), |&b| b as usize);
+            let character = text
+                .get(start..end)
+                .and_then(|cluster_text| {
+                    cluster_text.chars().find(|&c| {
+                        face.glyph_index(c).map(|g| u32::from(g.0)) == Some(info.glyph_id)
+                    })
+                })
+                .or_else(|| cluster_character(text, info.cluster));
 
             glyphs.push(PositionedGlyph {
                 glyph_id: info.glyph_id,
@@ -150,6 +169,31 @@ mod tests {
         }
         assert_eq!(cluster_character(text, 2), None);
         assert_eq!(cluster_character(text, text.len() as u32), None);
+    }
+
+    /// Regression: every glyph of a grapheme cluster reported the base letter,
+    /// so PDF ToUnicode mapped niqqud glyphs to duplicate letters.
+    #[test]
+    fn mark_glyphs_report_their_own_character() {
+        let mgr = crate::font::FontManager::default();
+        let font = mgr.get_font("Noto Serif Hebrew").unwrap();
+        let face = font.shaping_face().unwrap();
+        let run = TextShaper::shape_with_face(&face, "אָלֶף", 12.0, true);
+        let chars: Vec<char> = run.glyphs.iter().filter_map(|g| g.character).collect();
+        for expected in ['א', '\u{05B8}', 'ל', '\u{05B6}', 'ף'] {
+            assert_eq!(
+                chars.iter().filter(|&&c| c == expected).count(),
+                1,
+                "{expected:?} in {chars:?}"
+            );
+        }
+        // Clusters stay grapheme-based: the mark shares its letter's cluster.
+        let qamats = run
+            .glyphs
+            .iter()
+            .find(|g| g.character == Some('\u{05B8}'))
+            .unwrap();
+        assert_eq!(qamats.cluster, 0);
     }
 
     #[test]

@@ -1,3 +1,4 @@
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tok_core::anchor::TextAnchor;
 use tok_core::id::NodeId;
@@ -122,69 +123,143 @@ impl From<serde_json::Error> for IpcError {
 
 pub const MAX_MESSAGE_SIZE: u32 = 64 * 1024 * 1024;
 
-/// Binary message framing (4-byte length prefix + payload).
+/// Length of the little-endian `u32` frame header.
+pub const FRAME_HEADER_LEN: usize = 4;
+
+/// Binary message framing (4-byte little-endian length prefix + JSON payload).
 pub struct MessageFramer;
 
 impl MessageFramer {
-    pub fn encode_command(cmd: &IpcCommand) -> Result<Vec<u8>, IpcError> {
-        let payload = serde_json::to_vec(cmd)?;
-        if payload.len() > u32::MAX as usize {
-            return Err(IpcError::PayloadTooLarge);
-        }
-        let len = payload.len() as u32;
+    fn encode<T: Serialize>(value: &T) -> Result<Vec<u8>, IpcError> {
+        let payload = serde_json::to_vec(value)?;
+        let len = u32::try_from(payload.len()).map_err(|_| IpcError::PayloadTooLarge)?;
         if len > MAX_MESSAGE_SIZE {
             return Err(IpcError::MessageTooLarge);
         }
-        let mut framed = Vec::with_capacity(4 + payload.len());
+        let mut framed = Vec::with_capacity(FRAME_HEADER_LEN + payload.len());
         framed.extend_from_slice(&len.to_le_bytes());
         framed.extend_from_slice(&payload);
         Ok(framed)
+    }
+
+    /// Splits the first complete frame off a byte stream.
+    ///
+    /// Returns `Ok(None)` while the frame is still incomplete (read more
+    /// bytes), `Ok(Some((payload, consumed)))` once it is complete, and an
+    /// error as soon as the header announces a frame above
+    /// [`MAX_MESSAGE_SIZE`], before any of it has to be buffered.
+    pub fn split_frame(bytes: &[u8]) -> Result<Option<(&[u8], usize)>, IpcError> {
+        let Some(header) = bytes.first_chunk::<FRAME_HEADER_LEN>() else {
+            return Ok(None);
+        };
+        let len = u32::from_le_bytes(*header);
+        if len > MAX_MESSAGE_SIZE {
+            return Err(IpcError::MessageTooLarge);
+        }
+        let end = FRAME_HEADER_LEN + len as usize;
+        Ok(bytes
+            .get(FRAME_HEADER_LEN..end)
+            .map(|payload| (payload, end)))
+    }
+
+    /// Decodes the frame at the start of `bytes`. Bytes after the frame are
+    /// ignored; use [`MessageFramer::split_frame`] to consume a stream.
+    fn decode<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, IpcError> {
+        match Self::split_frame(bytes)? {
+            Some((payload, _)) => Ok(serde_json::from_slice(payload)?),
+            None => Err(IpcError::InvalidLength),
+        }
+    }
+
+    pub fn encode_command(cmd: &IpcCommand) -> Result<Vec<u8>, IpcError> {
+        Self::encode(cmd)
     }
 
     pub fn decode_command(bytes: &[u8]) -> Result<IpcCommand, IpcError> {
-        if bytes.len() < 4 {
-            return Err(IpcError::InvalidLength);
-        }
-        let mut len_bytes = [0u8; 4];
-        len_bytes.copy_from_slice(&bytes[0..4]);
-        let len = u32::from_le_bytes(len_bytes);
-        if len > MAX_MESSAGE_SIZE {
-            return Err(IpcError::MessageTooLarge);
-        }
-        if bytes.len() - 4 < len as usize {
-            return Err(IpcError::InvalidLength);
-        }
-        Ok(serde_json::from_slice(&bytes[4..4 + len as usize])?)
+        Self::decode(bytes)
     }
 
     pub fn encode_event(evt: &IpcEvent) -> Result<Vec<u8>, IpcError> {
-        let payload = serde_json::to_vec(evt)?;
-        if payload.len() > u32::MAX as usize {
-            return Err(IpcError::PayloadTooLarge);
-        }
-        let len = payload.len() as u32;
-        if len > MAX_MESSAGE_SIZE {
-            return Err(IpcError::MessageTooLarge);
-        }
-        let mut framed = Vec::with_capacity(4 + payload.len());
-        framed.extend_from_slice(&len.to_le_bytes());
-        framed.extend_from_slice(&payload);
-        Ok(framed)
+        Self::encode(evt)
     }
 
     pub fn decode_event(bytes: &[u8]) -> Result<IpcEvent, IpcError> {
-        if bytes.len() < 4 {
-            return Err(IpcError::InvalidLength);
+        Self::decode(bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn frame(len: u32, payload: &[u8]) -> Vec<u8> {
+        let mut v = len.to_le_bytes().to_vec();
+        v.extend_from_slice(payload);
+        v
+    }
+
+    #[test]
+    fn oversized_header_is_rejected_before_buffering() {
+        let bytes = frame(MAX_MESSAGE_SIZE + 1, b"");
+        assert!(matches!(
+            MessageFramer::decode_command(&bytes),
+            Err(IpcError::MessageTooLarge)
+        ));
+        assert!(matches!(
+            MessageFramer::split_frame(&bytes),
+            Err(IpcError::MessageTooLarge)
+        ));
+        assert!(matches!(
+            MessageFramer::decode_event(&frame(u32::MAX, b"{}")),
+            Err(IpcError::MessageTooLarge)
+        ));
+    }
+
+    #[test]
+    fn short_and_truncated_frames() {
+        for bytes in [&[][..], &[1, 0][..], &[5, 0, 0, 0, b'{'][..]] {
+            assert!(matches!(
+                MessageFramer::decode_event(bytes),
+                Err(IpcError::InvalidLength)
+            ));
+            assert!(MessageFramer::split_frame(bytes).unwrap().is_none());
         }
-        let mut len_bytes = [0u8; 4];
-        len_bytes.copy_from_slice(&bytes[0..4]);
-        let len = u32::from_le_bytes(len_bytes);
-        if len > MAX_MESSAGE_SIZE {
-            return Err(IpcError::MessageTooLarge);
-        }
-        if bytes.len() - 4 < len as usize {
-            return Err(IpcError::InvalidLength);
-        }
-        Ok(serde_json::from_slice(&bytes[4..4 + len as usize])?)
+        // Zero-length payload is a complete (but invalid JSON) frame.
+        assert!(matches!(
+            MessageFramer::decode_event(&frame(0, b"")),
+            Err(IpcError::Serialization(_))
+        ));
+    }
+
+    #[test]
+    fn stream_of_frames_is_split_exactly() {
+        let a = MessageFramer::encode_event(&IpcEvent::Error {
+            code: 1,
+            message: "א".to_string(),
+        })
+        .unwrap();
+        let b =
+            MessageFramer::encode_command(&IpcCommand::QueryGeometry { page_index: 7 }).unwrap();
+        let mut stream = a.clone();
+        stream.extend_from_slice(&b);
+
+        let (payload, used) = MessageFramer::split_frame(&stream).unwrap().unwrap();
+        assert_eq!(used, a.len());
+        assert_eq!(payload, &a[FRAME_HEADER_LEN..]);
+        let rest = &stream[used..];
+        let (_, used_b) = MessageFramer::split_frame(rest).unwrap().unwrap();
+        assert_eq!(used_b, b.len());
+        assert_eq!(
+            MessageFramer::decode_command(rest).unwrap(),
+            IpcCommand::QueryGeometry { page_index: 7 }
+        );
+    }
+
+    #[test]
+    fn wire_format_is_unchanged() {
+        let bytes =
+            MessageFramer::encode_command(&IpcCommand::QueryGeometry { page_index: 3 }).unwrap();
+        let json = br#"{"type":"QueryGeometry","payload":{"page_index":3}}"#;
+        assert_eq!(bytes, frame(json.len() as u32, json));
     }
 }

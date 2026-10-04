@@ -60,19 +60,24 @@ let cachedCliPath: string | null = null;
 
 function getTokCliPath(): string {
   if (cachedCliPath && fs.existsSync(cachedCliPath)) return cachedCliPath;
-  const exe = process.platform === 'win32' ? 'tok-cli.exe' : 'tok-cli';
+  const isWin = process.platform === 'win32';
+  const exe = isWin ? 'tok-cli.exe' : 'tok-cli';
   const bundled = path.join(process.resourcesPath, 'bin', exe);
   const repoRoot = path.join(__dirname, '../../..'); // packages/tok-electron/dist -> repo root
   const candidates = app.isPackaged
     ? [process.env.TOK_CLI_PATH, bundled]
     : [
         process.env.TOK_CLI_PATH,
-        // custom local target directory used on the dev machine
-        'C:/Users/USER/AppData/Local/tok_target/debug/tok-cli.exe',
-        'C:/Users/USER/AppData/Local/tok_target/release/tok-cli.exe',
-        // standard cargo target directory
-        path.join(repoRoot, 'target/debug', exe),
+        ...(process.env.CARGO_TARGET_DIR ? [
+          path.join(process.env.CARGO_TARGET_DIR, 'release', exe),
+          path.join(process.env.CARGO_TARGET_DIR, 'debug', exe),
+        ] : []),
+        ...(process.env.LOCALAPPDATA ? [
+          path.join(process.env.LOCALAPPDATA, 'tok_target', 'release', exe),
+          path.join(process.env.LOCALAPPDATA, 'tok_target', 'debug', exe),
+        ] : []),
         path.join(repoRoot, 'target/release', exe),
+        path.join(repoRoot, 'target/debug', exe),
         bundled,
       ];
   const found = candidates.find((p): p is string => !!p && fs.existsSync(p));

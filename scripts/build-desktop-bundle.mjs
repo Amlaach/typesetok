@@ -81,8 +81,16 @@ fs.mkdirSync(binDir, { recursive: true });
 // 5. Copy tok-cli into resources/bin/
 const candidateCliPaths = [
   process.env.TOK_CLI_PATH,
-  'C:/Users/USER/AppData/Local/tok_target/release/tok-cli.exe',
-  'C:/Users/USER/AppData/Local/tok_target/debug/tok-cli.exe',
+  ...(process.env.CARGO_TARGET_DIR ? [
+    path.join(process.env.CARGO_TARGET_DIR, 'release/tok-cli.exe'),
+    path.join(process.env.CARGO_TARGET_DIR, 'release/tok-cli'),
+    path.join(process.env.CARGO_TARGET_DIR, 'debug/tok-cli.exe'),
+    path.join(process.env.CARGO_TARGET_DIR, 'debug/tok-cli')
+  ] : []),
+  ...(process.env.LOCALAPPDATA ? [
+    path.join(process.env.LOCALAPPDATA, 'tok_target/release/tok-cli.exe'),
+    path.join(process.env.LOCALAPPDATA, 'tok_target/debug/tok-cli.exe')
+  ] : []),
   path.join(rootDir, 'target/release/tok-cli.exe'),
   path.join(rootDir, 'target/release/tok-cli'),
   path.join(rootDir, 'target/debug/tok-cli.exe'),
