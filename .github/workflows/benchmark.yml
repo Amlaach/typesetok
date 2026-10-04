@@ -1,0 +1,36 @@
+name: Benchmark
+
+on:
+  schedule:
+    # Run once a week on Sundays at 02:00 UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      page_count:
+        description: 'Number of pages for typesetting stress test'
+        required: false
+        default: '1000'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  benchmark-1000-pages:
+    name: 1,000-Page Typesetting Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run 1,000-Page Stress Benchmark
+        run: |
+          cargo run --release -p tok-cli -- benchmark-typeset --pages ${{ github.event.inputs.page_count || '1000' }}
+
+      - name: Verify Output Bit-for-Bit Determinism
+        run: |
+          cargo run --release -p tok-cli -- verify-determinism

@@ -1,0 +1,62 @@
+name: Desktop App Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build-desktop:
+    name: Build Desktop App (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build tok-cli release binary
+        run: cargo build --release -p tok-cli
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Build TypeScript & bundle UI
+        run: npm run build
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Upload Desktop bundle artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: typesetok-desktop-windows-x64
+          path: |
+            packages/tok-ui/dist
+            packages/tok-electron/dist
+            assets/fonts
+            target/release/tok-cli.exe
+
+      - name: Upload Desktop bundle artifact (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: typesetok-desktop-linux-x64
+          path: |
+            packages/tok-ui/dist
+            packages/tok-electron/dist
+            assets/fonts
+            target/release/tok-cli
