@@ -6,10 +6,12 @@ import { execSync } from 'child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
+const rootPkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf-8'));
+const version = rootPkg.version || '0.7.0';
 
 const electronDist = path.join(rootDir, 'node_modules/electron/dist');
-const outDir = path.join(rootDir, 'dist/TypesetOK-v0.6.0-windows-x64');
-const zipFile = path.join(rootDir, 'dist/TypesetOK-v0.6.0-windows-x64.zip');
+const outDir = path.join(rootDir, `dist/TypesetOK-v${version}-windows-x64`);
+const zipFile = path.join(rootDir, `dist/TypesetOK-v${version}-windows-x64.zip`);
 
 console.log('[BUNDLE] Packaging TypesetOK Standalone Windows Desktop App...');
 
@@ -76,7 +78,7 @@ fs.writeFileSync(
   JSON.stringify(
     {
       name: 'typesetok',
-      version: '0.6.0',
+      version: version,
       main: 'packages/tok-electron/dist/main.js'
     },
     null,

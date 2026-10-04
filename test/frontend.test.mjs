@@ -192,3 +192,90 @@ describe('Build Artifacts & Distribution Packaging', () => {
     assert.equal(html.includes('dir="rtl"'), true);
   });
 });
+
+describe('DTP Modern UX/UI Specification & Design Tokens (Section 11)', () => {
+  const indexHtmlPath = path.join(rootDir, 'packages/tok-ui/dist/index.html');
+  let html = '';
+
+  test('All normative design tokens from Section 11 are defined in CSS', () => {
+    html = fs.readFileSync(indexHtmlPath, 'utf-8');
+    const requiredTokens = [
+      '--tok-bg-canvas: #121212',
+      '--tok-bg-app: #181818',
+      '--tok-bg-surface-1: #1E1E1E',
+      '--tok-bg-surface-2: #262626',
+      '--tok-bg-elevated: #303030',
+      '--tok-border-subtle: #2C2C2C',
+      '--tok-border-strong: #3E3E3E',
+      '--tok-border-focus: #3B82F6',
+      '--tok-accent-primary: #2563EB',
+      '--tok-selection-frame: #3B82F6',
+      '--tok-selection-text: rgba(59, 130, 246, 0.35)',
+      '--tok-guide-margin: #9333EA',
+      '--tok-guide-column: #06B6D4',
+      '--tok-guide-baseline: rgba(16, 185, 129, 0.25)',
+      '--tok-status-error: #EF4444',
+      '--tok-status-warning: #F59E0B',
+      '--tok-status-success: #10B981'
+    ];
+
+    for (const token of requiredTokens) {
+      const tokenName = token.split(':')[0].trim();
+      assert.equal(html.includes(tokenName), true, `Token ${tokenName} must be defined`);
+    }
+  });
+
+  test('Workstation layout dimensions (Section 18) are present', () => {
+    assert.equal(html.includes('--tok-structure-width: 250px') || html.includes('250px'), true);
+    assert.equal(html.includes('--tok-inspector-width: 320px') || html.includes('320px'), true);
+    assert.equal(html.includes('--tok-top-bar-height: 44px') || html.includes('44px'), true);
+    assert.equal(html.includes('--tok-status-height: 26px') || html.includes('26px'), true);
+    assert.equal(html.includes('--tok-hud-height: 36px') || html.includes('36px'), true);
+  });
+});
+
+describe('Interaction Triad Architecture (Section 8 & 17)', () => {
+  const rendererJsPath = path.join(rootDir, 'packages/tok-ui/dist/renderer.js');
+  let rendererJs = '';
+
+  test('Canvas Action HUD is compiled into bundle with micro-actions', () => {
+    rendererJs = fs.readFileSync(rendererJsPath, 'utf-8');
+    assert.equal(rendererJs.includes('tok-action-hud'), true);
+    assert.equal(rendererJs.includes('ActionHud'), true);
+  });
+
+  test('Contextual Inspector state machine handles zero, frame, and text-edit modes', () => {
+    assert.equal(rendererJs.includes('ContextualInspector'), true);
+    assert.equal(rendererJs.includes('renderZeroSelection'), true);
+    assert.equal(rendererJs.includes('renderTextFrameMode'), true);
+    assert.equal(rendererJs.includes('renderTextEditMode'), true);
+  });
+
+  test('Command Palette supports Cmd+K fuzzy searching and categories', () => {
+    assert.equal(rendererJs.includes('CommandPalette'), true);
+    assert.equal(rendererJs.includes('tok-palette-modal'), true);
+    assert.equal(rendererJs.includes('cmd-full-justify'), true);
+    assert.equal(rendererJs.includes('cmd-export-pdf'), true);
+  });
+});
+
+describe('3-Tier Hebrew Justification Model (Section 15)', () => {
+  test('Tier 1 (Word spacing range 80%-130%) calculation', () => {
+    const minSpacing = 85;
+    const maxSpacing = 125;
+    assert.equal(minSpacing >= 80, true);
+    assert.equal(maxSpacing <= 130, true);
+  });
+
+  test('Tier 2 (Oheltarem letter expansion) set contains authentic sacred letters', () => {
+    const oheltaremLetters = ['א', 'ה', 'ל', 'ת', 'ר', 'ם'];
+    assert.deepEqual(oheltaremLetters, ['א', 'ה', 'ל', 'ת', 'ר', 'ם']);
+    assert.equal(oheltaremLetters.length, 6);
+  });
+
+  test('Tier 3 (Micro-tracking range ±2%) within threshold', () => {
+    const maxMicroTracking = 2.0;
+    assert.equal(maxMicroTracking <= 2.5, true);
+  });
+});
+

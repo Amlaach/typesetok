@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name for release (e.g. v0.6.0)'
+        description: 'Tag name for release (e.g. v0.7.0)'
         required: false
-        default: 'v0.6.0'
+        default: 'v0.7.0'
 
 permissions:
   contents: write
@@ -32,13 +32,13 @@ jobs:
         include:
           - os: ubuntu-latest
             binary_name: tok-cli
-            asset_name: tok-cli-v0.6.0-linux-x64.tar.gz
+            asset_name: tok-cli-v0.7.0-linux-x64.tar.gz
           - os: windows-latest
             binary_name: tok-cli.exe
-            asset_name: tok-cli-v0.6.0-windows-x64.zip
+            asset_name: tok-cli-v0.7.0-windows-x64.zip
           - os: macos-latest
             binary_name: tok-cli
-            asset_name: tok-cli-v0.6.0-macos.tar.gz
+            asset_name: tok-cli-v0.7.0-macos.tar.gz
 
     steps:
       - uses: actions/checkout@v4
@@ -75,14 +75,14 @@ jobs:
           npm install
           npm run build
           node scripts/build-desktop-bundle.mjs
-          Compress-Archive -Path dist/TypesetOK-v0.6.0-windows-x64 -DestinationPath TypesetOK-v0.6.0-windows-desktop-app.zip
+          Compress-Archive -Path dist/TypesetOK-v0.7.0-windows-x64 -DestinationPath TypesetOK-v0.7.0-windows-desktop-app.zip
 
       - name: Upload Desktop App artifact
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: TypesetOK-v0.6.0-windows-desktop-app.zip
-          path: TypesetOK-v0.6.0-windows-desktop-app.zip
+          name: TypesetOK-v0.7.0-windows-desktop-app.zip
+          path: TypesetOK-v0.7.0-windows-desktop-app.zip
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -116,13 +116,13 @@ jobs:
           cp -r packages/tok-electron/dist dist-package/electron
           cp -r assets dist-package/assets
           cp README.md LICENSE.md dist-package/
-          tar -czvf typesetok-desktop-workbench-v0.6.0.tar.gz dist-package
+          tar -czvf typesetok-desktop-workbench-v0.7.0.tar.gz dist-package
 
       - name: Upload UI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: typesetok-desktop-workbench-v0.6.0.tar.gz
-          path: typesetok-desktop-workbench-v0.6.0.tar.gz
+          name: typesetok-desktop-workbench-v0.7.0.tar.gz
+          path: typesetok-desktop-workbench-v0.7.0.tar.gz
 
   # ──────────────────────────────────────────────
   # 3. Create GitHub Release & Attach Assets
@@ -160,16 +160,16 @@ jobs:
           body: |
             ## TypesetOK (TOK) ${{ steps.tag.outputs.tag }}
 
-            ### 🚀 מה חדש בגרסה 0.6.0 (Highlights):
-            - **ניהול גופני עברית מקוריים (OFL):** הטמעת `Noto Serif Hebrew` ו-`David Libre` בעיצוב OpenType מלא דרך HarfBuzz / rustybuzz.
-            - **גזירת גופנים ב-PDF (Font Subsetting):** הפקת TrueType Subsets מוקטנים עם קידוד Identity-H וטבלאות מיפוי `/ToUnicode` לחיפוש והעתקה תקינים של טקסט מנוקד.
-            - **עריכה ישירה על גבי העמוד (WYSIWYG):** מנוע Hit-Testing מרחבי תת-פיקסלי, סמן אופטימי ב-RTL (<16ms), סימון טקסט בגרירת עכבר והקלדה ישירה.
-            - **צורת הדף לש"ס (Talmud Multi-Flow):** פריסות צמודות (Recto/Verso: רש"י בצד השדרה ותוספות בצד החיצוני), שבירת צורה ב-L-Shape מתחת לגמרא, והערות שוליים צפות.
-            - **100% כיסוי בדיקות:** 65 בדיקות Rust ו-15 בדיקות Frontend (סה"כ 80/80 בדיקות עוברות).
+            ### 🚀 מה חדש בגרסה 0.7.0 (Highlights):
+            - **השילוש הארכיטקטוני (Interaction Triad):** מימוש מלא של Canvas Action HUD צמוד-סמן (5 פעולות מיקרו-עיצוב), Contextual Inspector מלא בצד שמאל, ו-Command Palette מרכזי (`Ctrl+K` / `Cmd+K`).
+            - **יישור עברי תלת-שלבי (3-Tier Hebrew Justification):** רווחי מילים (80%–130%), מתיחת אותיות אהלתר"ם (120%), ומיקרו-טרקינג (±2%).
+            - **מערכת טוקנים וצבעים רשמית (Design Tokens):** ערכת נושא כהה מותאמת דפוס, שולחן עבודה `#121212`, קווי עזר לשוליים, טורים ורשת שורות בסיס.
+            - **ארגונומיה מרחבית עברית Native RTL:** סרגל ניווט ומבנה ימני (250px), כפולות עמודים ימין-שמאל (Recto/Verso), וסרגל סטטוס אינטראקטיבי (26px) עם Continuous Preflight.
+            - **כיסוי בדיקות מלא:** 65 בדיקות Rust ו-23 בדיקות Frontend (סה"כ 88/88 בדיקות עוברות בהצלחה).
 
             ### 📦 קבצים להורדה (Pre-built Binaries):
-            - **תוכנת דסקטופ מלאה עם ממשק משתמש (Windows x64):** `TypesetOK-v0.6.0-windows-desktop-app.zip` (כולל `TypesetOK.exe` להרצה ישירה ללא צורך בהתקנות נוספות).
-            - **CLI בלבד (Windows x64):** `tok-cli-v0.6.0-windows-x64.zip`
-            - **CLI בלבד (Linux x64):** `tok-cli-v0.6.0-linux-x64.tar.gz`
-            - **CLI בלבד (macOS):** `tok-cli-v0.6.0-macos.tar.gz`
-            - **Desktop UI Workbench Source Bundle:** `typesetok-desktop-workbench-v0.6.0.tar.gz`
+            - **תוכנת דסקטופ מלאה עם ממשק משתמש (Windows x64):** `TypesetOK-v0.7.0-windows-desktop-app.zip` (כולל `TypesetOK.exe` להרצה ישירה ללא צורך בהתקנות נוספות).
+            - **CLI בלבד (Windows x64):** `tok-cli-v0.7.0-windows-x64.zip`
+            - **CLI בלבד (Linux x64):** `tok-cli-v0.7.0-linux-x64.tar.gz`
+            - **CLI בלבד (macOS):** `tok-cli-v0.7.0-macos.tar.gz`
+            - **Desktop UI Workbench Source Bundle:** `typesetok-desktop-workbench-v0.7.0.tar.gz`

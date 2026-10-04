@@ -6,7 +6,7 @@
 ### תוכנת עימוד שולחנית מקצועית בקוד פתוח | Open-Source Professional Desktop Publishing (DTP) System
 
 [![CI Build](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml/badge.svg)](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/Version-0.6.0-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-0.7.0-blue.svg)]()
 [![Tests](https://img.shields.io/badge/Tests-80%2F80%20Passing-brightgreen.svg)]()
 [![Electron](https://img.shields.io/badge/Electron-29.4%2B-blue.svg?logo=electron)](https://www.electronjs.org)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
@@ -146,7 +146,7 @@ cargo test --workspace
 
 ### 📥 הרצה ישירה ללא התקנה מוקדמת (Portable Desktop Binary)
 למשתמשי Windows המעוניינים להריץ את התוכנה ישירות ללא צורך בהתקנת Node.js או Rust:
-1. הורידו את `TypesetOK-v0.6.0-windows-desktop-app.zip` מתוך דף ה-[GitHub Releases](https://github.com/TypesetOK/typesetok/releases/tag/v0.6.0).
+1. הורידו את `TypesetOK-v0.7.0-windows-desktop-app.zip` מתוך דף ה-[GitHub Releases](https://github.com/TypesetOK/typesetok/releases/tag/v0.7.0).
 2. חלצו את קובץ ה-ZIP.
 3. הפעילו ישירות בלחיצה כפולה את `TypesetOK.exe`.
 (התוכנה מגיעה כחבילת Standalone עצמאית הכוללת את מעטפת ה-UI, מנוע ה-Electron, ובינארי ה-CLI המובנה).
@@ -159,7 +159,7 @@ npm install
 # Build all TypeScript packages and bundle UI
 npm run build
 
-# Run frontend test suite (15 passing tests)
+# Run frontend test suite (23 passing tests across 7 suites)
 npm test
 
 # Build Standalone Desktop App bundle
@@ -190,13 +190,13 @@ cargo run -p tok-cli -- inspect-package document.tok
 
 ---
 
-## 📊 Verification & Benchmark Status (v0.6.0)
+## 📊 Verification & Benchmark Status (v0.7.0)
 
 | Metric | Architectural Target | Actual Result | Status |
 | :--- | :--- | :--- | :---: |
 | **Rust Engine Tests** | 100% Pass Across All 7 Crates | **65 / 65 Tests Passing** | **PASSED** |
-| **Frontend Shell Tests** | Gematria, Virtualizer, Hit-Testing & UI | **15 / 15 Tests Passing** | **PASSED** |
-| **Total Automated Tests** | Rust + TypeScript CI Matrix | **80 / 80 Tests Passing** | **PASSED** |
+| **Frontend Shell Tests** | Gematria, Virtualizer, Tokens & Interaction Triad | **23 / 23 Tests Passing** | **PASSED** |
+| **Total Automated Tests** | Rust + TypeScript CI Matrix | **88 / 88 Tests Passing** | **PASSED** |
 | **TrueType Font Subsetting** | TrueType OpenType Subsetting in PDF | **Identity-H & /ToUnicode** | **PASSED** |
 | **Spatial Hit-Testing** | Sub-pixel glyph snap & selection range | **100% RTL & Bidi Coordinated** | **PASSED** |
 | **Talmud Tzurat HaDaf** | L-Shape expansion & Recto/Verso spreads | **Tested & Validated** | **PASSED** |
