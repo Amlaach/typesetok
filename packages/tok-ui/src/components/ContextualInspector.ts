@@ -4,8 +4,9 @@ import {
   TextFrameData,
   TypographySettings
 } from '../types';
-import { renderIcon, IconName } from '../icons';
+import { IconName } from '../icons';
 import { t, i18n } from '../i18n';
+import { el, icon, button, switchRow, segmented, selectField } from '../ui';
 
 /**
  * Parses a scrubber field such as "11.5 pt", "-3 מ"מ" or "12,5". Returns null when no
@@ -35,6 +36,8 @@ export interface InspectorCallbacks {
   onNormalizeNiqqud: () => void;
   onAlignFrames: (alignType: string) => void;
 }
+
+const FLOW_COLORS: Record<string, string> = { gemara: '#1E4A9E', rashi: '#B45309', tosafot: '#15803D', notes: '#7C3AED' };
 
 export class ContextualInspector {
   public element: HTMLElement;
@@ -108,15 +111,6 @@ export class ContextualInspector {
     this.element.className = 'tok-inspector-bar';
     this.element.dir = i18n.getDirection();
     this.element.setAttribute('aria-label', t('inspAriaLabel'));
-    this.element.style.width = 'var(--tok-inspector-width)';
-    this.element.style.minWidth = 'var(--tok-inspector-width)';
-    this.element.style.background = 'var(--tok-bg-surface-1)';
-    // Border on the side facing the canvas in both directions (was always the right edge).
-    this.element.style.borderInlineStart = '1px solid var(--tok-border-subtle)';
-    this.element.style.display = 'flex';
-    this.element.style.flexDirection = 'column';
-    this.element.style.overflowY = 'auto';
-    this.element.style.userSelect = 'none';
 
     i18n.onChange(() => {
       this.element.dir = i18n.getDirection();
@@ -136,6 +130,16 @@ export class ContextualInspector {
 
   public getMode(): SelectionMode {
     return this.mode;
+  }
+
+  /** Current document setup (shared with the export dialog). */
+  public getDocumentSettings(): DocumentSettings {
+    return { ...this.documentSettings };
+  }
+
+  private flowName(flowId: string): string {
+    const keys: Record<string, string> = { gemara: 'inspFlowGemara', rashi: 'inspFlowRashi', tosafot: 'inspFlowTosafot', notes: 'inspFlowNotes' };
+    return keys[flowId] ? t(keys[flowId]) : flowId;
   }
 
   private render(): void {
@@ -161,207 +165,146 @@ export class ContextualInspector {
   }
 
   // =========================================================================
-  // State 1: Zero Selection (Document Setup & Preflight)
+  // State 1: Zero Selection (document setup & print check)
   // =========================================================================
   private renderZeroSelection(): void {
-    // Header
-    this.element.appendChild(this.createHeader(t('inspDocTitle'), t('inspDocSubtitle'), 'file'));
+    this.element.appendChild(this.createHeader(t('inspNothingSelected'), this.documentSettings.title, `${t('inspDocTitle')} · ${t('inspDocSubtitle')}`, 'file'));
 
-    // 1. Page Size Card
+    // 1. Page size
     const sizeCard = this.createCard(t('inspPageSize'));
-    const sizeSelect = document.createElement('select');
-    sizeSelect.className = 'tok-select';
-    sizeSelect.style.width = '100%';
-    sizeSelect.style.marginBottom = '8px';
-    sizeSelect.setAttribute('aria-label', t('inspPageSize'));
-
     const presets = [
       { id: '17x24', name: t('inspPresetSefer'), w: 170, h: 240 },
       { id: 'Crown', name: t('inspPresetCrown'), w: 165, h: 235 },
       { id: 'A4', name: t('inspPresetA4'), w: 210, h: 297 },
       { id: 'B5', name: t('inspPresetB5'), w: 176, h: 250 }
     ];
-    for (const p of presets) {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = p.name;
-      if (p.id === this.documentSettings.pageSize) opt.selected = true;
-      sizeSelect.appendChild(opt);
-    }
-    sizeSelect.addEventListener('change', () => {
-      const found = presets.find((p) => p.id === sizeSelect.value);
-      if (found) {
-        this.documentSettings.pageSize = found.id as any;
-        this.documentSettings.pageWidthMm = found.w;
-        this.documentSettings.pageHeightMm = found.h;
-        this.callbacks.onDocumentChange({
-          pageSize: this.documentSettings.pageSize,
-          pageWidthMm: found.w,
-          pageHeightMm: found.h
-        });
-        this.render();
-      }
-    });
-    sizeCard.appendChild(sizeSelect);
-
-    // Dimensions display
-    const dimRow = document.createElement('div');
-    dimRow.style.display = 'flex';
-    dimRow.style.gap = '8px';
-    dimRow.appendChild(this.createScrubber(t('inspWidth'), this.documentSettings.pageWidthMm, t('unitMm'), 50, 400, (v) => {
-      this.documentSettings.pageWidthMm = v;
-      this.callbacks.onDocumentChange({ pageWidthMm: v });
+    sizeCard.appendChild(selectField(t('inspPageSize'), presets.map((p) => ({ value: p.id, label: p.name })), this.documentSettings.pageSize, (value) => {
+      const found = presets.find((p) => p.id === value);
+      if (!found) return;
+      this.documentSettings.pageSize = found.id as DocumentSettings['pageSize'];
+      this.documentSettings.pageWidthMm = found.w;
+      this.documentSettings.pageHeightMm = found.h;
+      this.callbacks.onDocumentChange({ pageSize: this.documentSettings.pageSize, pageWidthMm: found.w, pageHeightMm: found.h });
+      this.render();
     }));
-    dimRow.appendChild(this.createScrubber(t('inspHeight'), this.documentSettings.pageHeightMm, t('unitMm'), 50, 500, (v) => {
-      this.documentSettings.pageHeightMm = v;
-      this.callbacks.onDocumentChange({ pageHeightMm: v });
-    }));
-    sizeCard.appendChild(dimRow);
+    sizeCard.appendChild(this.row(
+      this.createScrubber(t('inspWidth'), this.documentSettings.pageWidthMm, t('unitMm'), 50, 400, (v) => {
+        this.documentSettings.pageWidthMm = v;
+        this.callbacks.onDocumentChange({ pageWidthMm: v });
+      }),
+      this.createScrubber(t('inspHeight'), this.documentSettings.pageHeightMm, t('unitMm'), 50, 500, (v) => {
+        this.documentSettings.pageHeightMm = v;
+        this.callbacks.onDocumentChange({ pageHeightMm: v });
+      })
+    ));
     this.element.appendChild(sizeCard);
 
-    // 2. Graded Margins Card (שוליים מדורגים תורניים)
+    // 2. Graded margins
     const marginCard = this.createCard(t('inspGradedMargins'));
-    const mRow1 = document.createElement('div');
-    mRow1.style.display = 'flex';
-    mRow1.style.gap = '8px';
-    mRow1.appendChild(this.createScrubber(t('inspTop'), this.documentSettings.marginTopMm, t('unitMm'), 5, 80, (v) => {
-      this.documentSettings.marginTopMm = v;
-      this.callbacks.onDocumentChange({ marginTopMm: v });
-    }));
-    mRow1.appendChild(this.createScrubber(t('inspBottom'), this.documentSettings.marginBottomMm, t('unitMm'), 5, 80, (v) => {
-      this.documentSettings.marginBottomMm = v;
-      this.callbacks.onDocumentChange({ marginBottomMm: v });
-    }));
-    marginCard.appendChild(mRow1);
-
-    const mRow2 = document.createElement('div');
-    mRow2.style.display = 'flex';
-    mRow2.style.gap = '8px';
-    mRow2.appendChild(this.createScrubber(t('inspInside'), this.documentSettings.marginInsideMm, t('unitMm'), 5, 80, (v) => {
-      this.documentSettings.marginInsideMm = v;
-      this.callbacks.onDocumentChange({ marginInsideMm: v });
-    }));
-    mRow2.appendChild(this.createScrubber(t('inspOutside'), this.documentSettings.marginOutsideMm, t('unitMm'), 5, 80, (v) => {
-      this.documentSettings.marginOutsideMm = v;
-      this.callbacks.onDocumentChange({ marginOutsideMm: v });
-    }));
-    marginCard.appendChild(mRow2);
+    marginCard.appendChild(this.row(
+      this.createScrubber(t('inspTop'), this.documentSettings.marginTopMm, t('unitMm'), 5, 80, (v) => {
+        this.documentSettings.marginTopMm = v;
+        this.callbacks.onDocumentChange({ marginTopMm: v });
+      }),
+      this.createScrubber(t('inspBottom'), this.documentSettings.marginBottomMm, t('unitMm'), 5, 80, (v) => {
+        this.documentSettings.marginBottomMm = v;
+        this.callbacks.onDocumentChange({ marginBottomMm: v });
+      })
+    ));
+    marginCard.appendChild(this.row(
+      this.createScrubber(t('inspInside'), this.documentSettings.marginInsideMm, t('unitMm'), 5, 80, (v) => {
+        this.documentSettings.marginInsideMm = v;
+        this.callbacks.onDocumentChange({ marginInsideMm: v });
+      }),
+      this.createScrubber(t('inspOutside'), this.documentSettings.marginOutsideMm, t('unitMm'), 5, 80, (v) => {
+        this.documentSettings.marginOutsideMm = v;
+        this.callbacks.onDocumentChange({ marginOutsideMm: v });
+      })
+    ));
     this.element.appendChild(marginCard);
 
-    // 3. Grid & Baseline Card
+    // 3. Baseline grid
     const gridCard = this.createCard(t('inspBaselineGrid'));
-    const gRow = document.createElement('div');
-    gRow.style.display = 'flex';
-    gRow.style.gap = '8px';
-    gRow.appendChild(this.createScrubber(t('inspLineStep'), this.documentSettings.baselineGridPt, 'pt', 8, 30, (v) => {
-      this.documentSettings.baselineGridPt = v;
-      this.callbacks.onDocumentChange({ baselineGridPt: v });
-    }));
-    gRow.appendChild(this.createScrubber(t('inspTopOffset'), this.documentSettings.baselineOffsetPt, 'pt', 0, 100, (v) => {
-      this.documentSettings.baselineOffsetPt = v;
-      this.callbacks.onDocumentChange({ baselineOffsetPt: v });
-    }));
-    gridCard.appendChild(gRow);
+    gridCard.appendChild(this.row(
+      this.createScrubber(t('inspLineStep'), this.documentSettings.baselineGridPt, 'pt', 8, 30, (v) => {
+        this.documentSettings.baselineGridPt = v;
+        this.callbacks.onDocumentChange({ baselineGridPt: v });
+      }),
+      this.createScrubber(t('inspTopOffset'), this.documentSettings.baselineOffsetPt, 'pt', 0, 100, (v) => {
+        this.documentSettings.baselineOffsetPt = v;
+        this.callbacks.onDocumentChange({ baselineOffsetPt: v });
+      })
+    ));
     this.element.appendChild(gridCard);
 
-    // 4. Preflight Card (Continuous Preflight)
-    const pfCard = this.createCard(t('inspPreflight'));
-    pfCard.appendChild(this.createStatusRow(t('inspProdStatus'), t('inspReadyForPrint'), '#10B981'));
-    pfCard.appendChild(this.createStatusRow(t('inspColorProfile'), 'ISO Coated v2 (100% K Black)', '#94A3B8'));
-    pfCard.appendChild(this.createStatusRow(t('inspOverset'), t('inspNoIssues'), '#10B981'));
-    pfCard.appendChild(this.createStatusRow(t('inspImageRes'), t('inspImageResOk'), '#10B981'));
-    this.element.appendChild(pfCard);
+    this.element.appendChild(el('div', 'tok-insp-spacer'));
+
+    // 4. Continuous print check
+    this.element.appendChild(this.createCheckCard(t('inspPreflight'), [
+      { label: t('inspProdStatus'), value: t('inspReadyForPrint'), ok: true },
+      { label: t('inspColorProfile'), value: 'ISO Coated v2 (100% K)', ok: true },
+      { label: t('inspOverset'), value: t('inspNoIssues'), ok: true },
+      { label: t('inspImageRes'), value: t('inspImageResOk'), ok: true }
+    ]));
   }
 
   // =========================================================================
-  // State 2: Text Frame Selected (Object Mode)
+  // State 2: Text frame selected (object mode)
   // =========================================================================
   private renderTextFrameMode(): void {
-    this.element.appendChild(this.createHeader(t('inspTextFrame'), this.selectedFrame.flowId, 'frame'));
+    const flow = this.selectedFrame.flowId;
+    this.element.appendChild(this.createHeader(t('inspSelected'), this.flowName(flow), `${t('inspTextFrame')} · ${this.selectedFrame.id}`, 'frame', FLOW_COLORS[flow]));
 
-    // 1. Geometry & Coordinates with Value Scrubbing
+    // 1. Geometry
     const geoCard = this.createCard(t('inspGeometry'));
-    const geoRow1 = document.createElement('div');
-    geoRow1.style.display = 'flex';
-    geoRow1.style.gap = '8px';
-    geoRow1.appendChild(this.createScrubber(t('inspPosX'), this.selectedFrame.xMm, t('unitMm'), 0, 300, (v) => {
-      this.selectedFrame.xMm = v;
-      this.callbacks.onFrameChange({ xMm: v });
-    }));
-    geoRow1.appendChild(this.createScrubber(t('inspPosY'), this.selectedFrame.yMm, t('unitMm'), 0, 400, (v) => {
-      this.selectedFrame.yMm = v;
-      this.callbacks.onFrameChange({ yMm: v });
-    }));
-    geoCard.appendChild(geoRow1);
-
-    const geoRow2 = document.createElement('div');
-    geoRow2.style.display = 'flex';
-    geoRow2.style.gap = '8px';
-    geoRow2.appendChild(this.createScrubber(t('inspWidthW'), this.selectedFrame.widthMm, t('unitMm'), 10, 300, (v) => {
-      this.selectedFrame.widthMm = v;
-      this.callbacks.onFrameChange({ widthMm: v });
-    }));
-    geoRow2.appendChild(this.createScrubber(t('inspHeightH'), this.selectedFrame.heightMm, t('unitMm'), 10, 400, (v) => {
-      this.selectedFrame.heightMm = v;
-      this.callbacks.onFrameChange({ heightMm: v });
-    }));
-    geoCard.appendChild(geoRow2);
+    geoCard.appendChild(this.row(
+      this.createScrubber(t('inspPosX'), this.selectedFrame.xMm, t('unitMm'), 0, 300, (v) => {
+        this.selectedFrame.xMm = v;
+        this.callbacks.onFrameChange({ xMm: v });
+      }),
+      this.createScrubber(t('inspPosY'), this.selectedFrame.yMm, t('unitMm'), 0, 400, (v) => {
+        this.selectedFrame.yMm = v;
+        this.callbacks.onFrameChange({ yMm: v });
+      })
+    ));
+    geoCard.appendChild(this.row(
+      this.createScrubber(t('inspWidthW'), this.selectedFrame.widthMm, t('unitMm'), 10, 300, (v) => {
+        this.selectedFrame.widthMm = v;
+        this.callbacks.onFrameChange({ widthMm: v });
+      }),
+      this.createScrubber(t('inspHeightH'), this.selectedFrame.heightMm, t('unitMm'), 10, 400, (v) => {
+        this.selectedFrame.heightMm = v;
+        this.callbacks.onFrameChange({ heightMm: v });
+      })
+    ));
     this.element.appendChild(geoCard);
 
-    // 2. Flow & Threading Card
+    // 2. Flow & threading
     const flowCard = this.createCard(t('inspFlowThreading'));
-    const flowSelect = document.createElement('select');
-    flowSelect.className = 'tok-select';
-    flowSelect.style.width = '100%';
-    flowSelect.style.marginBottom = '8px';
-    flowSelect.setAttribute('aria-label', t('inspFlowThreading'));
-
-    const flows = [
-      { id: 'gemara', name: t('inspFlowGemara') },
-      { id: 'rashi', name: t('inspFlowRashi') },
-      { id: 'tosafot', name: t('inspFlowTosafot') },
-      { id: 'notes', name: t('inspFlowNotes') }
-    ];
-    for (const f of flows) {
-      const opt = document.createElement('option');
-      opt.value = f.id;
-      opt.textContent = f.name;
-      if (f.id === this.selectedFrame.flowId) opt.selected = true;
-      flowSelect.appendChild(opt);
-    }
-    flowSelect.addEventListener('change', () => {
-      this.selectedFrame.flowId = flowSelect.value as any;
+    const flows = ['gemara', 'rashi', 'tosafot', 'notes'].map((id) => ({ value: id, label: this.flowName(id) }));
+    flowCard.appendChild(selectField(t('inspFlowThreading'), flows, flow, (value) => {
+      this.selectedFrame.flowId = value as TextFrameData['flowId'];
       this.callbacks.onFrameChange({ flowId: this.selectedFrame.flowId });
-    });
-    flowCard.appendChild(flowSelect);
-
-    const threadInfo = document.createElement('div');
-    threadInfo.style.fontSize = '11px';
-    threadInfo.style.color = 'var(--tok-text-secondary)';
-    threadInfo.style.display = 'flex';
-    threadInfo.style.justifyContent = 'space-between';
-    threadInfo.innerHTML = `<span>${t('inspThreading')}</span><span style="color:#60A5FA;">-> ${this.selectedFrame.nextFrameId || t('inspNone')}</span>`;
-    flowCard.appendChild(threadInfo);
+      this.render();
+    }));
+    const thread = el('div', 'tok-status-line');
+    thread.appendChild(el('span', undefined, undefined, t('inspThreading')));
+    thread.appendChild(el('span', undefined, { dir: 'ltr', style: 'color:var(--tok-accent-text)' }, this.selectedFrame.nextFrameId || t('inspNone')));
+    flowCard.appendChild(thread);
     this.element.appendChild(flowCard);
 
-    // 3. Insets & Vertical Alignment Card
+    // 3. Insets & vertical alignment
     const insetCard = this.createCard(t('inspInsets'));
-    const inRow1 = document.createElement('div');
-    inRow1.style.display = 'flex';
-    inRow1.style.gap = '8px';
-    inRow1.appendChild(this.createScrubber(t('inspTop'), this.selectedFrame.insetTopMm, t('unitMm'), 0, 30, (v) => {
-      this.selectedFrame.insetTopMm = v;
-      this.callbacks.onFrameChange({ insetTopMm: v });
-    }));
-    inRow1.appendChild(this.createScrubber(t('inspBottom'), this.selectedFrame.insetBottomMm, t('unitMm'), 0, 30, (v) => {
-      this.selectedFrame.insetBottomMm = v;
-      this.callbacks.onFrameChange({ insetBottomMm: v });
-    }));
-    insetCard.appendChild(inRow1);
-
-    const inRow2 = document.createElement('div');
-    inRow2.style.display = 'flex';
-    inRow2.style.gap = '8px';
+    insetCard.appendChild(this.row(
+      this.createScrubber(t('inspTop'), this.selectedFrame.insetTopMm, t('unitMm'), 0, 30, (v) => {
+        this.selectedFrame.insetTopMm = v;
+        this.callbacks.onFrameChange({ insetTopMm: v });
+      }),
+      this.createScrubber(t('inspBottom'), this.selectedFrame.insetBottomMm, t('unitMm'), 0, 30, (v) => {
+        this.selectedFrame.insetBottomMm = v;
+        this.callbacks.onFrameChange({ insetBottomMm: v });
+      })
+    ));
     const rightInset = this.createScrubber(t('inspRight'), this.selectedFrame.insetRightMm, t('unitMm'), 0, 30, (v) => {
       this.selectedFrame.insetRightMm = v;
       this.callbacks.onFrameChange({ insetRightMm: v });
@@ -371,332 +314,169 @@ export class ContextualInspector {
       this.callbacks.onFrameChange({ insetLeftMm: v });
     });
     // Keep the physical order (Right field on the right) in both UI directions.
-    if (i18n.getDirection() === 'rtl') {
-      inRow2.append(rightInset, leftInset);
-    } else {
-      inRow2.append(leftInset, rightInset);
-    }
-    insetCard.appendChild(inRow2);
+    insetCard.appendChild(i18n.getDirection() === 'rtl' ? this.row(rightInset, leftInset) : this.row(leftInset, rightInset));
 
-    // Vertical alignment selector
-    const vaLabel = document.createElement('div');
-    vaLabel.style.fontSize = '11px';
-    vaLabel.style.color = 'var(--tok-text-secondary)';
-    vaLabel.style.margin = '8px 0 4px';
-    vaLabel.textContent = t('inspVAlign');
-    insetCard.appendChild(vaLabel);
-
-    const vaBtnWrap = document.createElement('div');
-    vaBtnWrap.style.display = 'flex';
-    vaBtnWrap.style.gap = '4px';
-
-    const vaOptions: { id: 'top' | 'center' | 'bottom' | 'justify'; label: string }[] = [
+    insetCard.appendChild(el('div', 'tok-inspector-sub', undefined, t('inspVAlign')));
+    insetCard.appendChild(segmented(t('inspVAlign'), [
       { id: 'top', label: t('inspTop') },
       { id: 'center', label: t('inspCenter') },
       { id: 'bottom', label: t('inspBottom') },
       { id: 'justify', label: t('inspJustify') }
-    ];
-
-    for (const opt of vaOptions) {
-      const btn = document.createElement('button');
-      btn.className = 'tok-btn';
-      btn.style.flex = '1';
-      btn.style.fontSize = '11px';
-      btn.textContent = opt.label;
-      btn.setAttribute('aria-pressed', String(this.selectedFrame.verticalAlign === opt.id));
-      if (this.selectedFrame.verticalAlign === opt.id) {
-        btn.style.background = 'var(--tok-accent-primary)';
-        btn.style.color = '#FFFFFF';
-      }
-      btn.addEventListener('click', () => {
-        this.selectedFrame.verticalAlign = opt.id;
-        this.callbacks.onFrameChange({ verticalAlign: opt.id });
-        this.render();
-      });
-      vaBtnWrap.appendChild(btn);
-    }
-    insetCard.appendChild(vaBtnWrap);
+    ], this.selectedFrame.verticalAlign, (id) => {
+      this.selectedFrame.verticalAlign = id;
+      this.callbacks.onFrameChange({ verticalAlign: id });
+    }, { fill: true }));
     this.element.appendChild(insetCard);
   }
 
   // =========================================================================
-  // State 3: Text Edit Mode (Typography, 3-Tier Hebrew Justification, Niqqud)
+  // State 3: Text edit mode (typography, 3-tier Hebrew justification, niqqud)
   // =========================================================================
   private renderTextEditMode(): void {
-    this.element.appendChild(this.createHeader(t('inspTypography'), this.typographySettings.styleTokenName, 'typography'));
+    this.element.appendChild(this.createHeader(t('inspSelected'), this.typographySettings.styleTokenName, t('inspTypography'), 'typography'));
 
-    // 1. Style Token Card & Override Sync
+    // 1. Paragraph style & override sync
     const styleCard = this.createCard(t('inspStyleToken'));
-    const tokenRow = document.createElement('div');
-    tokenRow.style.display = 'flex';
-    tokenRow.style.alignItems = 'center';
-    tokenRow.style.justifyContent = 'space-between';
-    tokenRow.style.marginBottom = '8px';
-
-    const tokenName = document.createElement('span');
-    tokenName.style.fontSize = '13px';
-    tokenName.style.fontWeight = 'bold';
-    tokenName.style.color = '#60A5FA';
-    tokenName.textContent = this.typographySettings.styleTokenName;
-    tokenRow.appendChild(tokenName);
-
+    const tokenRow = el('div', 'tok-status-line');
+    tokenRow.appendChild(el('span', undefined, { style: 'font-size:13px;font-weight:600;color:var(--tok-accent-text)' }, this.typographySettings.styleTokenName));
     if (this.typographySettings.isOverride) {
-      const overrideBadge = document.createElement('span');
-      overrideBadge.style.fontSize = '10px';
-      overrideBadge.style.padding = '2px 6px';
-      overrideBadge.style.borderRadius = '4px';
-      overrideBadge.style.background = '#F59E0B';
-      overrideBadge.style.color = '#000000';
-      overrideBadge.style.fontWeight = 'bold';
-      overrideBadge.textContent = t('inspLocalOverride');
-      tokenRow.appendChild(overrideBadge);
+      tokenRow.appendChild(el('span', 'tok-badge tok-badge-warning', undefined, t('inspLocalOverride')));
     }
     styleCard.appendChild(tokenRow);
-
-    const syncBtn = document.createElement('button');
-    syncBtn.className = 'tok-btn tok-btn-primary';
-    syncBtn.style.width = '100%';
-    syncBtn.style.fontSize = '11px';
-    syncBtn.style.display = 'flex';
-    syncBtn.style.alignItems = 'center';
-    syncBtn.style.justifyContent = 'center';
-    syncBtn.style.gap = '6px';
-    syncBtn.innerHTML = `${renderIcon('refresh', 13)}<span>${t('inspSyncStyle')}</span>`;
-    syncBtn.addEventListener('click', () => {
-      this.typographySettings.isOverride = false;
-      this.callbacks.onSyncStyleToken();
-      this.render();
-    });
-    styleCard.appendChild(syncBtn);
+    styleCard.appendChild(button(t('inspSyncStyle'), {
+      className: 'tok-btn tok-btn-block tok-btn-sm',
+      icon: 'refresh',
+      iconSize: 14,
+      onClick: () => {
+        this.typographySettings.isOverride = false;
+        this.callbacks.onSyncStyleToken();
+        this.render();
+      }
+    }));
     this.element.appendChild(styleCard);
 
-    // 2. Character & Font Settings
+    // 2. Font
     const fontCard = this.createCard(t('inspFontSpacing'));
-    const fontSelect = document.createElement('select');
-    fontSelect.className = 'tok-select';
-    fontSelect.style.width = '100%';
-    fontSelect.style.marginBottom = '8px';
-    fontSelect.setAttribute('aria-label', t('hudFont'));
-
     const fonts = ['וילנא (Vilna)', 'טעמי פרנק (Taamey Frank)', 'דוד (David CLM)', 'כתב רש"י (Rashi)'];
-    for (const f of fonts) {
-      const opt = document.createElement('option');
-      opt.value = f;
-      opt.textContent = f;
-      if (f.startsWith(this.typographySettings.fontFamily.slice(0, 4))) opt.selected = true;
-      fontSelect.appendChild(opt);
-    }
-    fontSelect.addEventListener('change', () => {
-      this.typographySettings.fontFamily = fontSelect.value;
+    const current = fonts.find((f) => f.startsWith(this.typographySettings.fontFamily.slice(0, 4))) ?? fonts[0];
+    fontCard.appendChild(selectField(t('hudFont'), fonts.map((f) => ({ value: f, label: f })), current, (value) => {
+      this.typographySettings.fontFamily = value;
       this.typographySettings.isOverride = true;
-      this.callbacks.onTypographyChange({ fontFamily: fontSelect.value, isOverride: true });
+      this.callbacks.onTypographyChange({ fontFamily: value, isOverride: true });
       this.render();
-    });
-    fontCard.appendChild(fontSelect);
-
-    const fRow1 = document.createElement('div');
-    fRow1.style.display = 'flex';
-    fRow1.style.gap = '8px';
-    fRow1.appendChild(this.createScrubber(t('inspFontSize'), this.typographySettings.fontSizePt, 'pt', 6, 72, (v) => {
-      this.typographySettings.fontSizePt = v;
-      this.typographySettings.isOverride = true;
-      this.callbacks.onTypographyChange({ fontSizePt: v, isOverride: true });
     }));
-    fRow1.appendChild(this.createScrubber(t('inspLeading'), this.typographySettings.lineHeightPt, 'pt', 8, 90, (v) => {
-      this.typographySettings.lineHeightPt = v;
-      this.typographySettings.isOverride = true;
-      this.callbacks.onTypographyChange({ lineHeightPt: v, isOverride: true });
-    }));
-    fontCard.appendChild(fRow1);
+    fontCard.appendChild(this.row(
+      this.createScrubber(t('inspFontSize'), this.typographySettings.fontSizePt, 'pt', 6, 72, (v) => {
+        this.typographySettings.fontSizePt = v;
+        this.typographySettings.isOverride = true;
+        this.callbacks.onTypographyChange({ fontSizePt: v, isOverride: true });
+      }),
+      this.createScrubber(t('inspLeading'), this.typographySettings.lineHeightPt, 'pt', 8, 90, (v) => {
+        this.typographySettings.lineHeightPt = v;
+        this.typographySettings.isOverride = true;
+        this.callbacks.onTypographyChange({ lineHeightPt: v, isOverride: true });
+      })
+    ));
     this.element.appendChild(fontCard);
 
-    // 3. Three-Tier Hebrew Justification Controls (Section 15)
+    // 3. Alignment
+    const alignCard = this.createCard(t('inspAlignTitle'));
+    alignCard.appendChild(segmented(t('inspAlignTitle'), [
+      { id: 'right', label: t('hudAlignRight'), icon: 'alignRight' },
+      { id: 'center', label: t('hudAlignCenter'), icon: 'alignCenter' },
+      { id: 'left', label: t('inspAlignLeft'), icon: 'alignLeft' },
+      { id: 'justify', label: t('hudAlignJustify'), icon: 'alignJustify' }
+    ], this.typographySettings.alignment, (id) => {
+      this.typographySettings.alignment = id;
+      this.callbacks.onTypographyChange({ alignment: id });
+    }, { fill: true, iconOnly: true }));
+    this.element.appendChild(alignCard);
+
+    // 4. Three-tier Hebrew justification
+    const j = this.typographySettings.justification;
     const justCard = this.createCard(t('inspJustify3'));
-    
-    // Tier 1: Word Spacing
-    const t1Header = document.createElement('div');
-    t1Header.style.fontSize = '11px';
-    t1Header.style.fontWeight = 'bold';
-    t1Header.style.color = '#93C5FD';
-    t1Header.style.margin = '4px 0';
-    t1Header.textContent = t('inspTier1');
-    justCard.appendChild(t1Header);
+    justCard.appendChild(el('div', 'tok-inspector-sub', undefined, t('inspTier1')));
+    justCard.appendChild(this.row(
+      this.createScrubber(t('inspMin'), j.tier1WordSpacingMin, '%', 60, 100, (v) => {
+        j.tier1WordSpacingMin = v;
+        this.callbacks.onTypographyChange({ justification: j });
+      }),
+      this.createScrubber(t('inspMax'), j.tier1WordSpacingMax, '%', 100, 160, (v) => {
+        j.tier1WordSpacingMax = v;
+        this.callbacks.onTypographyChange({ justification: j });
+      })
+    ));
 
-    const t1Row = document.createElement('div');
-    t1Row.style.display = 'flex';
-    t1Row.style.gap = '8px';
-    t1Row.appendChild(this.createScrubber(t('inspMin'), this.typographySettings.justification.tier1WordSpacingMin, '%', 60, 100, (v) => {
-      this.typographySettings.justification.tier1WordSpacingMin = v;
-      this.callbacks.onTypographyChange({ justification: this.typographySettings.justification });
+    justCard.appendChild(el('div', 'tok-inspector-sub', undefined, t('inspTier2')));
+    justCard.appendChild(switchRow(t('inspEnableStretch'), j.tier2OheltaremEnabled, (v) => {
+      j.tier2OheltaremEnabled = v;
+      this.callbacks.onTypographyChange({ justification: j });
     }));
-    t1Row.appendChild(this.createScrubber(t('inspMax'), this.typographySettings.justification.tier1WordSpacingMax, '%', 100, 160, (v) => {
-      this.typographySettings.justification.tier1WordSpacingMax = v;
-      this.callbacks.onTypographyChange({ justification: this.typographySettings.justification });
-    }));
-    justCard.appendChild(t1Row);
-
-    // Tier 2: Oheltarem letter elongation
-    const t2Header = document.createElement('div');
-    t2Header.style.fontSize = '11px';
-    t2Header.style.fontWeight = 'bold';
-    t2Header.style.color = '#FDE047';
-    t2Header.style.margin = '10px 0 4px';
-    t2Header.textContent = t('inspTier2');
-    justCard.appendChild(t2Header);
-
-    const t2ToggleRow = document.createElement('div');
-    t2ToggleRow.style.display = 'flex';
-    t2ToggleRow.style.alignItems = 'center';
-    t2ToggleRow.style.justifyContent = 'space-between';
-    t2ToggleRow.style.marginBottom = '6px';
-
-    const t2Label = document.createElement('span');
-    t2Label.style.fontSize = '11px';
-    t2Label.textContent = t('inspEnableStretch');
-    t2ToggleRow.appendChild(t2Label);
-
-    const t2Switch = document.createElement('input');
-    t2Switch.type = 'checkbox';
-    t2Switch.checked = this.typographySettings.justification.tier2OheltaremEnabled;
-    t2Switch.setAttribute('aria-label', t('inspEnableStretch'));
-    t2Switch.addEventListener('change', () => {
-      this.typographySettings.justification.tier2OheltaremEnabled = t2Switch.checked;
-      this.callbacks.onTypographyChange({ justification: this.typographySettings.justification });
-    });
-    t2ToggleRow.appendChild(t2Switch);
-    justCard.appendChild(t2ToggleRow);
-
-    const letterBoxes = document.createElement('div');
-    letterBoxes.style.display = 'flex';
-    letterBoxes.style.gap = '4px';
-    letterBoxes.style.marginBottom = '8px';
-
-    const oheltaremLetters = ['א', 'ה', 'ל', 'ת', 'ר', 'ם'];
-    for (const l of oheltaremLetters) {
-      const lBtn = document.createElement('button');
-      lBtn.className = 'tok-btn';
-      lBtn.textContent = l;
-      lBtn.style.padding = '2px 8px';
-      lBtn.style.fontSize = '12px';
-      lBtn.style.fontWeight = 'bold';
-      const isSelected = this.typographySettings.justification.tier2OheltaremLetters.includes(l);
-      lBtn.style.background = isSelected ? 'var(--tok-accent-primary)' : 'var(--tok-bg-surface-2)';
-      lBtn.style.color = isSelected ? '#FFFFFF' : 'var(--tok-text-secondary)';
-      lBtn.setAttribute('aria-pressed', String(isSelected));
-      lBtn.addEventListener('click', () => {
-        const arr = this.typographySettings.justification.tier2OheltaremLetters;
-        const idx = arr.indexOf(l);
-        if (idx >= 0) arr.splice(idx, 1);
-        else arr.push(l);
-        this.render();
-        this.callbacks.onTypographyChange({ justification: this.typographySettings.justification });
+    const letters = el('div', 'tok-letter-chips', { role: 'group', 'aria-label': t('inspTier2') });
+    for (const l of ['א', 'ה', 'ל', 'ת', 'ר', 'ם']) {
+      const on = j.tier2OheltaremLetters.includes(l);
+      const chip = el('button', 'tok-letter-chip', { type: 'button', 'aria-pressed': String(on) }, l);
+      chip.addEventListener('click', () => {
+        const idx = j.tier2OheltaremLetters.indexOf(l);
+        if (idx >= 0) j.tier2OheltaremLetters.splice(idx, 1);
+        else j.tier2OheltaremLetters.push(l);
+        chip.setAttribute('aria-pressed', String(idx < 0));
+        this.callbacks.onTypographyChange({ justification: j });
       });
-      letterBoxes.appendChild(lBtn);
+      letters.appendChild(chip);
     }
-    justCard.appendChild(letterBoxes);
-
-    justCard.appendChild(this.createScrubber(t('inspMaxStretch'), this.typographySettings.justification.tier2OheltaremMaxStretch, '%', 100, 180, (v) => {
-      this.typographySettings.justification.tier2OheltaremMaxStretch = v;
-      this.callbacks.onTypographyChange({ justification: this.typographySettings.justification });
+    justCard.appendChild(letters);
+    justCard.appendChild(this.createScrubber(t('inspMaxStretch'), j.tier2OheltaremMaxStretch, '%', 100, 180, (v) => {
+      j.tier2OheltaremMaxStretch = v;
+      this.callbacks.onTypographyChange({ justification: j });
     }));
 
-    // Tier 3: Micro-Tracking
-    const t3Header = document.createElement('div');
-    t3Header.style.fontSize = '11px';
-    t3Header.style.fontWeight = 'bold';
-    t3Header.style.color = '#86EFAC';
-    t3Header.style.margin = '10px 0 4px';
-    t3Header.textContent = t('inspTier3');
-    justCard.appendChild(t3Header);
-
-    justCard.appendChild(this.createScrubber(t('inspTrackingRange'), this.typographySettings.justification.tier3MicroTrackingRange, '%', 0, 5, (v) => {
-      this.typographySettings.justification.tier3MicroTrackingRange = v;
-      this.callbacks.onTypographyChange({ justification: this.typographySettings.justification });
+    justCard.appendChild(el('div', 'tok-inspector-sub', undefined, t('inspTier3')));
+    justCard.appendChild(this.createScrubber(t('inspTrackingRange'), j.tier3MicroTrackingRange, '%', 0, 5, (v) => {
+      j.tier3MicroTrackingRange = v;
+      this.callbacks.onTypographyChange({ justification: j });
     }));
-
     this.element.appendChild(justCard);
 
-    // 4. Sacred Typography & Niqqud Card
+    // 5. Niqqud, cantillation & divine names
     const sacredCard = this.createCard(t('inspSacred'));
-    const normBtn = document.createElement('button');
-    normBtn.className = 'tok-btn tok-btn-primary';
-    normBtn.style.width = '100%';
-    normBtn.style.marginBottom = '8px';
-    normBtn.style.display = 'flex';
-    normBtn.style.alignItems = 'center';
-    normBtn.style.justifyContent = 'center';
-    normBtn.style.gap = '6px';
-    normBtn.innerHTML = `${renderIcon('sparkle', 13)}<span>${t('inspNormalize')}</span>`;
-    normBtn.addEventListener('click', () => {
-      this.callbacks.onNormalizeNiqqud();
-    });
-    sacredCard.appendChild(normBtn);
-
-    const divineRow = document.createElement('div');
-    divineRow.style.display = 'flex';
-    divineRow.style.alignItems = 'center';
-    divineRow.style.justifyContent = 'space-between';
-
-    const divineLabel = document.createElement('span');
-    divineLabel.style.fontSize = '11px';
-    divineLabel.textContent = t('inspDivineShield');
-    divineRow.appendChild(divineLabel);
-
-    const divineSwitch = document.createElement('input');
-    divineSwitch.type = 'checkbox';
-    divineSwitch.checked = this.typographySettings.shieldDivineNames;
-    divineSwitch.setAttribute('aria-label', t('inspDivineShield'));
-    divineSwitch.addEventListener('change', () => {
-      this.typographySettings.shieldDivineNames = divineSwitch.checked;
-      this.callbacks.onTypographyChange({ shieldDivineNames: divineSwitch.checked });
-    });
-    divineRow.appendChild(divineSwitch);
-    sacredCard.appendChild(divineRow);
-
+    sacredCard.appendChild(button(t('inspNormalize'), {
+      className: 'tok-btn tok-btn-block tok-btn-sm',
+      icon: 'sparkle',
+      iconSize: 14,
+      onClick: () => this.callbacks.onNormalizeNiqqud()
+    }));
+    sacredCard.appendChild(switchRow(t('inspDivineShield'), this.typographySettings.shieldDivineNames, (v) => {
+      this.typographySettings.shieldDivineNames = v;
+      this.callbacks.onTypographyChange({ shieldDivineNames: v });
+    }));
     this.element.appendChild(sacredCard);
   }
 
   // =========================================================================
-  // State 4: Image Frame Mode
+  // State 4: Image frame
   // =========================================================================
   private renderImageFrameMode(): void {
-    this.element.appendChild(this.createHeader(t('inspImageFrame'), t('inspImage'), 'image'));
+    this.element.appendChild(this.createHeader(t('inspSelected'), t('inspImageFrame'), t('inspImage'), 'image'));
 
     const imgCard = this.createCard(t('inspFitting'));
-    const fitSelect = document.createElement('select');
-    fitSelect.className = 'tok-select';
-    fitSelect.style.width = '100%';
-    fitSelect.style.marginBottom = '8px';
-    fitSelect.setAttribute('aria-label', t('inspFitting'));
-
     const fits = [t('inspFitProportional'), t('inspFitFill'), t('inspFitFrame')];
-    for (const f of fits) {
-      const opt = document.createElement('option');
-      opt.textContent = f;
-      fitSelect.appendChild(opt);
-    }
-    imgCard.appendChild(fitSelect);
-
-    imgCard.appendChild(this.createStatusRow(t('inspEffRes'), t('inspEffResOk'), '#10B981'));
-    imgCard.appendChild(this.createStatusRow(t('inspColorSpace'), 'CMYK Coated', '#94A3B8'));
-    imgCard.appendChild(this.createStatusRow(t('inspWrap'), t('inspWrapAround'), '#60A5FA'));
+    imgCard.appendChild(selectField(t('inspFitting'), fits.map((f) => ({ value: f, label: f })), fits[0], () => {}));
+    imgCard.appendChild(this.createStatusRow(t('inspEffRes'), t('inspEffResOk'), 'var(--tok-status-success)'));
+    imgCard.appendChild(this.createStatusRow(t('inspColorSpace'), 'CMYK Coated', 'var(--tok-text-primary)'));
+    imgCard.appendChild(this.createStatusRow(t('inspWrap'), t('inspWrapAround'), 'var(--tok-accent-text)'));
     this.element.appendChild(imgCard);
   }
 
   // =========================================================================
-  // State 5: Multi-Selection Mode (Align & Distribute)
+  // State 5: Multi-selection (align & distribute)
   // =========================================================================
   private renderMultiSelectMode(): void {
-    this.element.appendChild(this.createHeader(t('inspMulti'), t('inspMultiCount'), 'layers'));
+    this.element.appendChild(this.createHeader(t('inspSelected'), t('inspMulti'), t('inspMultiCount'), 'layers'));
 
     const alignCard = this.createCard(t('inspAlignDist'));
-    const alignRow = document.createElement('div');
-    alignRow.style.display = 'grid';
-    alignRow.style.gridTemplateColumns = 'repeat(3, 1fr)';
-    alignRow.style.gap = '6px';
-    alignRow.style.marginBottom = '8px';
-
-    const alignActions = [
+    const grid = el('div', undefined, { style: 'display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px' });
+    const actions = [
       { id: 'right', label: t('inspAlignRight') },
       { id: 'center', label: t('inspAlignCenter') },
       { id: 'left', label: t('inspAlignLeft') },
@@ -704,29 +484,19 @@ export class ContextualInspector {
       { id: 'middle', label: t('inspAlignMiddle') },
       { id: 'bottom', label: t('inspAlignBottom') }
     ];
-
-    for (const a of alignActions) {
-      const btn = document.createElement('button');
-      btn.className = 'tok-btn';
-      btn.textContent = a.label;
-      btn.style.fontSize = '11px';
-      btn.addEventListener('click', () => this.callbacks.onAlignFrames(a.id));
-      alignRow.appendChild(btn);
+    for (const a of actions) {
+      grid.appendChild(button(a.label, { className: 'tok-btn tok-btn-sm', onClick: () => this.callbacks.onAlignFrames(a.id) }));
     }
-    alignCard.appendChild(alignRow);
-
-    const distBtn = document.createElement('button');
-    distBtn.className = 'tok-btn tok-btn-primary';
-    distBtn.style.width = '100%';
-    distBtn.textContent = t('inspDistribute');
-    distBtn.addEventListener('click', () => this.callbacks.onAlignFrames('distribute-vertical'));
-    alignCard.appendChild(distBtn);
-
+    alignCard.appendChild(grid);
+    alignCard.appendChild(button(t('inspDistribute'), {
+      className: 'tok-btn tok-btn-primary tok-btn-block tok-btn-sm',
+      onClick: () => this.callbacks.onAlignFrames('distribute-vertical')
+    }));
     this.element.appendChild(alignCard);
   }
 
   // =========================================================================
-  // Value Scrubber Helper (Figma / Blender Style Direct Drag Manipulation)
+  // Value scrubber: label above (drag it to change the value), unit inside the field
   // =========================================================================
   private createScrubber(
     label: string,
@@ -736,52 +506,50 @@ export class ContextualInspector {
     max: number,
     onChange: (val: number) => void
   ): HTMLElement {
-    const wrap = document.createElement('div');
-    wrap.className = 'tok-scrubber-field';
-    wrap.style.flex = '1';
-    wrap.style.display = 'flex';
-    wrap.style.flexDirection = 'column';
-    wrap.style.alignItems = 'stretch';
-    wrap.style.marginBottom = '6px';
+    const wrap = el('div', 'tok-field tok-scrubber-field');
+    const id = `tok-scrub-${Math.random().toString(36).slice(2, 9)}`;
+    const lbl = el('label', 'tok-field-label tok-scrub', { for: id, title: t('inspScrubHint') }, label);
+    wrap.appendChild(lbl);
 
-    const topRow = document.createElement('div');
-    topRow.style.display = 'flex';
-    topRow.style.alignItems = 'center';
-    topRow.style.justifyContent = 'space-between';
+    const box = el('div', 'tok-field-box');
+    const input = el('input', 'tok-input tok-input-number', { id, type: 'text', inputmode: 'decimal' });
+    input.value = String(Math.round(initialVal * 10) / 10);
+    box.appendChild(input);
+    box.appendChild(el('span', 'tok-field-unit', { 'aria-hidden': 'true' }, unit));
+    wrap.appendChild(box);
 
-    const lbl = document.createElement('span');
-    lbl.className = 'tok-scrubber-label';
-    lbl.textContent = label;
-    lbl.title = t('inspScrubHint');
-    topRow.appendChild(lbl);
-
-    const inputWrap = document.createElement('div');
-    inputWrap.className = 'tok-scrubber-input-wrapper';
-    inputWrap.style.position = 'relative';
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.inputMode = 'decimal';
-    input.className = 'tok-input tok-input-number tok-scrubber-input';
-    input.style.width = '100%';
-    input.value = formatScrubberValue(initialVal, unit);
-    input.setAttribute('aria-label', label);
-
-    // Value scrubbing state
     let isDragging = false;
     let startX = 0;
     let startVal = initialVal;
     let lastVal = initialVal;
 
+    const show = (v: number) => {
+      // The unit is drawn inside the field; the value itself stays a plain number.
+      input.value = formatScrubberValue(v, unit).replace(` ${unit}`, '');
+    };
     const commit = (v: number) => {
-      input.value = formatScrubberValue(v, unit);
+      show(v);
       if (v !== lastVal) {
         lastVal = v;
         onChange(v);
       }
     };
 
-    const onMouseDown = (e: MouseEvent) => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      // Dragging toward the inline end increases the value: right in LTR, left in RTL.
+      const rtl = getComputedStyle(wrap).direction === 'rtl';
+      const dx = rtl ? startX - e.clientX : e.clientX - startX;
+      commit(clampScrubberValue(startVal + Math.round(dx / 3), min, max));
+    };
+    const onMouseUp = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      document.body.style.cursor = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    lbl.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       isDragging = true;
       startX = e.clientX;
@@ -790,33 +558,12 @@ export class ContextualInspector {
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
       e.preventDefault();
-    };
-
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      // Dragging toward the inline end increases the value: right in LTR, left in RTL.
-      const rtl = getComputedStyle(wrap).direction === 'rtl';
-      const dx = rtl ? startX - e.clientX : e.clientX - startX;
-      const delta = Math.round(dx / 3);
-      // Only fire onChange when the value actually changes (mousemove fires per pixel).
-      commit(clampScrubberValue(startVal + delta, min, max));
-    };
-
-    const onMouseUp = () => {
-      if (isDragging) {
-        isDragging = false;
-        document.body.style.cursor = '';
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onMouseUp);
-      }
-    };
-
-    lbl.addEventListener('mousedown', onMouseDown);
+    });
 
     input.addEventListener('change', () => {
       const parsed = parseScrubberValue(input.value);
       if (parsed === null) {
-        input.value = formatScrubberValue(lastVal, unit); // restore instead of leaving garbage
+        show(lastVal); // restore instead of leaving garbage
         return;
       }
       commit(clampScrubberValue(parsed, min, max));
@@ -830,83 +577,71 @@ export class ContextualInspector {
       commit(clampScrubberValue((parseScrubberValue(input.value) ?? lastVal) + step, min, max));
     });
 
-    inputWrap.appendChild(input);
-    wrap.appendChild(topRow);
-    wrap.appendChild(inputWrap);
-
     return wrap;
   }
 
+  private row(a: HTMLElement, b: HTMLElement): HTMLElement {
+    const r = el('div', 'tok-field-row');
+    r.append(a, b);
+    return r;
+  }
+
   private createCard(title: string): HTMLElement {
-    const card = document.createElement('div');
-    card.className = 'tok-inspector-card';
-    const header = document.createElement('div');
-    header.className = 'tok-inspector-card-header';
-    header.textContent = title;
-    card.appendChild(header);
+    const card = el('section', 'tok-inspector-card');
+    card.appendChild(el('h3', 'tok-inspector-card-header', undefined, title));
     return card;
   }
 
-  private createHeader(title: string, subtitle: string, icon: IconName): HTMLElement {
-    const header = document.createElement('div');
-    header.style.padding = '12px 14px';
-    header.style.borderBottom = '1px solid var(--tok-border-subtle)';
-    header.style.background = 'var(--tok-bg-surface-2)';
-    header.style.display = 'flex';
-    header.style.alignItems = 'center';
-    header.style.justifyContent = 'space-between';
-
-    const right = document.createElement('div');
-    right.style.display = 'flex';
-    right.style.alignItems = 'center';
-    right.style.gap = '8px';
-
-    const iconSpan = document.createElement('span');
-    iconSpan.style.display = 'inline-flex';
-    iconSpan.style.alignItems = 'center';
-    iconSpan.style.justifyContent = 'center';
-    iconSpan.style.color = '#60A5FA';
-    iconSpan.innerHTML = renderIcon(icon, 16);
-    right.appendChild(iconSpan);
-
-    const textWrap = document.createElement('div');
-    const titleEl = document.createElement('div');
-    titleEl.style.fontWeight = 'bold';
-    titleEl.style.fontSize = '13px';
-    titleEl.textContent = title;
-    textWrap.appendChild(titleEl);
-
-    const s = document.createElement('div');
-    s.style.fontSize = '11px';
-    s.style.color = 'var(--tok-text-muted)';
-    s.textContent = subtitle;
-    textWrap.appendChild(s);
-
-    right.appendChild(textWrap);
-    header.appendChild(right);
-
+  private createHeader(eyebrow: string, title: string, subtitle: string, iconName: IconName, swatch?: string): HTMLElement {
+    const header = el('div', 'tok-insp-head');
+    header.appendChild(el('span', 'tok-insp-eyebrow', undefined, eyebrow));
+    const titleRow = el('div', 'tok-insp-title');
+    if (swatch) {
+      const sw = el('span', 'tok-swatch', { 'aria-hidden': 'true' });
+      sw.style.background = swatch;
+      titleRow.appendChild(sw);
+    } else {
+      const ic = icon(iconName, 16);
+      ic.style.color = 'var(--tok-accent-text)';
+      titleRow.appendChild(ic);
+    }
+    titleRow.appendChild(el('h2', undefined, undefined, title));
+    header.appendChild(titleRow);
+    header.appendChild(el('span', 'tok-insp-sub', undefined, subtitle));
     return header;
   }
 
+  /** Bottom card with a status badge and a list of checks. */
+  private createCheckCard(title: string, items: { label: string; value: string; ok: boolean }[]): HTMLElement {
+    const card = el('div', 'tok-check-card');
+    const head = el('div', 'tok-check-head');
+    head.appendChild(el('span', undefined, undefined, title));
+    const allOk = items.every((i) => i.ok);
+    const badge = el('span', `tok-badge ${allOk ? 'tok-badge-success' : 'tok-badge-warning'}`);
+    badge.appendChild(el('span', 'tok-dot', { 'aria-hidden': 'true' }));
+    badge.appendChild(el('span', undefined, undefined, allOk ? t('inspReadyForPrint') : t('exportCheckWarnings')));
+    head.appendChild(badge);
+    card.appendChild(head);
+    const list = el('ul', 'tok-check-list');
+    for (const item of items) {
+      const li = el('li');
+      const mark = el('span', item.ok ? 'tok-ok' : 'tok-warn');
+      mark.appendChild(icon(item.ok ? 'check' : 'warning', 15));
+      li.appendChild(mark);
+      li.appendChild(el('span', undefined, { style: 'flex:1' }, item.label));
+      li.appendChild(el('span', undefined, { style: 'color:var(--tok-text-primary)' }, item.value));
+      list.appendChild(li);
+    }
+    card.appendChild(list);
+    return card;
+  }
+
   private createStatusRow(label: string, value: string, color: string): HTMLElement {
-    const row = document.createElement('div');
-    row.style.display = 'flex';
-    row.style.alignItems = 'center';
-    row.style.justifyContent = 'space-between';
-    row.style.padding = '4px 0';
-    row.style.fontSize = '11px';
-
-    const lSpan = document.createElement('span');
-    lSpan.style.color = 'var(--tok-text-secondary)';
-    lSpan.textContent = label;
-    row.appendChild(lSpan);
-
-    const vSpan = document.createElement('span');
-    vSpan.style.color = color;
-    vSpan.style.fontWeight = 'bold';
-    vSpan.textContent = value;
-    row.appendChild(vSpan);
-
+    const row = el('div', 'tok-status-line');
+    row.appendChild(el('span', undefined, undefined, label));
+    const v = el('span', undefined, undefined, value);
+    v.style.color = color;
+    row.appendChild(v);
     return row;
   }
 }

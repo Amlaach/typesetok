@@ -1,69 +1,120 @@
 <!DOCTYPE html>
-<html dir="rtl" lang="he">
+<html dir="rtl" lang="he" data-theme="light">
 <head>
   <meta charset="utf-8">
   <!-- Only local code may run. 'unsafe-eval' is required by the plugin engine (new Function);
-       inline styles are used throughout the component code. -->
+       inline styles are used for per-element geometry. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TypesetOK (TOK) - תוכנת עימוד מקצועית</title>
+  <title>TypesetOK</title>
   <style>
     /* ==========================================================================
-       TypesetOK (TOK) Design System & Tokens (UX/UI Specification 2.0)
-       Section 11: Color System & Design Tokens
-       Section 18: Responsive Design System
+       Fonts (SIL Open Font License, shipped in assets/fonts/ui)
+       IBM Plex Sans Hebrew: interface · Frank Ruhl Libre: main text · Noto Rashi Hebrew: commentaries
+       ========================================================================== */
+    @font-face { font-family: 'IBM Plex Sans Hebrew'; font-weight: 400; font-display: swap; src: url('../../../assets/fonts/ui/ibm-plex-sans-hebrew-hebrew-400-normal.woff2') format('woff2'); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+    @font-face { font-family: 'IBM Plex Sans Hebrew'; font-weight: 500; font-display: swap; src: url('../../../assets/fonts/ui/ibm-plex-sans-hebrew-hebrew-500-normal.woff2') format('woff2'); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+    @font-face { font-family: 'IBM Plex Sans Hebrew'; font-weight: 600; font-display: swap; src: url('../../../assets/fonts/ui/ibm-plex-sans-hebrew-hebrew-600-normal.woff2') format('woff2'); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+    @font-face { font-family: 'IBM Plex Sans Hebrew'; font-weight: 400; font-display: swap; src: url('../../../assets/fonts/ui/ibm-plex-sans-hebrew-latin-400-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+    @font-face { font-family: 'IBM Plex Sans Hebrew'; font-weight: 500; font-display: swap; src: url('../../../assets/fonts/ui/ibm-plex-sans-hebrew-latin-500-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+    @font-face { font-family: 'IBM Plex Sans Hebrew'; font-weight: 600; font-display: swap; src: url('../../../assets/fonts/ui/ibm-plex-sans-hebrew-latin-600-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+    @font-face { font-family: 'Frank Ruhl Libre'; font-weight: 400; font-display: swap; src: url('../../../assets/fonts/ui/frank-ruhl-libre-hebrew-400-normal.woff2') format('woff2'); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+    @font-face { font-family: 'Frank Ruhl Libre'; font-weight: 700; font-display: swap; src: url('../../../assets/fonts/ui/frank-ruhl-libre-hebrew-700-normal.woff2') format('woff2'); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+    @font-face { font-family: 'Frank Ruhl Libre'; font-weight: 400; font-display: swap; src: url('../../../assets/fonts/ui/frank-ruhl-libre-latin-400-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+2000-206F; }
+    @font-face { font-family: 'Frank Ruhl Libre'; font-weight: 700; font-display: swap; src: url('../../../assets/fonts/ui/frank-ruhl-libre-latin-700-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+2000-206F; }
+    @font-face { font-family: 'Noto Rashi Hebrew'; font-weight: 400; font-display: swap; src: url('../../../assets/fonts/ui/noto-rashi-hebrew-hebrew-400-normal.woff2') format('woff2'); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+    @font-face { font-family: 'Noto Rashi Hebrew'; font-weight: 700; font-display: swap; src: url('../../../assets/fonts/ui/noto-rashi-hebrew-hebrew-700-normal.woff2') format('woff2'); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+    @font-face { font-family: 'Noto Rashi Hebrew'; font-weight: 400; font-display: swap; src: url('../../../assets/fonts/ui/noto-rashi-hebrew-latin-400-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+2000-206F; }
+    @font-face { font-family: 'IBM Plex Mono'; font-weight: 400; font-display: swap; src: url('../../../assets/fonts/ui/ibm-plex-mono-latin-400-normal.woff2') format('woff2'); }
+    @font-face { font-family: 'IBM Plex Mono'; font-weight: 500; font-display: swap; src: url('../../../assets/fonts/ui/ibm-plex-mono-latin-500-normal.woff2') format('woff2'); }
+
+    /* ==========================================================================
+       Design tokens. theme.ts overwrites the color tokens at runtime (light / dark /
+       high contrast + accent); the values below are the light theme, so the first
+       paint already matches.
        ========================================================================== */
     :root {
-      /* Surface Tokens */
-      --tok-bg-canvas:        #121212; /* שולחן העבודה מאחורי העמודים */
-      --tok-bg-app:           #181818; /* מסגרת התוכנה והסרגלים */
-      --tok-bg-surface-1:     #1E1E1E; /* רקע פאנל מפקח וסרגל ניווט */
-      --tok-bg-surface-2:     #262626; /* רקע שדות קלט וכפתורים משניים */
-      --tok-bg-surface-hover: #2E2E2E;
-      --tok-bg-elevated:      #303030; /* רקע Popovers ו-Command Palette */
+      /* Surfaces */
+      --tok-bg-app:           #F4F3EF; /* app chrome: top bar, rail, status bar */
+      --tok-bg-surface-1:     #FFFFFF; /* panels and dialogs */
+      --tok-bg-surface-2:     #F8F7F4; /* input fields */
+      --tok-bg-surface-hover: #EEECE7;
+      --tok-bg-elevated:      #FFFFFF; /* menus and popovers */
+      --tok-bg-canvas:        #E4E2DB; /* the desk behind the pages */
 
-      /* Border & Focus */
-      --tok-border-subtle:    #2C2C2C; /* מפרידים פנימיים */
-      --tok-border-strong:    #3E3E3E; /* גבולות שדות קלט וכרטיסים */
-      --tok-border-focus:     #3B82F6; /* מסגרת פוקוס פעיל במקלדת */
+      /* Lines & focus */
+      --tok-border-subtle:    #DDDAD2;
+      --tok-border-strong:    #C9C5BB;
+      --tok-border-focus:     #1E4A9E;
 
-      /* Interactive & Accent */
-      --tok-accent-primary:   #2563EB; /* כפתורי פעולה מרכזיים */
-      --tok-accent-hover:     #1D4ED8;
-      --tok-selection-frame:  #3B82F6; /* מסגרת אובייקט נבחר בקנבס */
-      --tok-selection-text:   rgba(59, 130, 246, 0.35); /* הדגשת טקסט מסומן */
-      --tok-guide-margin:     #9333EA; /* קווי שוליים (סגול ברור) */
-      --tok-guide-column:     #06B6D4; /* קווי טורים (טורקיז) */
-      --tok-guide-baseline:   rgba(16, 185, 129, 0.25); /* רשת שורות בסיס (ירוק) */
+      /* Accent ("ink blue" by default) */
+      --tok-accent-primary:   #1E4A9E; /* button fill */
+      --tok-accent-hover:     #163A7D;
+      --tok-accent-text:      #1E4A9E; /* accent as text */
+      --tok-accent-soft:      #E8EEF8; /* selected rows */
+      --tok-on-accent:        #FFFFFF;
+      --tok-selection-frame:  #1E4A9E;
+      --tok-selection-text:   rgba(30, 74, 158, 0.22);
 
-      /* Feedback Tokens */
-      --tok-status-error:     #EF4444; /* שגיאות Preflight, טקסט גולש */
-      --tok-status-warning:   #F59E0B; /* תמונות ברזולוציה נמוכה, חריגות רווח */
-      --tok-status-success:   #10B981; /* תקינות דפוס מלאה, ייצוא הושלם */
+      /* Guides drawn over the page */
+      --tok-guide-margin:     #9333EA;
+      --tok-guide-column:     #06B6D4;
+      --tok-guide-baseline:   rgba(16, 185, 129, 0.25);
 
-      /* Typography & Font Stacks */
-      --tok-text-primary:     #F3F4F6;
-      --tok-text-secondary:   #9CA3AF;
-      --tok-text-muted:       #6B7280;
-      --tok-font-system:      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      --tok-font-hebrew-body: "Taamey Frank CLM", "David CLM", "Frank Ruehl CLM", serif;
-      --tok-font-hebrew-rashi: "Rashi", "Taamey Frank CLM", serif;
+      /* Feedback */
+      --tok-status-error:     #B42318;
+      --tok-status-warning:   #8A5300;
+      --tok-status-success:   #1D6B45;
+      --tok-error-soft:       #FDECEA;
+      --tok-warning-soft:     #FBF0DC;
+      --tok-success-soft:     #E6F2EA;
 
-      /* Spatial Dimensions */
-      --tok-structure-width:  250px;
-      --tok-inspector-width:  320px;
-      --tok-top-bar-height:   44px;
-      --tok-status-height:    26px;
+      /* Text */
+      --tok-text-primary:     #1B1A17;
+      --tok-text-secondary:   #57534B;
+      --tok-text-muted:       #6B675E;
+
+      /* Controls */
+      --tok-seg-bg:           #EAE8E2;
+      --tok-seg-active:       #FFFFFF;
+      --tok-seg-shadow:       0 1px 2px rgba(27, 26, 23, 0.12);
+      --tok-kbd-bg:           #ECEAE4;
+      --tok-switch-off:       #8F897D;
+
+      /* Elevation */
+      --tok-scrim:            rgba(27, 26, 23, 0.42);
+      --tok-shadow-page:      0 1px 2px rgba(27, 26, 23, 0.10), 0 12px 32px rgba(40, 32, 16, 0.16);
+      --tok-shadow-float:     0 4px 16px rgba(27, 26, 23, 0.12);
+      --tok-shadow-modal:     0 24px 64px rgba(27, 26, 23, 0.30);
+
+      /* Paper is paper in every theme */
+      --tok-paper:            #FFFEFB;
+      --tok-ink:              #1A1814;
+      --tok-ink-soft:         #2A2620;
+      --tok-ink-rule:         #4A463E;
+
+      /* Typography */
+      --tok-font-system:      'IBM Plex Sans Hebrew', 'Segoe UI', system-ui, sans-serif;
+      --tok-font-mono:        'IBM Plex Mono', Consolas, monospace;
+      --tok-font-hebrew-body: 'Frank Ruhl Libre', 'Times New Roman', serif;
+      --tok-font-hebrew-rashi: 'Noto Rashi Hebrew', 'Frank Ruhl Libre', serif;
+      /* Type scale: 11 / 12 / 13 / 15 (+ display 34 on the start screen) */
+
+      /* Layout */
+      --tok-top-bar-height:   52px;
+      --tok-status-height:    28px;
+      --tok-rail-width:       68px;
+      --tok-structure-width:  236px;
+      --tok-inspector-width:  300px;
       --tok-hud-height:       36px;
-      --tok-input-height:     28px;
+      --tok-input-height:     32px;
+      --tok-row-height:       36px;
+      --tok-radius-sm:        6px;
+      --tok-radius:           8px;
+      --tok-radius-lg:        12px;
     }
 
-    /* CSS Reset */
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     html, body {
       width: 100vw;
@@ -72,290 +123,602 @@
       background: var(--tok-bg-app);
       color: var(--tok-text-primary);
       font-family: var(--tok-font-system);
+      font-size: 13px;
       user-select: none;
       -webkit-user-select: none;
-      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    ::selection { background: var(--tok-selection-text); }
+
+    #app { width: 100%; height: 100%; display: flex; flex-direction: column; position: relative; }
+
+    /* Keyboard focus is always visible; mouse clicks don't draw rings. */
+    :focus { outline: none; }
+    :focus-visible { outline: 2px solid var(--tok-border-focus); outline-offset: 2px; border-radius: 4px; }
+    .tok-enhanced-focus :focus-visible { outline-width: 3px; outline-offset: 3px; box-shadow: 0 0 0 6px var(--tok-accent-soft); }
+
+    .tok-reduced-motion *, .tok-reduced-motion *::before, .tok-reduced-motion *::after {
+      animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
     }
 
-    #app {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-    }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--tok-border-strong); border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--tok-text-muted); background-clip: padding-box; border: 2px solid transparent; }
 
-    /* Professional Dark Scrollbars */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-    ::-webkit-scrollbar-track {
-      background: var(--tok-bg-surface-1);
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #3A3A3A;
-      border-radius: 4px;
-      border: 1px solid var(--tok-bg-surface-1);
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #525252;
-    }
+    .tok-visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-    /* Form Controls: Inputs, Selects, Buttons */
-    .tok-input, .tok-select {
-      height: var(--tok-input-height);
-      background: var(--tok-bg-surface-2);
-      color: var(--tok-text-primary);
-      border: 1px solid var(--tok-border-strong);
-      border-radius: 4px;
-      padding: 0 8px;
-      font-size: 12px;
-      outline: none;
-      transition: border-color 0.15s, box-shadow 0.15s;
-      font-family: inherit;
-    }
-    .tok-input:focus, .tok-select:focus {
-      border-color: var(--tok-border-focus);
-      box-shadow: 0 0 0 1px var(--tok-border-focus);
-    }
-    .tok-input-number {
-      text-align: left;
-      font-variant-numeric: tabular-nums;
-      direction: ltr;
-    }
+    /* ==========================================================================
+       Controls
+       ========================================================================== */
+    .tok-icon-wrap { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .tok-icon-wrap svg { stroke-width: 1.6; }
+    .tok-flip-rtl[dir="rtl"] .tok-icon-wrap, [dir="rtl"] .tok-flip-rtl svg { transform: scaleX(-1); }
 
     .tok-btn {
       height: var(--tok-input-height);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 10px;
-      background: var(--tok-bg-surface-2);
-      color: var(--tok-text-primary);
-      border: 1px solid var(--tok-border-strong);
-      border-radius: 4px;
-      font-size: 12px;
-      cursor: pointer;
-      user-select: none;
-      transition: all 0.15s ease;
-      gap: 6px;
-      font-family: inherit;
-    }
-    .tok-btn:hover {
-      background: var(--tok-bg-surface-hover);
-      border-color: #4A4A4A;
-    }
-    .tok-btn:active {
-      transform: scale(0.98);
-    }
-    .tok-btn-primary {
-      background: var(--tok-accent-primary);
-      border-color: var(--tok-accent-primary);
-      color: #FFFFFF;
-      font-weight: 600;
-    }
-    .tok-btn-primary:hover {
-      background: var(--tok-accent-hover);
-      border-color: var(--tok-accent-hover);
-    }
-
-    /* Value Scrubber Component (Figma/Blender Style) */
-    .tok-scrubber-field {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-    .tok-scrubber-label {
-      font-size: 12px;
-      color: var(--tok-text-secondary);
-      cursor: ew-resize;
-      user-select: none;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      transition: color 0.15s;
-    }
-    .tok-scrubber-label:hover {
-      color: #60A5FA;
-    }
-    .tok-scrubber-input-wrapper {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-    .tok-scrubber-input {
-      width: 72px;
-      text-align: center;
-      font-variant-numeric: tabular-nums;
-    }
-    .tok-scrubber-unit {
-      position: absolute;
-      left: 6px;
-      font-size: 11px;
-      color: var(--tok-text-muted);
-      pointer-events: none;
-    }
-
-    /* Inspector Card Containers */
-    .tok-inspector-card {
-      background: var(--tok-bg-surface-1);
-      border-bottom: 1px solid var(--tok-border-subtle);
-      padding: 12px 14px;
-    }
-    .tok-inspector-card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 10px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--tok-text-primary);
-      letter-spacing: 0.3px;
-    }
-    .tok-inspector-card-header .tok-badge {
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 10px;
-      background: var(--tok-bg-surface-2);
-      color: var(--tok-text-secondary);
-      border: 1px solid var(--tok-border-subtle);
-    }
-
-    /* Canvas Action HUD (Section 8: Canvas Action HUD) */
-    .tok-action-hud {
-      position: absolute;
-      height: var(--tok-hud-height);
-      background: var(--tok-bg-elevated);
-      border: 1px solid var(--tok-border-strong);
-      border-radius: 6px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-      display: flex;
-      align-items: center;
-      padding: 0 6px;
-      gap: 6px;
-      z-index: 900;
-      animation: hudFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-      direction: rtl;
-    }
-    @keyframes hudFadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .tok-hud-divider {
-      width: 1px;
-      height: 18px;
-      background: var(--tok-border-subtle);
-      margin: 0 2px;
-    }
-
-    /* Command Palette Overlay (Section 8: Command Palette) */
-    .tok-palette-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(0, 0, 0, 0.65);
-      backdrop-filter: blur(4px);
-      z-index: 9999;
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
-      padding-top: 15vh;
-      animation: fadeIn 0.15s ease-out;
-    }
-    .tok-palette-modal {
-      width: 560px;
-      max-width: 90vw;
-      background: var(--tok-bg-elevated);
-      border: 1px solid var(--tok-border-strong);
-      border-radius: 8px;
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      direction: rtl;
-    }
-    .tok-palette-input-wrap {
-      display: flex;
-      align-items: center;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--tok-border-subtle);
-      background: #282828;
-    }
-    .tok-palette-input {
-      flex: 1;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 0 14px;
       background: transparent;
-      border: none;
-      outline: none;
-      color: #FFFFFF;
-      font-size: 15px;
-      font-family: inherit;
+      color: var(--tok-text-primary);
+      border: 1px solid var(--tok-border-strong);
+      border-radius: var(--tok-radius);
+      font-size: 13px; font-weight: 500;
+      white-space: nowrap;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
     }
-    .tok-palette-list {
-      max-height: 340px;
-      overflow-y: auto;
-      padding: 6px 0;
-    }
-    .tok-palette-item {
-      padding: 8px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      cursor: pointer;
-      font-size: 13px;
-      transition: background 0.1s;
-    }
-    .tok-palette-item.active, .tok-palette-item:hover {
-      background: #2563EB;
-      color: #FFFFFF;
-    }
-    .tok-palette-category {
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--tok-text-muted);
-      padding: 8px 16px 4px;
-      text-transform: uppercase;
-    }
+    .tok-btn:hover { background: var(--tok-bg-surface-hover); }
+    .tok-btn:disabled { opacity: 0.55; cursor: default; }
+    .tok-btn-primary { background: var(--tok-accent-primary); border-color: transparent; color: var(--tok-on-accent); font-weight: 600; }
+    .tok-btn-primary:hover { background: var(--tok-accent-hover); }
+    .tok-btn-ghost { border-color: transparent; color: var(--tok-text-secondary); }
+    .tok-btn-ghost:hover { color: var(--tok-text-primary); }
+    .tok-btn-block { width: 100%; }
+    .tok-btn-sm { height: 28px; padding: 0 10px; font-size: 12px; }
 
-    /* Toast Notification */
+    .tok-icon-btn {
+      width: var(--tok-input-height); height: var(--tok-input-height);
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 0; border: none; border-radius: 7px;
+      background: transparent; color: var(--tok-text-secondary);
+      transition: background 0.12s, color 0.12s;
+    }
+    .tok-icon-btn:hover { background: var(--tok-bg-surface-hover); color: var(--tok-text-primary); }
+    .tok-icon-btn:disabled { opacity: 0.4; cursor: default; background: transparent; }
+
+    .tok-input, .tok-select {
+      height: var(--tok-input-height);
+      width: 100%;
+      background: var(--tok-bg-surface-2);
+      color: var(--tok-text-primary);
+      border: 1px solid var(--tok-border-strong);
+      border-radius: 7px;
+      padding: 0 10px;
+      font-size: 13px;
+      transition: border-color 0.12s, box-shadow 0.12s;
+    }
+    .tok-input:focus, .tok-select:focus { border-color: var(--tok-border-focus); box-shadow: 0 0 0 3px var(--tok-accent-soft); outline: none; }
+    .tok-select { appearance: none; cursor: pointer; padding-inline-end: 30px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%236B675E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-size: 12px 12px; background-position: left 10px center; }
+    [dir="ltr"] .tok-select { background-position: right 10px center; }
+    [data-theme="dark"] .tok-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%23A3A6AE' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+    .tok-input-number { font-variant-numeric: tabular-nums; }
+
+    /* Label above a field, unit shown inside the field */
+    .tok-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1; }
+    .tok-field-label { font-size: 12px; color: var(--tok-text-secondary); user-select: none; }
+    .tok-field-label.tok-scrub { cursor: ew-resize; }
+    .tok-field-label.tok-scrub:hover { color: var(--tok-accent-text); }
+    .tok-field-box { position: relative; }
+    .tok-field-box .tok-input { padding-inline-end: 38px; }
+    .tok-field-unit { position: absolute; inset-inline-end: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--tok-text-muted); pointer-events: none; }
+    .tok-field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+    /* Segmented control */
+    .tok-seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--tok-seg-bg); border: 1px solid var(--tok-border-subtle); border-radius: 9px; }
+    .tok-seg-btn {
+      height: 28px; padding: 0 14px; border: none; border-radius: 6px;
+      background: transparent; color: var(--tok-text-secondary);
+      font-size: 13px; font-weight: 500;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      transition: background 0.12s, color 0.12s;
+    }
+    .tok-seg-btn:hover { color: var(--tok-text-primary); }
+    .tok-seg-btn[aria-pressed="true"], .tok-seg-btn[aria-checked="true"] { background: var(--tok-seg-active); color: var(--tok-text-primary); font-weight: 600; box-shadow: var(--tok-seg-shadow); }
+    .tok-seg-fill { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
+    .tok-seg-fill .tok-seg-btn { padding: 0 6px; }
+
+    /* Switch */
+    .tok-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; }
+    .tok-switch-row > span { font-size: 13px; }
+    .tok-switch-text { display: flex; flex-direction: column; gap: 2px; }
+    .tok-switch-desc { font-size: 12px; color: var(--tok-text-secondary); line-height: 1.45; }
+    .tok-switch {
+      flex: none; width: 34px; height: 20px; border-radius: 10px; border: none; padding: 0;
+      position: relative; background: var(--tok-switch-off); transition: background 0.15s;
+    }
+    .tok-switch::after {
+      content: ''; position: absolute; top: 3px; inset-inline-start: 3px;
+      width: 14px; height: 14px; border-radius: 50%; background: #FFFFFF;
+      box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: inset-inline-start 0.15s;
+    }
+    .tok-switch[aria-checked="true"] { background: var(--tok-accent-primary); }
+    .tok-switch[aria-checked="true"]::after { inset-inline-start: 17px; }
+    .tok-switch:disabled { opacity: 0.5; cursor: default; }
+
+    .tok-kbd {
+      font-family: var(--tok-font-mono); font-size: 11px; line-height: 1.4;
+      color: var(--tok-text-secondary); background: var(--tok-kbd-bg);
+      border-radius: 4px; padding: 2px 6px; white-space: nowrap; direction: ltr; unicode-bidi: isolate;
+    }
+    .tok-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+    .tok-badge-count { font-size: 11px; color: var(--tok-text-secondary); background: var(--tok-kbd-bg); padding: 1px 7px; border-radius: 10px; }
+    .tok-badge-success { color: var(--tok-status-success); background: var(--tok-success-soft); }
+    .tok-badge-warning { color: var(--tok-status-warning); background: var(--tok-warning-soft); }
+    .tok-badge-error { color: var(--tok-status-error); background: var(--tok-error-soft); }
+    .tok-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+    .tok-divider-v { width: 1px; height: 20px; background: var(--tok-border-subtle); flex: none; }
+
+    /* ==========================================================================
+       Top bar
+       ========================================================================== */
+    .tok-top-bar {
+      height: var(--tok-top-bar-height); min-height: var(--tok-top-bar-height);
+      display: flex; align-items: center; gap: 16px; padding: 0 16px;
+      background: var(--tok-bg-app); border-bottom: 1px solid var(--tok-border-subtle);
+      position: relative; z-index: 50;
+    }
+    .tok-top-side { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+    .tok-top-side.tok-end { justify-content: flex-end; gap: 6px; }
+    .tok-brand-mark {
+      width: 28px; height: 28px; flex: none; border-radius: 7px;
+      background: var(--tok-accent-primary); color: var(--tok-on-accent);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: var(--tok-font-hebrew-body); font-size: 19px; font-weight: 700; line-height: 1; padding-bottom: 2px;
+    }
+    .tok-brand-btn { display: inline-flex; align-items: center; gap: 10px; border: none; background: transparent; padding: 2px; border-radius: 8px; }
+    .tok-brand-name { font-size: 14px; font-weight: 600; }
+    .tok-doc-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+    .tok-doc-title-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tok-doc-title-sep { color: var(--tok-text-muted); }
+    .tok-doc-title-page { color: var(--tok-text-secondary); white-space: nowrap; }
+    .tok-saved { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tok-text-muted); white-space: nowrap; }
+    .tok-saved .tok-dot { color: var(--tok-status-success); }
+    .tok-menu-btn { border: none; background: transparent; padding: 0 8px; height: 30px; gap: 6px; color: var(--tok-text-secondary); }
+    .tok-search-pill {
+      height: 34px; width: 236px; display: inline-flex; align-items: center; gap: 8px; padding: 0 10px;
+      background: var(--tok-bg-surface-2); border: 1px solid var(--tok-border-subtle); border-radius: 8px;
+      color: var(--tok-text-muted); font-size: 13px; transition: border-color 0.12s;
+    }
+    .tok-search-pill:hover { border-color: var(--tok-border-strong); color: var(--tok-text-secondary); }
+    .tok-search-pill > span:not(.tok-icon-wrap):not(.tok-kbd) { flex: 1; text-align: start; }
+
+    /* Dropdown menu (file menu) */
+    .tok-quick-menu {
+      position: absolute; top: calc(100% - 4px); min-width: 260px; padding: 6px; z-index: 999;
+      background: var(--tok-bg-elevated); border: 1px solid var(--tok-border-subtle); border-radius: 10px;
+      box-shadow: var(--tok-shadow-float); animation: tokPop 0.12s ease-out;
+    }
+    .tok-quick-menu-item {
+      width: 100%; height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 0 10px; border: none; border-radius: 6px; background: transparent; text-align: start; font-size: 13px;
+    }
+    .tok-quick-menu-item:hover, .tok-quick-menu-item:focus { background: var(--tok-accent-soft); color: var(--tok-text-primary); outline: none; }
+    .tok-quick-menu-sep { height: 1px; background: var(--tok-border-subtle); margin: 5px 4px; }
+
+    /* ==========================================================================
+       Workbench: rail · side panel · canvas · inspector
+       ========================================================================== */
+    .tok-workbench-main { display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative; }
+
+    .tok-rail {
+      width: var(--tok-rail-width); flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 10px 0; background: var(--tok-bg-app); border-inline-end: 1px solid var(--tok-border-subtle);
+    }
+    .tok-rail-btn {
+      width: 56px; height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      border: none; border-radius: 8px; background: transparent; color: var(--tok-text-secondary);
+      font-size: 11px; font-weight: 500; transition: background 0.12s, color 0.12s;
+    }
+    .tok-rail-btn:hover { background: var(--tok-bg-surface-hover); color: var(--tok-text-primary); }
+    .tok-rail-btn[aria-pressed="true"] { background: var(--tok-accent-soft); color: var(--tok-accent-text); }
+    .tok-rail-spacer { flex: 1; }
+    .tok-structure-bottom { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+    .tok-structure-bar {
+      width: var(--tok-structure-width); min-width: var(--tok-structure-width); flex: none;
+      display: flex; flex-direction: column; overflow: hidden;
+      background: var(--tok-bg-surface-1); border-inline-end: 1px solid var(--tok-border-subtle);
+    }
+    .tok-structure-bar[hidden] { display: none; }
+    .tok-panel-head {
+      height: 48px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px;
+      border-bottom: 1px solid var(--tok-border-subtle);
+    }
+    [dir="rtl"] .tok-panel-head { padding: 0 16px 0 12px; }
+    .tok-panel-head h2 { font-size: 13px; font-weight: 600; }
+    .tok-panel-head .tok-grow { flex: 1; }
+    .tok-structure-body { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+    .tok-panel-note { margin: 4px 4px 12px; font-size: 12px; line-height: 1.5; color: var(--tok-text-secondary); }
+
+    /* Page thumbnails grouped as spreads */
+    .tok-spread-card {
+      display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0 6px;
+      border: none; border-radius: 8px; background: transparent; color: var(--tok-text-secondary);
+    }
+    .tok-spread-card:hover { background: var(--tok-bg-surface-hover); }
+    .tok-spread-pages { display: flex; box-shadow: 0 1px 3px rgba(27, 26, 23, 0.18); }
+    .tok-spread-label { font-size: 12px; }
+    .tok-thumb { width: 50px; height: 70px; position: relative; background: var(--tok-paper); border: 1px solid var(--tok-border-strong); cursor: pointer; }
+    .tok-thumb.tok-thumb-empty { background: transparent; border-color: transparent; cursor: default; }
+    .tok-thumb[aria-current="page"] { outline: 2px solid var(--tok-accent-text); outline-offset: 1px; z-index: 1; }
+    .tok-thumb i { position: absolute; display: block; }
+    .tok-thumb .tl { background: repeating-linear-gradient(to bottom, #C9C4B8 0 1px, transparent 1px 3px); }
+    .tok-thumb .tg { background: repeating-linear-gradient(to bottom, #8F897C 0 1.5px, transparent 1.5px 4px); }
+    .tok-thumb .tr { height: 1px; background: #B8B3A8; }
+    .tok-spread-card.tok-active { background: var(--tok-accent-soft); box-shadow: inset 0 0 0 1.5px var(--tok-accent-text); color: var(--tok-accent-text); }
+    .tok-spread-card.tok-active .tok-spread-label { font-weight: 600; }
+
+    /* List rows (flows, styles, layers) */
+    .tok-list-row {
+      width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: var(--tok-row-height);
+      border: none; border-radius: 8px; background: transparent; text-align: start; color: var(--tok-text-primary);
+    }
+    button.tok-list-row:hover { background: var(--tok-bg-surface-hover); }
+    .tok-list-row[aria-pressed="true"], .tok-list-row[aria-current="true"] { background: var(--tok-accent-soft); box-shadow: inset 0 0 0 1.5px var(--tok-accent-text); }
+    .tok-list-row .tok-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+    .tok-list-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .tok-list-title { font-size: 13px; font-weight: 500; }
+    .tok-list-row[aria-pressed="true"] .tok-list-title { font-weight: 600; }
+    .tok-list-sub { font-size: 12px; color: var(--tok-text-secondary); }
+    .tok-list-meta { font-size: 12px; color: var(--tok-text-muted); white-space: nowrap; }
+
+    /* ==========================================================================
+       Canvas & pages
+       ========================================================================== */
+    .tok-canvas-container { flex: 1; min-width: 0; position: relative; overflow: auto; background: var(--tok-bg-canvas); display: flex; flex-direction: column; align-items: flex-start; padding: 40px 40px 96px; }
+    .tok-spreads-wrapper { display: flex; flex-direction: column; gap: 48px; margin-inline: auto; }
+    .tok-spread-row { display: flex; position: relative; box-shadow: var(--tok-shadow-page); }
+    .tok-spread-row.tok-single { box-shadow: none; }
+    .tok-spread-row.tok-single .tok-page-sheet { box-shadow: var(--tok-shadow-page); }
+    .tok-page-sheet {
+      width: 480px; height: 678px; position: relative; overflow: hidden; flex: none;
+      background: var(--tok-paper); color: var(--tok-ink);
+      padding: 36px 38px 40px; display: flex; flex-direction: column;
+      font-family: var(--tok-font-hebrew-body);
+    }
+    .tok-page-spine { position: absolute; top: 0; bottom: 0; width: 18px; pointer-events: none; }
+    .tok-page-head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 11px; color: var(--tok-ink-rule); padding-bottom: 5px; border-bottom: 0.75px solid var(--tok-ink-rule); margin-bottom: 11px;
+    }
+    .tok-page-head strong { font-size: 12.5px; font-weight: 700; }
+    .tok-talmud-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1.3fr 1fr; grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); column-gap: 10px; row-gap: 8px; }
+    .tok-interactive-frame {
+      position: relative; overflow: hidden; cursor: text; text-align: justify; text-justify: inter-word;
+      user-select: text; -webkit-user-select: text; border-radius: 1px;
+    }
+    .tok-interactive-frame:hover { box-shadow: 0 0 0 1px var(--tok-accent-soft); }
+    .tok-interactive-frame.tok-selected { outline: 1.5px solid var(--tok-selection-frame); outline-offset: 3px; overflow: visible; }
+    .tok-frame-text { height: 100%; overflow: hidden; }
+    .tok-frame-gemara { font-family: var(--tok-font-hebrew-body); font-size: 13.5px; line-height: 1.5; color: var(--tok-ink); }
+    .tok-frame-gemara b { font-weight: 700; }
+    .tok-frame-comm { font-family: var(--tok-font-hebrew-rashi); font-size: 9.6px; line-height: 1.45; color: var(--tok-ink-soft); }
+    .tok-frame-comm b { font-family: var(--tok-font-hebrew-body); font-weight: 700; }
+    .tok-frame-label { font-family: var(--tok-font-hebrew-body); font-weight: 700; font-size: 10.5px; text-align: center; margin-bottom: 2px; color: var(--tok-ink); }
+    .tok-frame-notes { font-size: 9px; line-height: 1.4; color: var(--tok-ink-rule); border-top: 0.75px solid var(--tok-ink-rule); padding-top: 4px; margin-top: 8px; }
+    .tok-frame-tag {
+      position: absolute; top: -21px; inset-inline-start: -5px; z-index: 2;
+      font-family: var(--tok-font-system); font-size: 11px; line-height: 15px; padding: 1px 6px; border-radius: 3px;
+      background: var(--tok-accent-primary); color: var(--tok-on-accent); white-space: nowrap; pointer-events: none;
+    }
+    .tok-resize-handle { position: absolute; width: 8px; height: 8px; background: #FFFFFF; border: 1.5px solid var(--tok-selection-frame); border-radius: 1px; z-index: 3; }
+    .tok-page-foot { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; font-size: 11px; color: var(--tok-ink-rule); }
+    .tok-guides-layer { position: absolute; inset: 0; pointer-events: none; }
+    .tok-guide-margin-rect { position: absolute; border: 1px dashed var(--tok-guide-margin); opacity: 0.45; }
+    .tok-guide-baseline { position: absolute; }
+
+    .tok-zoom-pill {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 20;
+      display: flex; align-items: center; gap: 2px; padding: 4px;
+      background: var(--tok-bg-elevated); border: 1px solid var(--tok-border-subtle); border-radius: 10px; box-shadow: var(--tok-shadow-float);
+    }
+    .tok-zoom-pill .tok-icon-btn { width: 30px; height: 30px; }
+    .tok-zoom-value { min-width: 48px; text-align: center; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; border: none; background: transparent; height: 30px; border-radius: 6px; }
+    .tok-zoom-value:hover { background: var(--tok-bg-surface-hover); }
+    .tok-canvas-shell { flex: 1; min-width: 0; position: relative; display: flex; }
+
+    /* ==========================================================================
+       Story editor & split view
+       ========================================================================== */
+    .tok-story-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--tok-bg-surface-1); }
+    .tok-story-toolbar {
+      height: 46px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px;
+      border-bottom: 1px solid var(--tok-border-subtle); background: var(--tok-bg-surface-1);
+    }
+    .tok-story-toolbar .tok-grow { flex: 1; }
+    .tok-chip-select {
+      height: 30px; display: inline-flex; align-items: center; gap: 8px; padding: 0 10px;
+      border: 1px solid var(--tok-border-subtle); border-radius: 7px; background: var(--tok-bg-surface-2); font-size: 13px; font-weight: 500;
+    }
+    .tok-story-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 48px; }
+    .tok-story-editor-content {
+      max-width: 640px; margin: 0 auto; padding: 36px 0 120px;
+      font-family: var(--tok-font-hebrew-body); font-size: 19px; line-height: 1.85; color: var(--tok-text-primary);
+      text-align: justify; outline: none; user-select: text; -webkit-user-select: text; caret-color: var(--tok-accent-text);
+    }
+    .tok-story-editor-content p { margin: 0 0 14px; padding: 4px 12px; margin-inline: -12px; border-radius: 6px; position: relative; }
+    .tok-story-editor-content p.tok-current { background: var(--tok-accent-soft); }
+    .tok-story-editor-content p.tok-current::before { content: ''; position: absolute; top: 8px; bottom: 8px; inset-inline-start: -10px; width: 3px; border-radius: 2px; background: var(--tok-accent-text); }
+    .tok-split .tok-story-panel { flex: 1; }
+    .tok-split .tok-story-editor-content { font-size: 17px; max-width: 520px; }
+    .tok-split .tok-story-scroll { padding: 0 32px; }
+    .tok-split-divider {
+      width: 9px; flex: none; display: flex; align-items: center; justify-content: center; cursor: col-resize;
+      background: var(--tok-bg-app); border-inline: 1px solid var(--tok-border-subtle); color: var(--tok-text-muted);
+    }
+    .tok-split-divider > span { display: flex; padding: 6px 0; border-radius: 4px; background: var(--tok-bg-surface-1); border: 1px solid var(--tok-border-subtle); }
+    .tok-split-divider:hover, .tok-split-divider:focus-visible { background: var(--tok-accent-soft); }
+
+    /* ==========================================================================
+       Inspector
+       ========================================================================== */
+    .tok-inspector-bar {
+      width: var(--tok-inspector-width); min-width: var(--tok-inspector-width); flex: none;
+      display: flex; flex-direction: column; overflow-y: auto;
+      background: var(--tok-bg-surface-1); border-inline-start: 1px solid var(--tok-border-subtle);
+    }
+    .tok-insp-head { padding: 14px 16px; border-bottom: 1px solid var(--tok-border-subtle); display: flex; flex-direction: column; gap: 3px; }
+    .tok-insp-eyebrow { font-size: 12px; color: var(--tok-text-muted); }
+    .tok-insp-title { display: flex; align-items: center; gap: 8px; }
+    .tok-insp-title h2 { font-size: 15px; font-weight: 600; }
+    .tok-insp-title .tok-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--tok-accent-text); }
+    .tok-insp-sub { font-size: 12px; color: var(--tok-text-secondary); }
+    .tok-inspector-card { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--tok-border-subtle); }
+    .tok-inspector-card:last-child { border-bottom: none; }
+    .tok-inspector-card-header { font-size: 12px; font-weight: 600; color: var(--tok-text-primary); display: flex; align-items: center; justify-content: space-between; }
+    .tok-inspector-sub { font-size: 12px; font-weight: 500; color: var(--tok-text-secondary); margin-top: 4px; }
+    .tok-insp-spacer { flex: 1; }
+    .tok-status-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; min-height: 22px; }
+    .tok-status-line > span:first-child { color: var(--tok-text-secondary); }
+    .tok-status-line > span:last-child { font-weight: 500; }
+    .tok-check-card { margin: 0 16px 16px; padding: 12px 14px; border: 1px solid var(--tok-border-subtle); border-radius: 10px; display: flex; flex-direction: column; gap: 10px; }
+    .tok-check-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; }
+    .tok-check-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+    .tok-check-list li { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--tok-text-secondary); }
+    .tok-check-list .tok-ok { color: var(--tok-status-success); display: flex; }
+    .tok-check-list .tok-warn { color: var(--tok-status-warning); display: flex; }
+    .tok-letter-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tok-letter-chip {
+      width: 32px; height: 30px; border-radius: 6px; border: 1px solid var(--tok-border-strong); background: transparent;
+      font-family: var(--tok-font-hebrew-body); font-size: 15px; font-weight: 700; color: var(--tok-text-secondary);
+    }
+    .tok-letter-chip[aria-pressed="true"] { background: var(--tok-accent-soft); border-color: var(--tok-accent-text); color: var(--tok-accent-text); }
+    .tok-font-preview { font-family: var(--tok-font-hebrew-body); font-size: 16px; line-height: 1; }
+
+    /* ==========================================================================
+       Status bar
+       ========================================================================== */
+    .tok-status-bar {
+      height: var(--tok-status-height); min-height: var(--tok-status-height);
+      display: flex; align-items: center; gap: 18px; padding: 0 16px;
+      background: var(--tok-bg-app); border-top: 1px solid var(--tok-border-subtle);
+      font-size: 12px; color: var(--tok-text-secondary);
+    }
+    .tok-status-bar .tok-grow { flex: 1; }
+    .tok-status-btn { border: none; background: transparent; padding: 0 4px; height: 22px; border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; color: inherit; font-size: 12px; }
+    .tok-status-btn:hover { background: var(--tok-bg-surface-hover); color: var(--tok-text-primary); }
+    .tok-status-ok { color: var(--tok-status-success); }
+    .tok-status-warn { color: var(--tok-status-warning); }
+    .tok-status-err { color: var(--tok-status-error); }
+
+    /* ==========================================================================
+       Action HUD (floating text toolbar)
+       ========================================================================== */
+    .tok-action-hud {
+      position: absolute; height: 40px; z-index: 900; display: flex; align-items: center; gap: 4px; padding: 0 6px;
+      background: var(--tok-bg-elevated); border: 1px solid var(--tok-border-subtle); border-radius: 10px; box-shadow: var(--tok-shadow-float);
+      animation: tokPop 0.12s ease-out;
+    }
+    .tok-action-hud .tok-select, .tok-action-hud .tok-input { height: 28px; width: auto; font-size: 12px; }
+    .tok-hud-divider { width: 1px; height: 18px; background: var(--tok-border-subtle); margin: 0 2px; }
+    .tok-hud-btn { min-width: 28px; height: 28px; padding: 0 6px; border: none; border-radius: 6px; background: transparent; color: var(--tok-text-secondary); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+    .tok-hud-btn:hover { background: var(--tok-bg-surface-hover); color: var(--tok-text-primary); }
+    .tok-hud-btn[aria-pressed="true"] { background: var(--tok-accent-soft); color: var(--tok-accent-text); }
+
+    /* ==========================================================================
+       Dialogs
+       ========================================================================== */
+    .tok-overlay {
+      position: fixed; inset: 0; z-index: 9000; display: none; align-items: center; justify-content: center;
+      background: var(--tok-scrim); animation: tokFade 0.15s ease-out;
+    }
+    .tok-overlay.tok-open { display: flex; }
+    .tok-dialog {
+      max-width: calc(100vw - 48px); max-height: calc(100vh - 48px);
+      display: flex; flex-direction: column; overflow: hidden;
+      background: var(--tok-bg-surface-1); color: var(--tok-text-primary);
+      border: 1px solid var(--tok-border-subtle); border-radius: 14px; box-shadow: var(--tok-shadow-modal);
+      animation: tokRise 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .tok-dialog-head { height: 60px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 24px; border-bottom: 1px solid var(--tok-border-subtle); }
+    [dir="rtl"] .tok-dialog-head { padding: 0 24px 0 16px; }
+    .tok-dialog-head-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .tok-dialog-head h2 { font-size: 15px; font-weight: 600; }
+    .tok-dialog-head p { font-size: 12px; color: var(--tok-text-secondary); }
+    .tok-dialog-body { flex: 1; min-height: 0; display: flex; }
+    .tok-dialog-foot { height: 64px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-top: 1px solid var(--tok-border-subtle); }
+    .tok-dialog-foot .tok-grow { flex: 1; }
+    .tok-dialog-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tok-text-muted); }
+    .tok-dialog-note .tok-icon-wrap { color: var(--tok-status-success); }
+
+    .tok-group { display: flex; flex-direction: column; gap: 10px; }
+    .tok-group-head { display: flex; flex-direction: column; gap: 2px; }
+    .tok-group-head h3 { font-size: 13px; font-weight: 600; }
+    .tok-group-head p { font-size: 12px; color: var(--tok-text-secondary); line-height: 1.5; }
+    .tok-card { padding: 14px 16px; border: 1px solid var(--tok-border-subtle); border-radius: 10px; background: var(--tok-bg-surface-1); }
+    .tok-card-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+    /* Radio cards (theme, export format) */
+    .tok-radio-card {
+      display: flex; gap: 12px; padding: 12px 14px; border-radius: 10px; text-align: start;
+      border: 1px solid var(--tok-border-subtle); background: var(--tok-bg-surface-1); color: var(--tok-text-primary);
+      transition: border-color 0.12s, box-shadow 0.12s;
+    }
+    .tok-radio-card:hover { border-color: var(--tok-border-strong); }
+    .tok-radio-card[aria-checked="true"] { border: 1.5px solid var(--tok-accent-text); box-shadow: 0 0 0 3px var(--tok-accent-soft); }
+    .tok-radio-dot { width: 16px; height: 16px; flex: none; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--tok-border-strong); background: var(--tok-bg-surface-1); }
+    [aria-checked="true"] > .tok-radio-dot, [aria-checked="true"] .tok-radio-dot { border: 5px solid var(--tok-accent-primary); }
+
+    /* Settings */
+    .tok-settings-nav { width: 200px; flex: none; display: flex; flex-direction: column; gap: 2px; padding: 14px 12px; background: var(--tok-bg-app); border-inline-end: 1px solid var(--tok-border-subtle); }
+    .tok-settings-nav-btn {
+      height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border: none; border-radius: 8px;
+      background: transparent; color: var(--tok-text-secondary); font-size: 13px; font-weight: 500; text-align: start;
+    }
+    .tok-settings-nav-btn:hover { background: var(--tok-bg-surface-hover); color: var(--tok-text-primary); }
+    .tok-settings-nav-btn[aria-selected="true"] { background: var(--tok-accent-soft); color: var(--tok-accent-text); font-weight: 600; }
+    .tok-settings-version { margin-top: auto; padding: 0 12px; font-size: 12px; color: var(--tok-text-muted); }
+    .tok-settings-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .tok-settings-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 22px 28px; display: flex; flex-direction: column; gap: 24px; }
+    .tok-settings-scroll > h2 { font-size: 15px; font-weight: 600; margin-bottom: -10px; }
+    .tok-theme-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .tok-theme-card { flex-direction: column; padding: 10px; gap: 10px; }
+    .tok-theme-card-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+    .tok-theme-card[aria-checked="true"] .tok-theme-card-label { font-weight: 600; }
+    .tok-theme-preview { display: flex; height: 92px; border-radius: 7px; overflow: hidden; border: 1px solid var(--tok-border-subtle); }
+    .tok-swatches { display: flex; gap: 12px; align-items: center; }
+    .tok-swatch-btn { width: 30px; height: 30px; border-radius: 50%; border: none; padding: 0; }
+    .tok-swatch-btn[aria-checked="true"] { box-shadow: 0 0 0 2px var(--tok-bg-surface-1), 0 0 0 4px var(--tok-swatch); }
+    .tok-log-box {
+      height: 200px; overflow-y: auto; padding: 10px 12px; border-radius: 8px; white-space: pre-wrap; text-align: left;
+      font-family: var(--tok-font-mono); font-size: 11.5px; line-height: 1.55;
+      background: var(--tok-bg-surface-2); border: 1px solid var(--tok-border-subtle); color: var(--tok-text-secondary);
+      user-select: text; -webkit-user-select: text;
+    }
+    .tok-plugin-card { display: flex; align-items: center; gap: 12px; }
+    .tok-plugin-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .tok-plugin-name { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+    .tok-plugin-desc { font-size: 12px; color: var(--tok-text-secondary); }
+    .tok-plugin-error { font-size: 12px; color: var(--tok-status-error); }
+    .tok-tag { font-family: var(--tok-font-mono); font-size: 10.5px; font-weight: 500; padding: 1px 6px; border-radius: 4px; background: var(--tok-kbd-bg); color: var(--tok-text-secondary); }
+
+    /* Command palette */
+    .tok-palette-overlay { position: fixed; inset: 0; z-index: 9500; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; background: var(--tok-scrim); animation: tokFade 0.12s ease-out; }
+    .tok-palette-modal {
+      width: 640px; max-width: calc(100vw - 48px); display: flex; flex-direction: column; overflow: hidden;
+      background: var(--tok-bg-surface-1); border: 1px solid var(--tok-border-subtle); border-radius: 14px; box-shadow: var(--tok-shadow-modal);
+      animation: tokRise 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .tok-palette-input-wrap { height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 18px; border-bottom: 1px solid var(--tok-border-subtle); color: var(--tok-text-secondary); }
+    .tok-palette-input { flex: 1; height: 40px; border: none; outline: none; background: transparent; color: var(--tok-text-primary); font-size: 16px; }
+    .tok-palette-input::placeholder { color: var(--tok-text-muted); }
+    .tok-palette-list { max-height: min(400px, 52vh); overflow-y: auto; padding: 6px 8px; }
+    .tok-palette-category { padding: 10px 12px 4px; font-size: 12px; font-weight: 500; color: var(--tok-text-muted); }
+    .tok-palette-item { height: 40px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 8px; cursor: pointer; color: var(--tok-text-primary); }
+    .tok-palette-item .tok-palette-icon { color: var(--tok-text-secondary); display: flex; }
+    .tok-palette-item .tok-palette-title { font-size: 13px; white-space: nowrap; }
+    .tok-palette-item .tok-palette-sub { font-size: 12px; color: var(--tok-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .tok-palette-item .tok-grow { flex: 1; }
+    .tok-palette-item .tok-palette-enter { display: none; color: var(--tok-accent-text); }
+    .tok-palette-item.active { background: var(--tok-accent-soft); }
+    .tok-palette-item.active .tok-palette-icon, .tok-palette-item.active .tok-palette-enter { color: var(--tok-accent-text); display: flex; }
+    .tok-palette-item mark { background: transparent; color: var(--tok-accent-text); font-weight: 600; }
+    .tok-palette-empty { padding: 28px; text-align: center; color: var(--tok-text-muted); }
+    .tok-palette-foot { height: 40px; display: flex; align-items: center; gap: 16px; padding: 0 18px; border-top: 1px solid var(--tok-border-subtle); background: var(--tok-bg-app); font-size: 12px; color: var(--tok-text-secondary); }
+    .tok-palette-foot > span { display: inline-flex; align-items: center; gap: 6px; }
+    .tok-palette-foot .tok-grow { flex: 1; }
+
+    /* Welcome / start screen (full window) */
+    .tok-welcome-overlay { position: fixed; inset: 0; z-index: 8000; display: none; flex-direction: column; background: var(--tok-bg-app); color: var(--tok-text-primary); animation: tokFade 0.15s ease-out; }
+    .tok-welcome-overlay.tok-open { display: flex; }
+    .tok-welcome-top { height: var(--tok-top-bar-height); flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--tok-border-subtle); }
+    .tok-welcome-top .tok-grow { flex: 1; }
+    .tok-welcome-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; justify-content: center; padding: 36px 56px; }
+    .tok-welcome-card { width: 100%; max-width: 1328px; display: flex; gap: 40px; }
+    .tok-welcome-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 24px; }
+    .tok-welcome-main h1 { font-family: var(--tok-font-hebrew-body); font-size: 34px; font-weight: 700; line-height: 1.2; }
+    .tok-welcome-main .tok-lead { font-size: 15px; color: var(--tok-text-secondary); margin-top: 6px; }
+    .tok-template-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .tok-template-card {
+      display: flex; flex-direction: column; text-align: start; padding: 0; overflow: hidden;
+      border: 1px solid var(--tok-border-subtle); border-radius: 12px; background: var(--tok-bg-surface-1); color: var(--tok-text-primary);
+      transition: border-color 0.12s, box-shadow 0.12s, transform 0.12s;
+    }
+    .tok-template-card:hover { border-color: var(--tok-accent-text); box-shadow: 0 0 0 2px var(--tok-accent-text); }
+    .tok-template-art { height: 150px; display: flex; align-items: center; justify-content: center; background: var(--tok-bg-canvas); border-bottom: 1px solid var(--tok-border-subtle); }
+    .tok-template-text { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 14px; }
+    .tok-template-title { font-size: 15px; font-weight: 600; }
+    .tok-template-desc { font-size: 12px; line-height: 1.5; color: var(--tok-text-secondary); }
+    .tok-template-meta { font-size: 12px; color: var(--tok-text-muted); margin-top: 4px; }
+    .tok-template-blank { align-items: center; justify-content: center; gap: 10px; min-height: 230px; border: 1.5px dashed var(--tok-border-strong); background: transparent; text-align: center; }
+    .tok-template-blank .tok-plus { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--tok-accent-soft); color: var(--tok-accent-text); }
+    .tok-page-art { position: relative; background: var(--tok-paper); box-shadow: 0 1px 2px rgba(27,26,23,.12), 0 6px 16px rgba(40,32,16,.14); }
+    .tok-page-art i { position: absolute; display: block; }
+    .tok-page-art .tl { background: repeating-linear-gradient(to bottom, #C9C4B8 0 1px, transparent 1px 3.5px); }
+    .tok-page-art .tg { background: repeating-linear-gradient(to bottom, #8F897C 0 1.5px, transparent 1.5px 5px); }
+    .tok-page-art .tg2 { background: repeating-linear-gradient(to bottom, #9B9588 0 1.2px, transparent 1.2px 4.2px); }
+    .tok-page-art .th { background: #5E584C; border-radius: 1px; }
+    .tok-page-art .th2 { background: #B0AA9D; border-radius: 1px; }
+    .tok-page-art .tr { height: 1px; background: #B8B3A8; }
+    .tok-first-run { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border: 1px solid var(--tok-border-subtle); border-radius: 12px; background: var(--tok-bg-surface-1); }
+    .tok-first-run-icon { width: 36px; height: 36px; flex: none; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: var(--tok-accent-soft); color: var(--tok-accent-text); }
+    .tok-first-run-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .tok-first-run-text strong { font-size: 13px; font-weight: 600; }
+    .tok-first-run-text span { font-size: 12px; color: var(--tok-text-secondary); }
+    .tok-recent { width: 340px; flex: none; display: flex; flex-direction: column; gap: 12px; padding: 20px 16px; border: 1px solid var(--tok-border-subtle); border-radius: 14px; background: var(--tok-bg-surface-1); align-self: flex-start; min-height: 520px; }
+    .tok-recent-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
+    .tok-recent-head h2 { font-size: 15px; font-weight: 600; }
+    .tok-recent-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: none; border-radius: 10px; background: transparent; text-align: start; }
+    .tok-recent-row:hover { background: var(--tok-accent-soft); }
+    .tok-recent-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .tok-recent-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tok-recent-sub { font-size: 12px; color: var(--tok-text-secondary); }
+    .tok-recent-when { font-size: 12px; color: var(--tok-text-muted); white-space: nowrap; }
+    .tok-recent-empty { padding: 24px 12px; text-align: center; font-size: 13px; color: var(--tok-text-secondary); line-height: 1.6; }
+    .tok-dropzone { margin-top: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 22px 16px; border: 1.5px dashed var(--tok-border-strong); border-radius: 12px; color: var(--tok-text-secondary); text-align: center; font-size: 13px; transition: background 0.12s, border-color 0.12s; }
+    .tok-dropzone.tok-drag { background: var(--tok-accent-soft); border-color: var(--tok-accent-text); color: var(--tok-accent-text); }
+    .tok-welcome-foot { height: 40px; flex: none; display: flex; align-items: center; gap: 18px; padding: 0 24px; border-top: 1px solid var(--tok-border-subtle); font-size: 12px; color: var(--tok-text-secondary); }
+    .tok-welcome-foot .tok-grow { flex: 1; }
+    .tok-welcome-foot label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .tok-welcome-foot input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--tok-accent-primary); }
+    .tok-link { border: none; background: transparent; padding: 0; color: var(--tok-accent-text); font-size: inherit; text-decoration: none; }
+    .tok-link:hover { text-decoration: underline; }
+
+    /* Export dialog */
+    .tok-export-side { width: 300px; flex: none; padding: 20px; display: flex; flex-direction: column; gap: 16px; background: var(--tok-bg-canvas); border-inline-start: 1px solid var(--tok-border-subtle); }
+    .tok-export-preview { display: flex; justify-content: center; padding-top: 6px; }
+    .tok-export-preview > div { display: flex; box-shadow: 0 1px 3px rgba(0,0,0,.2), 0 8px 20px rgba(40,32,16,.18); }
+    .tok-export-form { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; }
+    .tok-format-title { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .tok-format-title b { font-weight: 600; direction: ltr; unicode-bidi: isolate; }
+
+    /* About */
+    .tok-about-body { padding: 28px 28px 8px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+    .tok-about-body .tok-brand-mark { width: 56px; height: 56px; border-radius: 14px; font-size: 36px; }
+    .tok-about-body h2 { font-size: 15px; font-weight: 600; margin-top: 6px; }
+    .tok-about-body p { font-size: 13px; color: var(--tok-text-secondary); }
+    .tok-about-meta { width: 100%; margin-top: 12px; display: flex; flex-direction: column; gap: 4px; text-align: start; }
+
+    /* Toast */
     .tok-toast {
-      position: fixed;
-      bottom: 34px;
-      left: 24px;
-      background: #1E293B;
-      color: #FFFFFF;
-      border: 1px solid #334155;
-      padding: 10px 18px;
-      border-radius: 6px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-      font-size: 13px;
-      z-index: 99999;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      animation: fadeIn 0.2s ease-out;
+      position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); z-index: 99999; pointer-events: none;
+      display: flex; align-items: center; gap: 10px; max-width: min(560px, calc(100vw - 48px));
+      padding: 10px 16px; border-radius: 10px; font-size: 13px;
+      background: var(--tok-text-primary); color: var(--tok-bg-surface-1); box-shadow: var(--tok-shadow-float);
+      animation: tokRiseToast 0.18s ease-out;
     }
+    .tok-toast.tok-toast-error { background: var(--tok-status-error); color: #FFFFFF; }
 
-    /* Modals & Overlays */
-    .tok-welcome-overlay, .tok-settings-overlay, .tok-about-overlay {
-      animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    .tok-welcome-card, .tok-settings-card, .tok-about-card {
-      animation: modalSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    @keyframes modalSlideIn {
-      from { opacity: 0; transform: translateY(12px) scale(0.98); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
+    @keyframes tokFade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes tokRise { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
+    @keyframes tokRiseToast { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    @keyframes tokPop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
   </style>
 </head>
 <body>

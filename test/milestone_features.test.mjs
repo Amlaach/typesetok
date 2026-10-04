@@ -140,7 +140,9 @@ describe('UI/UX Feature 1: Welcome & Project Picker (מסך בחירת פרוי�
     assert.equal(fs.existsSync(welcomeTs), true);
     const content = fs.readFileSync(welcomeTs, 'utf-8');
     assert.equal(content.includes('tok-welcome-card'), true);
-    assert.equal(content.includes('#0F172A'), true, 'Uses matching blue palette');
+    // Colors come from the theme tokens (light/dark/color themes), never hard-coded.
+    assert.equal(/#[0-9A-Fa-f]{6}\b/.test(content), false, 'No hard-coded colors: uses theme tokens');
+    assert.equal(content.includes('tok-welcome-overlay'), true);
     assert.equal(content.includes('templateGemara'), true);
     assert.equal(content.includes('recentProjects'), true);
   });
@@ -151,7 +153,8 @@ describe('UI/UX Feature 2 & 3: Modern TopSystemBar & Minimalist Layout (ללא �
     const topBarTs = path.join(rootDir, 'packages/tok-ui/src/components/TopSystemBar.ts');
     assert.equal(fs.existsSync(topBarTs), true);
     const content = fs.readFileSync(topBarTs, 'utf-8');
-    assert.equal(content.includes('#0B132B'), true, 'Deep blue modern theme');
+    // Colors come from the theme tokens (light/dark/color themes), never hard-coded.
+    assert.equal(/#[0-9A-Fa-f]{6}\b/.test(content), false, 'No hard-coded colors: uses theme tokens');
     assert.equal(content.includes('tok-search-pill'), true, 'Clean search pill');
     assert.equal(content.includes('onOpenProjects'), true);
   });

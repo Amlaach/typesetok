@@ -1,10 +1,13 @@
 import { t, i18n } from '../i18n';
-import { renderIcon } from '../icons';
+import { el, iconButton, button } from '../ui';
 import { ModalController } from './ModalController';
+import { APP_VERSION } from './WelcomeModal';
 
 export interface AboutModalCallbacks {
   onClose: () => void;
 }
+
+const REPO_URL = 'https://github.com/TypesetOK/typesetok';
 
 export class AboutModal {
   public element: HTMLElement;
@@ -14,19 +17,7 @@ export class AboutModal {
 
   constructor(callbacks: AboutModalCallbacks) {
     this.callbacks = callbacks;
-    this.element = document.createElement('div');
-    this.element.className = 'tok-about-overlay';
-    this.element.style.position = 'fixed';
-    this.element.style.top = '0';
-    this.element.style.left = '0';
-    this.element.style.width = '100vw';
-    this.element.style.height = '100vh';
-    this.element.style.background = 'rgba(11, 19, 43, 0.82)';
-    this.element.style.backdropFilter = 'blur(6px)';
-    this.element.style.zIndex = '99999';
-    this.element.style.display = 'none';
-    this.element.style.alignItems = 'center';
-    this.element.style.justifyContent = 'center';
+    this.element = el('div', 'tok-overlay tok-about-overlay');
 
     this.modal = new ModalController(this.element, () => this.hide(), { closeOnBackdrop: true });
 
@@ -37,7 +28,7 @@ export class AboutModal {
 
   public show(): void {
     this.isVisible = true;
-    this.element.style.display = 'flex';
+    this.element.classList.add('tok-open');
     this.render();
     this.modal.opened();
   }
@@ -45,7 +36,7 @@ export class AboutModal {
   public hide(): void {
     if (!this.isVisible) return;
     this.isVisible = false;
-    this.element.style.display = 'none';
+    this.element.classList.remove('tok-open');
     this.modal.closed();
     this.callbacks.onClose();
   }
@@ -58,122 +49,59 @@ export class AboutModal {
 
   private renderContent(): void {
     this.element.innerHTML = '';
-    this.element.style.direction = i18n.getDirection();
+    this.element.dir = i18n.getDirection();
 
-    const card = document.createElement('div');
-    card.className = 'tok-about-card';
-    card.style.width = '520px';
-    card.style.maxWidth = '90vw';
-    card.style.background = '#0F172A';
-    card.style.border = '1px solid #1E3A8A';
-    card.style.borderRadius = '14px';
-    card.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 24px rgba(37, 99, 235, 0.25)';
-    card.style.padding = '28px 32px';
-    card.style.textAlign = 'center';
-    card.style.display = 'flex';
-    card.style.flexDirection = 'column';
-    card.style.alignItems = 'center';
+    const card = el('div', 'tok-dialog tok-about-card');
+    card.style.width = '440px';
 
-    // Logo Emblem
-    const logo = document.createElement('div');
-    logo.style.width = '64px';
-    logo.style.height = '64px';
-    logo.style.borderRadius = '14px';
-    logo.style.background = '#1E293B';
-    logo.style.border = '1.5px solid #3B82F6';
-    logo.style.display = 'flex';
-    logo.style.alignItems = 'center';
-    logo.style.justifyContent = 'center';
-    logo.style.color = '#60A5FA';
-    logo.style.marginBottom = '14px';
-    logo.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.4)';
-    logo.innerHTML = renderIcon('brand', 30);
-    card.appendChild(logo);
+    const head = el('div', 'tok-dialog-head');
+    const headText = el('div', 'tok-dialog-head-text');
+    headText.appendChild(el('h2', undefined, { 'data-modal-title': '' }, t('aboutTitle')));
+    head.appendChild(headText);
+    head.appendChild(iconButton('close', t('aboutClose'), () => this.hide(), { attrs: { 'data-focus-key': 'x' } }));
+    card.appendChild(head);
 
-    // Title & Tagline
-    const title = document.createElement('h2');
-    title.style.margin = '0 0 6px 0';
-    title.style.fontSize = '22px';
-    title.style.fontWeight = '800';
-    title.style.color = '#60A5FA';
-    title.style.letterSpacing = '-0.3px';
-    title.textContent = 'TypesetOK (TOK)';
-    title.dataset.modalTitle = '';
-    card.appendChild(title);
+    const body = el('div', 'tok-about-body');
+    body.appendChild(el('span', 'tok-brand-mark', { 'aria-hidden': 'true' }, 'ת'));
+    body.appendChild(el('h2', undefined, undefined, 'TypesetOK (TOK)'));
+    body.appendChild(el('p', undefined, undefined, t('appTagline')));
 
-    const subtitle = document.createElement('p');
-    subtitle.style.margin = '0 0 18px 0';
-    subtitle.style.fontSize = '13px';
-    subtitle.style.color = '#94A3B8';
-    subtitle.textContent = t('appTagline');
-    card.appendChild(subtitle);
+    const meta = el('div', 'tok-about-meta tok-card');
+    const line = (label: string, value: string, ltr = false) => {
+      const row = el('div', 'tok-status-line');
+      row.appendChild(el('span', undefined, undefined, label));
+      row.appendChild(el('span', undefined, ltr ? { dir: 'ltr' } : undefined, value));
+      meta.appendChild(row);
+    };
+    line(t('aboutVersionLabel'), `v${APP_VERSION}`, true);
+    line(t('aboutCoreLabel'), t('aboutRustVersion'));
+    line(t('aboutShellLabel'), t('aboutShellValue'));
+    body.appendChild(meta);
+    card.appendChild(body);
 
-    // Metadata List
-    const metaBox = document.createElement('div');
-    metaBox.style.width = '100%';
-    metaBox.style.background = '#0B132B';
-    metaBox.style.border = '1px solid #1E293B';
-    metaBox.style.borderRadius = '8px';
-    metaBox.style.padding = '12px 16px';
-    metaBox.style.marginBottom = '20px';
-    metaBox.style.fontSize = '12px';
-    metaBox.style.color = '#CBD5E1';
-    metaBox.style.textAlign = i18n.getLanguage() === 'he' ? 'right' : 'left';
-
-    metaBox.innerHTML = `
-      <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-        <span style="color: #64748B;">${t('aboutVersionLabel')}</span>
-        <span style="font-weight: 600; color: #F8FAFC;">v0.7.3 Stable (2026)</span>
-      </div>
-      <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-        <span style="color: #64748B;">${t('aboutCoreLabel')}</span>
-        <span style="color: #38BDF8;">${t('aboutRustVersion')}</span>
-      </div>
-      <div style="display: flex; justify-content: space-between;">
-        <span style="color: #64748B;">${t('aboutShellLabel')}</span>
-        <span style="color: #F8FAFC;">${t('aboutShellValue')}</span>
-      </div>
-    `;
-    card.appendChild(metaBox);
-
-    // GitHub Link Button
-    const ghBtn = document.createElement('button');
-    ghBtn.className = 'tok-btn tok-btn-primary';
-    ghBtn.style.width = '100%';
-    ghBtn.style.height = '38px';
-    ghBtn.style.fontSize = '13px';
-    ghBtn.style.fontWeight = '600';
-    ghBtn.style.marginBottom = '10px';
-    ghBtn.style.display = 'inline-flex';
-    ghBtn.style.alignItems = 'center';
-    ghBtn.style.justifyContent = 'center';
-    ghBtn.style.gap = '8px';
-    ghBtn.dataset.focusKey = 'github';
-    ghBtn.innerHTML = `${renderIcon('brand', 15)} <span>${t('aboutGithubBtn')}</span>`;
-
-    ghBtn.addEventListener('click', () => {
-      const url = 'https://github.com/TypesetOK/typesetok';
-      const win = window as any;
-      if (win.tokIpc && win.tokIpc.openExternal) {
-        Promise.resolve(win.tokIpc.openExternal(url)).catch((e: any) => {
-          console.warn('[ABOUT] openExternal failed:', e?.message ?? e);
-        });
-      } else {
-        window.open(url, '_blank', 'noopener,noreferrer');
+    const foot = el('div', 'tok-dialog-foot');
+    foot.appendChild(button(t('aboutGithubBtn'), {
+      className: 'tok-btn',
+      icon: 'brand',
+      attrs: { 'data-focus-key': 'github' },
+      onClick: () => {
+        const win = window as any;
+        if (win.tokIpc && win.tokIpc.openExternal) {
+          Promise.resolve(win.tokIpc.openExternal(REPO_URL)).catch((e: any) => {
+            console.warn('[ABOUT] openExternal failed:', e?.message ?? e);
+          });
+        } else {
+          window.open(REPO_URL, '_blank', 'noopener,noreferrer');
+        }
       }
-    });
-    card.appendChild(ghBtn);
-
-    // Close Button
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'tok-btn';
-    closeBtn.style.width = '100%';
-    closeBtn.style.height = '34px';
-    closeBtn.textContent = t('aboutClose');
-    closeBtn.dataset.focusKey = 'close';
-    closeBtn.dataset.autofocus = '';
-    closeBtn.addEventListener('click', () => this.hide());
-    card.appendChild(closeBtn);
+    }));
+    foot.appendChild(el('span', 'tok-grow'));
+    foot.appendChild(button(t('aboutClose'), {
+      className: 'tok-btn tok-btn-primary',
+      attrs: { 'data-focus-key': 'close', 'data-autofocus': '' },
+      onClick: () => this.hide()
+    }));
+    card.appendChild(foot);
 
     this.element.appendChild(card);
   }

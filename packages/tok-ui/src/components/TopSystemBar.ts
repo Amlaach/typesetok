@@ -1,6 +1,6 @@
 import { ViewMode } from '../types';
 import { t, i18n } from '../i18n';
-import { renderIcon } from '../icons';
+import { el, icon, iconButton, kbd, button } from '../ui';
 
 export interface TopSystemBarCallbacks {
   onMenuAction: (action: string, data?: unknown) => void;
@@ -11,8 +11,34 @@ export interface TopSystemBarCallbacks {
   onToggleLanguage?: () => void;
   onOpenSettings?: () => void;
   onOpenAbout?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
+type MenuItem = { type: 'separator' } | { labelKey: string; shortcut?: string; action: string };
+
+// Only shortcuts that are actually bound (Electron menu accelerators) are shown.
+const MENU_ITEMS: MenuItem[] = [
+  { labelKey: 'topBarProjects', shortcut: 'Ctrl+Shift+P', action: 'open-projects' },
+  { labelKey: 'menuNewDocument', shortcut: 'Ctrl+N', action: 'new-document' },
+  { labelKey: 'menuOpenDocument', shortcut: 'Ctrl+O', action: 'open-document' },
+  { labelKey: 'menuSave', shortcut: 'Ctrl+S', action: 'save-document' },
+  { labelKey: 'menuSaveAs', shortcut: 'Ctrl+Shift+S', action: 'save-as' },
+  { type: 'separator' },
+  { labelKey: 'menuNormalizeNiqqud', action: 'normalize-hebrew' },
+  { labelKey: 'menuShieldDivineNames', action: 'shield-divine-names' },
+  { labelKey: 'menuRecalcGematria', action: 'recalculate-gematria' },
+  { type: 'separator' },
+  { labelKey: 'menuExportPdf', shortcut: 'Ctrl+E', action: 'export-pdf' },
+  { type: 'separator' },
+  { labelKey: 'sidebarSettings', shortcut: 'Ctrl+,', action: 'open-settings' },
+  { labelKey: 'sidebarAbout', action: 'open-about' }
+];
+
+/**
+ * App header: brand + document (start side), view switcher (center), command search,
+ * undo/redo, language and export (end side). All colors come from theme tokens.
+ */
 export class TopSystemBar {
   public element: HTMLElement;
   private currentMode: ViewMode = 'canvas';
@@ -20,37 +46,27 @@ export class TopSystemBar {
   private activeDropdown: HTMLElement | null = null;
   private activeAnchor: HTMLElement | null = null;
   private documentTitle = 'מסכת ברכות — מהדורת מופת.tok';
+  private pageLabel = '';
+  private pageLabelEl: HTMLElement | null = null;
 
   constructor(callbacks: TopSystemBarCallbacks) {
     this.callbacks = callbacks;
     this.element = document.createElement('header');
     this.element.className = 'tok-top-bar';
-    this.element.dir = i18n.getLanguage() === 'he' ? 'rtl' : 'ltr';
-    this.element.style.height = 'var(--tok-top-bar-height)';
-    this.element.style.minHeight = 'var(--tok-top-bar-height)';
-    this.element.style.background = '#0B132B'; // Deep navy blue, seamless & modern
-    this.element.style.borderBottom = '1px solid #1E293B';
-    this.element.style.display = 'flex';
-    this.element.style.alignItems = 'center';
-    this.element.style.justifyContent = 'space-between';
-    this.element.style.padding = '0 14px';
-    this.element.style.userSelect = 'none';
-    this.element.style.zIndex = '50';
-    this.element.style.position = 'relative';
+    this.element.dir = i18n.getDirection();
 
-    i18n.onChange((lang) => {
-      this.element.dir = lang === 'he' ? 'rtl' : 'ltr';
+    i18n.onChange(() => {
+      this.element.dir = i18n.getDirection();
       this.render();
     });
 
     this.render();
 
-    // Close any open dropdown on click outside
-    document.addEventListener('click', (e) => {
-      if (this.activeDropdown && !this.element.contains(e.target as Node)) {
-        this.closeDropdown();
-      }
-    });
+    // Close an open dropdown on click outside or Escape.
+    // Capture phase: page frames stop click propagation, which used to keep the menu open.
+    document.addEventListener('pointerdown', (e) => {
+      if (this.activeDropdown && !this.element.contains(e.target as Node)) this.closeDropdown();
+    }, true);
     document.addEventListener('keydown', (e) => {
       if (this.activeDropdown && e.key === 'Escape') this.closeDropdown();
     });
@@ -61,282 +77,126 @@ export class TopSystemBar {
     this.render();
   }
 
+  /** Current page shown next to the document name (e.g. "דף ב׳ ע״ב"). */
+  public setPageLabel(label: string): void {
+    this.pageLabel = label;
+    if (this.pageLabelEl) {
+      this.pageLabelEl.textContent = label;
+      this.pageLabelEl.hidden = !label;
+      const sep = this.pageLabelEl.previousElementSibling as HTMLElement | null;
+      if (sep) sep.hidden = !label;
+    }
+  }
+
+  /** Reflects a view change made elsewhere (palette, story "show on page") without re-firing it. */
+  public setViewMode(mode: ViewMode): void {
+    if (this.currentMode === mode) return;
+    this.currentMode = mode;
+    this.element.querySelectorAll<HTMLElement>('.tok-seg-btn[data-view]').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.view === mode))
+    );
+  }
+
   private render(): void {
-    // innerHTML='' below detaches an open dropdown; drop the reference too, otherwise
-    // the next Menu click only "closes" the detached node and nothing opens.
+    // innerHTML='' detaches an open dropdown; drop the reference too.
     this.closeDropdown();
     this.element.innerHTML = '';
 
-    // ==========================================
-    // Leading Section: Brand & Document Indicator
-    // ==========================================
-    const leadingSide = document.createElement('div');
-    leadingSide.style.display = 'flex';
-    leadingSide.style.alignItems = 'center';
-    leadingSide.style.gap = '10px';
+    // ---- Start side: brand, document, saved state, file menu ----
+    const start = el('div', 'tok-top-side');
 
-    // Logo & Brand
-    const brandWrap = document.createElement('div');
-    brandWrap.style.display = 'flex';
-    brandWrap.style.alignItems = 'center';
-    brandWrap.style.gap = '8px';
-    brandWrap.style.cursor = 'pointer';
-    brandWrap.title = 'TypesetOK Desktop Publishing';
-    brandWrap.addEventListener('click', () => {
-      if (this.callbacks.onOpenProjects) this.callbacks.onOpenProjects();
-    });
+    const brand = el('button', 'tok-brand-btn', { type: 'button', title: t('topBarProjects'), 'aria-label': `TypesetOK · ${t('topBarProjects')}` });
+    brand.appendChild(el('span', 'tok-brand-mark', { 'aria-hidden': 'true' }, 'ת'));
+    brand.appendChild(el('span', 'tok-brand-name', undefined, 'TypesetOK'));
+    brand.addEventListener('click', () => this.callbacks.onOpenProjects?.());
+    start.appendChild(brand);
 
-    const brandIcon = document.createElement('span');
-    brandIcon.style.color = '#3B82F6';
-    brandIcon.innerHTML = renderIcon('brand', 18);
-    brandWrap.appendChild(brandIcon);
+    start.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true' }));
 
-    const brandName = document.createElement('span');
-    brandName.textContent = 'TypesetOK';
-    brandName.style.fontWeight = '700';
-    brandName.style.fontSize = '13px';
-    brandName.style.color = '#60A5FA';
-    brandName.style.letterSpacing = '-0.2px';
-    brandWrap.appendChild(brandName);
+    const doc = el('div', 'tok-doc-title', { title: this.documentTitle });
+    doc.appendChild(el('span', 'tok-doc-title-name', undefined, this.documentTitle.replace(/\.tok$/i, '')));
+    const sep = el('span', 'tok-doc-title-sep', { 'aria-hidden': 'true' }, '/');
+    sep.hidden = !this.pageLabel;
+    doc.appendChild(sep);
+    this.pageLabelEl = el('span', 'tok-doc-title-page', undefined, this.pageLabel);
+    this.pageLabelEl.hidden = !this.pageLabel;
+    doc.appendChild(this.pageLabelEl);
+    start.appendChild(doc);
 
-    leadingSide.appendChild(brandWrap);
+    const saved = el('span', 'tok-saved', { role: 'status' });
+    saved.appendChild(el('span', 'tok-dot', { 'aria-hidden': 'true' }));
+    saved.appendChild(el('span', undefined, undefined, t('topBarSaved')));
+    start.appendChild(saved);
 
-    // Document Name Pill with Saved Indicator
-    const docPill = document.createElement('div');
-    docPill.className = 'tok-doc-pill';
-    docPill.style.background = '#131E38';
-    docPill.style.border = '1px solid #1E3A8A';
-    docPill.style.borderRadius = '12px';
-    docPill.style.padding = '3px 10px';
-    docPill.style.fontSize = '11px';
-    docPill.style.display = 'flex';
-    docPill.style.alignItems = 'center';
-    docPill.style.gap = '6px';
-    docPill.style.color = '#E2E8F0';
-
-    const statusDot = document.createElement('span');
-    statusDot.style.width = '6px';
-    statusDot.style.height = '6px';
-    statusDot.style.borderRadius = '50%';
-    statusDot.style.background = '#10B981'; // Green saved status
-    statusDot.title = t('topBarSaved');
-    statusDot.setAttribute('role', 'img');
-    statusDot.setAttribute('aria-label', t('topBarSaved'));
-    docPill.appendChild(statusDot);
-
-    const docTitle = document.createElement('span');
-    docTitle.textContent = this.documentTitle;
-    docPill.appendChild(docTitle);
-
-    leadingSide.appendChild(docPill);
-
-    // Unified Project & File Menu Button (Uncluttered)
-    const menuBtn = document.createElement('button');
-    menuBtn.className = 'tok-btn';
-    menuBtn.style.height = '28px';
-    menuBtn.style.padding = '0 10px';
-    menuBtn.style.fontSize = '12px';
-    menuBtn.style.fontWeight = '500';
-    menuBtn.style.background = 'var(--tok-bg-surface-2, #1E293B)';
-    menuBtn.style.border = '1px solid var(--tok-border-strong, #334155)';
-    menuBtn.style.color = '#F1F5F9';
-    menuBtn.style.borderRadius = '6px';
-    menuBtn.style.cursor = 'pointer';
-    menuBtn.style.display = 'inline-flex';
-    menuBtn.style.alignItems = 'center';
-    menuBtn.style.gap = '6px';
-    menuBtn.innerHTML = `${renderIcon('folder', 13)} <span>${t('topBarFileAndMenu')}</span> ${renderIcon('chevronDown', 10)}`;
-    menuBtn.setAttribute('aria-haspopup', 'menu');
-    menuBtn.setAttribute('aria-expanded', 'false');
+    const menuBtn = el('button', 'tok-btn tok-menu-btn', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
+    menuBtn.appendChild(el('span', undefined, undefined, t('topBarFileAndMenu')));
+    menuBtn.appendChild(icon('chevronDown', 12));
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.toggleQuickMenu(menuBtn);
     });
-    leadingSide.appendChild(menuBtn);
+    start.appendChild(menuBtn);
 
-    this.element.appendChild(leadingSide);
+    this.element.appendChild(start);
 
-    // ==========================================
-    // Center Section: Minimalist View Switcher & Search
-    // ==========================================
-    const centerSide = document.createElement('div');
-    centerSide.style.display = 'flex';
-    centerSide.style.alignItems = 'center';
-    centerSide.style.gap = '12px';
-
-    // View Switcher Capsule
-    const viewGroup = document.createElement('div');
-    viewGroup.style.display = 'flex';
-    viewGroup.style.background = '#0F172A';
-    viewGroup.style.border = '1px solid #1E293B';
-    viewGroup.style.borderRadius = '6px';
-    viewGroup.style.padding = '2px';
-    viewGroup.setAttribute('role', 'group');
-    viewGroup.setAttribute('aria-label', t('topBarViewMode'));
-
-    const modes: { id: ViewMode; label: string; icon: 'canvas' | 'split' | 'story' }[] = [
-      { id: 'canvas', label: t('topBarViewCanvas'), icon: 'canvas' },
-      { id: 'split', label: t('topBarViewSplit'), icon: 'split' },
-      { id: 'story', label: t('topBarViewStory'), icon: 'story' }
+    // ---- Center: view switcher ----
+    const views = el('div', 'tok-seg', { role: 'group', 'aria-label': t('topBarViewMode') });
+    const modes: { id: ViewMode; label: string }[] = [
+      { id: 'canvas', label: t('topBarViewCanvas') },
+      { id: 'split', label: t('topBarViewSplit') },
+      { id: 'story', label: t('topBarViewStory') }
     ];
-
     for (const m of modes) {
-      const modeBtn = document.createElement('button');
-      modeBtn.style.border = 'none';
-      modeBtn.style.background = this.currentMode === m.id ? '#1E3A8A' : 'transparent';
-      modeBtn.style.color = this.currentMode === m.id ? '#FFFFFF' : '#94A3B8';
-      modeBtn.style.padding = '4px 10px';
-      modeBtn.style.borderRadius = '4px';
-      modeBtn.style.fontSize = '11px';
-      modeBtn.style.fontWeight = this.currentMode === m.id ? '600' : 'normal';
-      modeBtn.style.cursor = 'pointer';
-      modeBtn.style.display = 'inline-flex';
-      modeBtn.style.alignItems = 'center';
-      modeBtn.style.gap = '5px';
-      modeBtn.style.transition = 'all 0.15s';
-      modeBtn.innerHTML = `${renderIcon(m.icon, 13)} <span>${m.label}</span>`;
-      modeBtn.setAttribute('aria-pressed', String(this.currentMode === m.id));
-
-      modeBtn.addEventListener('click', () => {
+      const b = el('button', 'tok-seg-btn', { type: 'button', 'aria-pressed': String(this.currentMode === m.id), 'data-view': m.id }, m.label);
+      b.addEventListener('click', () => {
         if (this.currentMode === m.id) return;
-        this.currentMode = m.id;
+        this.setViewMode(m.id);
         this.callbacks.onViewModeChange(m.id);
-        this.render();
       });
-
-      viewGroup.appendChild(modeBtn);
+      views.appendChild(b);
     }
-    centerSide.appendChild(viewGroup);
+    this.element.appendChild(views);
 
-    // Minimal Search Pill Trigger (Ctrl+K)
-    const searchPill = document.createElement('button');
-    searchPill.className = 'tok-search-pill';
-    searchPill.style.height = '28px';
-    searchPill.style.background = '#131E38';
-    searchPill.style.border = '1px solid #1E293B';
-    searchPill.style.borderRadius = '6px';
-    searchPill.style.padding = '0 12px';
-    searchPill.style.color = '#94A3B8';
-    searchPill.style.fontSize = '11px';
-    searchPill.style.display = 'flex';
-    searchPill.style.alignItems = 'center';
-    searchPill.style.gap = '8px';
-    searchPill.style.cursor = 'pointer';
-    searchPill.style.transition = 'all 0.15s';
+    // ---- End side: search, undo/redo, language, export ----
+    const end = el('div', 'tok-top-side tok-end');
 
-    searchPill.innerHTML = `
-      ${renderIcon('search', 13)}
-      <span>${t('topBarSearchPlaceholder')}</span>
-      <kbd style="background: #1E293B; padding: 1px 5px; border-radius: 4px; font-size: 10px; color: #CBD5E1; border: 1px solid #334155;">Ctrl+K</kbd>
-    `;
+    const search = el('button', 'tok-search-pill', { type: 'button', 'aria-keyshortcuts': 'Control+K' });
+    search.appendChild(icon('search', 16));
+    search.appendChild(el('span', undefined, undefined, t('topBarSearchPlaceholder')));
+    search.appendChild(kbd('Ctrl K'));
+    search.addEventListener('click', () => this.callbacks.onOpenCommandPalette());
+    end.appendChild(search);
 
-    searchPill.addEventListener('mouseenter', () => {
-      searchPill.style.borderColor = '#3B82F6';
-      searchPill.style.color = '#F8FAFC';
+    const undo = iconButton('undo', t('topBarUndo'), () => this.callbacks.onUndo?.(), { attrs: { 'aria-keyshortcuts': 'Control+Z' } });
+    const redo = iconButton('redo', t('topBarRedo'), () => this.callbacks.onRedo?.(), { attrs: { 'aria-keyshortcuts': 'Control+Y' } });
+    // In RTL the "back" arrow points right.
+    if (i18n.getDirection() === 'rtl') {
+      undo.replaceChildren(icon('redo', 18));
+      redo.replaceChildren(icon('undo', 18));
+    }
+    end.appendChild(undo);
+    end.appendChild(redo);
+
+    const lang = button(i18n.getLanguage() === 'he' ? 'עברית' : 'English', {
+      className: 'tok-btn tok-btn-ghost tok-btn-sm',
+      icon: 'globe',
+      iconSize: 15,
+      attrs: { title: t('topBarSwitchLanguage'), 'aria-label': `${t('topBarSwitchLanguage')}: ${i18n.getLanguage() === 'he' ? 'עברית' : 'English'}` },
+      onClick: () => {
+        i18n.toggleLanguage();
+        this.callbacks.onToggleLanguage?.();
+      }
     });
-    searchPill.addEventListener('mouseleave', () => {
-      searchPill.style.borderColor = '#1E293B';
-      searchPill.style.color = '#94A3B8';
-    });
-    searchPill.addEventListener('click', () => {
-      this.callbacks.onOpenCommandPalette();
-    });
-    centerSide.appendChild(searchPill);
+    end.appendChild(lang);
 
-    this.element.appendChild(centerSide);
+    end.appendChild(button(t('topBarExportPdf'), {
+      className: 'tok-btn tok-btn-primary',
+      icon: 'upload',
+      attrs: { 'aria-keyshortcuts': 'Control+E' },
+      onClick: () => this.callbacks.onExportPdf()
+    }));
 
-    // ==========================================
-    // Trailing Section: Language & Export Actions
-    // ==========================================
-    const trailingSide = document.createElement('div');
-    trailingSide.style.display = 'flex';
-    trailingSide.style.alignItems = 'center';
-    trailingSide.style.gap = '8px';
-
-    // Settings Button (Prominent & Direct)
-    const settingsBtn = document.createElement('button');
-    settingsBtn.className = 'tok-btn';
-    settingsBtn.style.height = '28px';
-    settingsBtn.style.padding = '0 9px';
-    settingsBtn.style.fontSize = '12px';
-    settingsBtn.style.background = 'var(--tok-bg-surface-2, #1E293B)';
-    settingsBtn.style.border = '1px solid var(--tok-border-strong, #334155)';
-    settingsBtn.style.color = '#F8FAFC';
-    settingsBtn.style.borderRadius = '6px';
-    settingsBtn.style.cursor = 'pointer';
-    settingsBtn.style.display = 'inline-flex';
-    settingsBtn.style.alignItems = 'center';
-    settingsBtn.style.gap = '6px';
-    settingsBtn.title = t('sidebarSettings');
-    settingsBtn.innerHTML = `${renderIcon('settings', 13)} <span>${t('sidebarSettings')}</span>`;
-    settingsBtn.addEventListener('click', () => {
-      if (this.callbacks.onOpenSettings) this.callbacks.onOpenSettings();
-    });
-    trailingSide.appendChild(settingsBtn);
-
-    // About Button (Prominent & Direct)
-    const aboutBtn = document.createElement('button');
-    aboutBtn.className = 'tok-btn';
-    aboutBtn.style.height = '28px';
-    aboutBtn.style.padding = '0 8px';
-    aboutBtn.style.fontSize = '12px';
-    aboutBtn.style.background = 'transparent';
-    aboutBtn.style.border = '1px solid var(--tok-border-subtle, #334155)';
-    aboutBtn.style.color = 'var(--tok-text-secondary, #94A3B8)';
-    aboutBtn.style.borderRadius = '6px';
-    aboutBtn.style.cursor = 'pointer';
-    aboutBtn.style.display = 'inline-flex';
-    aboutBtn.style.alignItems = 'center';
-    aboutBtn.style.gap = '5px';
-    aboutBtn.title = t('sidebarAbout');
-    aboutBtn.innerHTML = `${renderIcon('info', 13)} <span>${t('sidebarAbout')}</span>`;
-    aboutBtn.addEventListener('click', () => {
-      if (this.callbacks.onOpenAbout) this.callbacks.onOpenAbout();
-    });
-    trailingSide.appendChild(aboutBtn);
-
-    // Language Switcher Button
-    const langBtn = document.createElement('button');
-    langBtn.className = 'tok-btn';
-    langBtn.style.height = '28px';
-    langBtn.style.padding = '0 9px';
-    langBtn.style.fontSize = '11px';
-    langBtn.style.background = 'var(--tok-bg-surface-2, #1E293B)';
-    langBtn.style.border = '1px solid var(--tok-border-subtle, #334155)';
-    langBtn.style.color = '#CBD5E1';
-    langBtn.style.borderRadius = '6px';
-    langBtn.style.cursor = 'pointer';
-    langBtn.style.display = 'inline-flex';
-    langBtn.style.alignItems = 'center';
-    langBtn.style.gap = '6px';
-    langBtn.innerHTML = `${renderIcon('globe', 13)} <span>${i18n.getLanguage() === 'he' ? 'עברית' : 'English'}</span>`;
-    langBtn.title = t('topBarSwitchLanguage');
-    langBtn.setAttribute('aria-label', t('topBarSwitchLanguage'));
-    langBtn.addEventListener('click', () => {
-      i18n.toggleLanguage();
-      if (this.callbacks.onToggleLanguage) this.callbacks.onToggleLanguage();
-    });
-    trailingSide.appendChild(langBtn);
-
-    // Primary Action: Export Pre-Press PDF
-    const exportBtn = document.createElement('button');
-    exportBtn.className = 'tok-btn tok-btn-primary';
-    exportBtn.style.height = '28px';
-    exportBtn.style.padding = '0 12px';
-    exportBtn.style.fontSize = '12px';
-    exportBtn.style.fontWeight = '600';
-    exportBtn.style.borderRadius = '6px';
-    exportBtn.style.boxShadow = '0 0 10px rgba(37, 99, 235, 0.4)';
-    exportBtn.style.display = 'inline-flex';
-    exportBtn.style.alignItems = 'center';
-    exportBtn.style.gap = '6px';
-    exportBtn.innerHTML = `${renderIcon('export', 13)} <span>${t('topBarExportPdf')}</span>`;
-    exportBtn.addEventListener('click', () => {
-      this.callbacks.onExportPdf();
-    });
-    trailingSide.appendChild(exportBtn);
-
-    this.element.appendChild(trailingSide);
+    this.element.appendChild(end);
   }
 
   private toggleQuickMenu(anchorBtn: HTMLElement): void {
@@ -345,101 +205,28 @@ export class TopSystemBar {
       return;
     }
 
-    const dropdown = document.createElement('div');
-    dropdown.className = 'tok-quick-menu';
-    dropdown.setAttribute('role', 'menu');
-    dropdown.style.position = 'absolute';
-    dropdown.style.top = '100%';
-    dropdown.style.background = 'var(--tok-bg-elevated, #1E293B)';
-    dropdown.style.border = '1px solid var(--tok-border-strong, #334155)';
-    dropdown.style.borderRadius = '8px';
-    dropdown.style.boxShadow = '0 10px 30px rgba(0,0,0,0.7)';
-    dropdown.style.padding = '6px 0';
-    dropdown.style.minWidth = '230px';
-    dropdown.style.zIndex = '999';
-
-    // Open under the Menu button (was a fixed 120px offset that ignored the actual
-    // button position, e.g. with a long document title or a different density).
+    const dropdown = el('div', 'tok-quick-menu', { role: 'menu', 'aria-label': t('topBarFileAndMenu') });
+    // Open under the menu button on its start edge.
     if (i18n.getDirection() === 'rtl') {
       dropdown.style.right = `${Math.max(0, this.element.clientWidth - (anchorBtn.offsetLeft + anchorBtn.offsetWidth))}px`;
     } else {
       dropdown.style.left = `${Math.max(0, anchorBtn.offsetLeft)}px`;
     }
 
-    // Only shortcuts that are actually bound (Electron menu accelerators) are shown.
-    const menuItems: ({ type: 'separator' } | { labelKey: string; shortcut?: string; action: string })[] = [
-      { labelKey: 'topBarProjects', shortcut: 'Ctrl+Shift+P', action: 'open-projects' },
-      { labelKey: 'menuNewDocument', shortcut: 'Ctrl+N', action: 'new-document' },
-      { labelKey: 'menuOpenDocument', shortcut: 'Ctrl+O', action: 'open-document' },
-      { labelKey: 'menuSave', shortcut: 'Ctrl+S', action: 'save-document' },
-      { labelKey: 'menuSaveAs', shortcut: 'Ctrl+Shift+S', action: 'save-as' },
-      { type: 'separator' },
-      { labelKey: 'menuNormalizeNiqqud', action: 'normalize-hebrew' },
-      { labelKey: 'menuShieldDivineNames', action: 'shield-divine-names' },
-      { labelKey: 'menuRecalcGematria', action: 'recalculate-gematria' },
-      { type: 'separator' },
-      { labelKey: 'menuExportPdf', shortcut: 'Ctrl+E', action: 'export-pdf' },
-      { type: 'separator' },
-      { labelKey: 'sidebarSettings', shortcut: 'Ctrl+,', action: 'open-settings' },
-      { labelKey: 'sidebarAbout', action: 'open-about' }
-    ];
-
     const rows: HTMLButtonElement[] = [];
-    for (const item of menuItems) {
+    for (const item of MENU_ITEMS) {
       if ('type' in item) {
-        const sep = document.createElement('div');
-        sep.setAttribute('role', 'separator');
-        sep.style.height = '1px';
-        sep.style.background = '#334155';
-        sep.style.margin = '4px 0';
-        dropdown.appendChild(sep);
+        dropdown.appendChild(el('div', 'tok-quick-menu-sep', { role: 'separator' }));
         continue;
       }
-
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'tok-quick-menu-item';
-      row.setAttribute('role', 'menuitem');
-      row.tabIndex = -1;
-      row.style.width = '100%';
-      row.style.border = 'none';
-      row.style.background = 'transparent';
-      row.style.font = 'inherit';
-      row.style.textAlign = 'start';
-      row.style.padding = '7px 14px';
-      row.style.fontSize = '12px';
-      row.style.color = '#F8FAFC';
-      row.style.display = 'flex';
-      row.style.alignItems = 'center';
-      row.style.justifyContent = 'space-between';
-      row.style.gap = '16px';
-      row.style.cursor = 'pointer';
-      row.style.outline = 'none';
-
-      const highlight = (on: boolean) => {
-        row.style.background = on ? '#2563EB' : 'transparent';
-      };
+      const row = el('button', 'tok-quick-menu-item', { type: 'button', role: 'menuitem', tabindex: '-1' });
+      row.appendChild(el('span', undefined, undefined, t(item.labelKey)));
+      if (item.shortcut) row.appendChild(kbd(item.shortcut));
       row.addEventListener('mouseenter', () => row.focus());
-      row.addEventListener('focus', () => highlight(true));
-      row.addEventListener('blur', () => highlight(false));
-
-      const label = document.createElement('span');
-      label.textContent = t(item.labelKey);
-      row.appendChild(label);
-      if (item.shortcut) {
-        const sc = document.createElement('span');
-        sc.style.fontSize = '10px';
-        sc.style.color = '#94A3B8';
-        sc.dir = 'ltr';
-        sc.textContent = item.shortcut;
-        row.appendChild(sc);
-      }
-
       row.addEventListener('click', () => {
         this.closeDropdown();
         this.callbacks.onMenuAction(item.action);
       });
-
       rows.push(row);
       dropdown.appendChild(row);
     }

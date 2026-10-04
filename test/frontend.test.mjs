@@ -226,10 +226,11 @@ describe('DTP Modern UX/UI Specification & Design Tokens (Section 11)', () => {
   });
 
   test('Workstation layout dimensions (Section 18) are present', () => {
-    assert.equal(html.includes('--tok-structure-width: 250px') || html.includes('250px'), true);
-    assert.equal(html.includes('--tok-inspector-width: 320px') || html.includes('320px'), true);
-    assert.equal(html.includes('--tok-top-bar-height: 44px') || html.includes('44px'), true);
-    assert.equal(html.includes('--tok-status-height: 26px') || html.includes('26px'), true);
+    // Redesign (2026-10): side panel 236px, inspector 300px, top bar 52px, status bar 28px.
+    assert.equal(html.includes('--tok-structure-width:  236px'), true);
+    assert.equal(html.includes('--tok-inspector-width:  300px'), true);
+    assert.equal(html.includes('--tok-top-bar-height:   52px'), true);
+    assert.equal(html.includes('--tok-status-height:    28px'), true);
     assert.equal(html.includes('--tok-hud-height: 36px') || html.includes('36px'), true);
   });
 });
@@ -508,7 +509,8 @@ describe('Regression: theme settings', () => {
   });
 
   test('turning high contrast off does not leave the black app background behind', async () => {
-    fakeDom.storage.set('tok_theme_settings', JSON.stringify({ highContrast: true, canvasTone: '#123456' }));
+    // version 2 = the redesign's storage format (older entries keep only accessibility choices).
+    fakeDom.storage.set('tok_theme_settings', JSON.stringify({ version: 2, highContrast: true, canvasTone: '#123456' }));
     const { themeManager, THEME_PALETTES } = await loadTs('packages/tok-ui/src/theme.ts');
     const style = fakeDom.documentElement.style;
     assert.equal(style.getPropertyValue('--tok-bg-app'), '#000000');

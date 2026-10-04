@@ -28,12 +28,9 @@ export class StoryEditor {
     this.editorEl.setAttribute('role', 'textbox');
     this.editorEl.setAttribute('aria-multiline', 'true');
     this.editorEl.setAttribute('aria-label', 'Story editor / עורך סיפור');
+    // Typography and colors come from the host stylesheet (.tok-story-editor-content),
+    // so the editor follows the light/dark theme.
     this.editorEl.style.outline = 'none';
-    this.editorEl.style.padding = '24px';
-    this.editorEl.style.fontFamily = '"Taamey Frank CLM", "David CLM", "SBL Hebrew", serif';
-    this.editorEl.style.fontSize = '18px';
-    this.editorEl.style.lineHeight = '1.6';
-    this.editorEl.style.color = '#ffffff';
     // The workbench sets `user-select: none` on <body>; without overriding it here the
     // editor's text cannot be selected (no drag-select, no Shift+Arrow, no copy).
     this.editorEl.style.userSelect = 'text';
@@ -44,6 +41,30 @@ export class StoryEditor {
     this.editorEl.addEventListener('input', () => {
       this.handleInput();
     });
+
+    // Highlight the paragraph that holds the caret.
+    document.addEventListener('selectionchange', () => this.markCurrentParagraph());
+  }
+
+  /** The editable element (for focusing and scrolling from the host). */
+  public getElement(): HTMLElement {
+    return this.editorEl;
+  }
+
+  /** Editor text size in px (display only; the document's typography is unchanged). */
+  public setFontSize(px: number): void {
+    this.editorEl.style.fontSize = `${px}px`;
+  }
+
+  private markCurrentParagraph(): void {
+    const sel = window.getSelection();
+    let node: Node | null = sel && sel.anchorNode && this.editorEl.contains(sel.anchorNode) ? sel.anchorNode : null;
+    while (node && node !== this.editorEl && node.nodeName !== 'P') node = node.parentNode;
+    const current = node && node.nodeName === 'P' ? (node as HTMLElement) : null;
+    this.editorEl.querySelectorAll('p.tok-current').forEach((p) => {
+      if (p !== current) p.classList.remove('tok-current');
+    });
+    current?.classList.add('tok-current');
   }
 
   public loadStory(paragraphs: StoryParagraph[]): void {
@@ -53,7 +74,6 @@ export class StoryEditor {
       pEl.dataset.paraId = p.id;
       pEl.dataset.styleId = p.styleId;
       pEl.textContent = p.text;
-      pEl.style.marginBottom = '12px';
       frag.appendChild(pEl);
     }
     this.editorEl.replaceChildren(frag);
