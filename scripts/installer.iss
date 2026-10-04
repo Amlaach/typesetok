@@ -3,11 +3,14 @@
 ; =========================================================================
 
 #define MyAppName "TypesetOK"
-#define MyAppVersion "0.7.3"
+; build-installer.mjs passes /DMyAppVersion=<package.json version>
+#ifndef MyAppVersion
+  #define MyAppVersion "0.7.3"
+#endif
 #define MyAppPublisher "TypesetOK Team"
 #define MyAppURL "https://github.com/TypesetOK/typesetok"
 #define MyAppExeName "TypesetOK.exe"
-#define SourceDir "..\dist\TypesetOK-v0.7.3-windows-x64"
+#define SourceDir "..\dist\TypesetOK-v" + MyAppVersion + "-windows-x64"
 
 [Setup]
 AppId={{E1B385C9-5D8A-4A73-98FB-364F36AA8C80}

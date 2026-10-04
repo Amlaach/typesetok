@@ -1,31 +1,155 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, IpcMainInvokeEvent } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
 import { buildApplicationMenu } from './menu';
 import { logger } from './logger';
-import { updater } from './updater';
+import { updater, getAppVersion, isSafeExternalUrl } from './updater';
 import { pluginManager } from './plugin-manager';
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
 
+const UI_INDEX_PATH = path.join(__dirname, '../../tok-ui/dist/index.html');
+const APP_REPO_URL = 'https://github.com/TypesetOK/typesetok';
+
+// ---------------------------------------------------------------------------
+// Startup tracing (opt-in). TOK_STARTUP_TRACE=1 prints epoch-ms milestones to
+// stdout; TOK_STARTUP_TRACE=exit additionally collects renderer timings and
+// quits once the main window is visible. Used by scripts/measure-startup.mjs.
+// ---------------------------------------------------------------------------
+const STARTUP_TRACE = process.env.TOK_STARTUP_TRACE || '';
+function trace(label: string, at: number = Date.now()): void {
+  if (STARTUP_TRACE) process.stdout.write(`[TOK-TRACE] ${label} ${Math.round(at)}\n`);
+}
+trace('main-module-loaded');
+
+function collectRendererTimingsAndMaybeQuit(win: BrowserWindow): void {
+  if (!STARTUP_TRACE) return;
+  const collect = () => {
+    if (win.isDestroyed()) return;
+    win.webContents
+      .executeJavaScript(
+        `new Promise((resolve) => requestAnimationFrame(() => setTimeout(() => {
+           const o = performance.timeOrigin;
+           const at = (n) => { const e = performance.getEntriesByName(n)[0]; return e ? o + e.startTime : null; };
+           const nav = performance.getEntriesByType('navigation')[0] || {};
+           resolve({ navStart: o, htmlLoaded: o + nav.responseEnd, scriptStart: at('tok-script-start'),
+             dclStart: o + nav.domContentLoadedEventStart, uiBuilt: at('tok-ui-built'),
+             domContentLoaded: o + nav.domContentLoadedEventEnd, fcp: at('first-contentful-paint') });
+         }, 0)))`
+      )
+      .then((r: Record<string, number | null>) => {
+        for (const [k, v] of Object.entries(r)) if (v) trace(`renderer-${k}`, v);
+        trace('trace-done');
+        if (STARTUP_TRACE === 'exit') setTimeout(() => app.quit(), 50);
+      })
+      .catch(() => {
+        if (STARTUP_TRACE === 'exit') app.quit();
+      });
+  };
+  if (win.isVisible()) collect();
+  else win.once('show', collect);
+}
+
+// ---------------------------------------------------------------------------
+// tok-cli (Rust engine) integration. The binary is only spawned on demand.
+// ---------------------------------------------------------------------------
+let cachedCliPath: string | null = null;
+
 function getTokCliPath(): string {
-  // Check custom local target directory first
-  const localDebug = 'C:/Users/USER/AppData/Local/tok_target/debug/tok-cli.exe';
-  if (fs.existsSync(localDebug)) {
-    return localDebug;
+  if (cachedCliPath && fs.existsSync(cachedCliPath)) return cachedCliPath;
+  const exe = process.platform === 'win32' ? 'tok-cli.exe' : 'tok-cli';
+  const bundled = path.join(process.resourcesPath, 'bin', exe);
+  const repoRoot = path.join(__dirname, '../../..'); // packages/tok-electron/dist -> repo root
+  const candidates = app.isPackaged
+    ? [process.env.TOK_CLI_PATH, bundled]
+    : [
+        process.env.TOK_CLI_PATH,
+        // custom local target directory used on the dev machine
+        'C:/Users/USER/AppData/Local/tok_target/debug/tok-cli.exe',
+        'C:/Users/USER/AppData/Local/tok_target/release/tok-cli.exe',
+        // standard cargo target directory
+        path.join(repoRoot, 'target/debug', exe),
+        path.join(repoRoot, 'target/release', exe),
+        bundled,
+      ];
+  const found = candidates.find((p): p is string => !!p && fs.existsSync(p));
+  cachedCliPath = found || null;
+  return found || bundled;
+}
+
+interface CliResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+/** Runs tok-cli without a shell. Rejects (instead of crashing the main process) when it cannot start. */
+function runCli(args: string[]): Promise<CliResult> {
+  const cli = getTokCliPath();
+  return new Promise((resolve, reject) => {
+    let proc: ReturnType<typeof spawn>;
+    try {
+      proc = spawn(cli, args, { windowsHide: true });
+    } catch (err: any) {
+      reject(new Error(`tok-cli could not be started (${cli}): ${err?.message}`));
+      return;
+    }
+    let stdout = '';
+    let stderr = '';
+    proc.stdout?.on('data', (d) => (stdout += d.toString()));
+    proc.stderr?.on('data', (d) => (stderr += d.toString()));
+    proc.on('error', (err) => reject(new Error(`tok-cli could not be started (${cli}): ${err.message}`)));
+    proc.on('close', (code) => resolve({ code, stdout, stderr }));
+  });
+}
+
+function requireString(value: unknown, name: string): string {
+  if (typeof value !== 'string' || !value) throw new Error(`Invalid ${name}`);
+  return value;
+}
+
+// ---------------------------------------------------------------------------
+// Security helpers
+// ---------------------------------------------------------------------------
+const normalizeFsPath = (p: string) => {
+  const n = path.normalize(p);
+  return process.platform === 'win32' ? n.toLowerCase() : n;
+};
+const UI_INDEX_KEY = normalizeFsPath(UI_INDEX_PATH);
+
+/** True for the app's own UI page (any hash/query), false for anything else. */
+function isAppUrl(url: string | undefined): boolean {
+  if (!url || !url.startsWith('file:')) return false;
+  try {
+    return normalizeFsPath(fileURLToPath(url)) === UI_INDEX_KEY;
+  } catch {
+    return false;
   }
-  const localRelease = 'C:/Users/USER/AppData/Local/tok_target/release/tok-cli.exe';
-  if (fs.existsSync(localRelease)) {
-    return localRelease;
+}
+
+/** ipcMain.handle wrapper that only answers the app's own UI page and logs failures. */
+function handle(channel: string, fn: (event: IpcMainInvokeEvent, ...args: any[]) => unknown): void {
+  ipcMain.handle(channel, async (event, ...args) => {
+    if (!isAppUrl(event.senderFrame?.url)) {
+      logger.warn(`[IPC] Rejected ${channel} from untrusted frame`, { url: event.senderFrame?.url });
+      throw new Error('Untrusted IPC sender');
+    }
+    try {
+      return await fn(event, ...args);
+    } catch (err: any) {
+      logger.error(`[IPC] ${channel} failed: ${err?.message}`);
+      throw err;
+    }
+  });
+}
+
+function openExternalSafely(url: unknown): void {
+  if (isSafeExternalUrl(url)) {
+    shell.openExternal(url).catch((err) => logger.warn('[MAIN] openExternal failed', { error: err?.message }));
   }
-  // Standard cargo target directory
-  const rootTarget = path.join(__dirname, '../../../../target/debug/tok-cli.exe');
-  if (fs.existsSync(rootTarget)) {
-    return rootTarget;
-  }
-  return path.join(process.resourcesPath, 'bin', 'tok-cli.exe');
 }
 
 /**
@@ -157,10 +281,11 @@ function createSplashWindow(): void {
   `;
 
   splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(splashHtml)}`);
+  if (STARTUP_TRACE) splashWindow.webContents.once('did-finish-load', () => trace('splash-loaded'));
 }
 
 function createWindow(): void {
-  mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1024,
@@ -173,207 +298,213 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webviewTag: false,
     },
   });
+  mainWindow = win;
 
-  // Remove the clunky greyish Windows native menu bar
-  const menu = buildApplicationMenu(mainWindow);
-  mainWindow.setMenu(menu);
-  mainWindow.setMenuBarVisibility(false);
-  mainWindow.setAutoHideMenuBar(true);
-
-  // Load UI entry point
-  const uiPath = path.join(__dirname, '../../tok-ui/dist/index.html');
-  mainWindow.loadFile(uiPath).catch((err) => {
-    logger.warn(`Could not load ${uiPath}: ${err.message}. Loading fallback shell.`);
+  // Load the UI first so the renderer starts working while the menu is built.
+  win.loadFile(UI_INDEX_PATH).catch((err) => {
+    logger.warn(`Could not load ${UI_INDEX_PATH}: ${err.message}`);
   });
 
-  // Once UI is ready, instantaneously transition from splash to main window
-  mainWindow.once('ready-to-show', () => {
-    logger.info('[MAIN] Main window ready to show.');
-    if (splashWindow && !splashWindow.isDestroyed()) {
-      splashWindow.destroy();
-      splashWindow = null;
+  // Remove the clunky greyish Windows native menu bar (accelerators stay active)
+  win.setMenu(buildApplicationMenu(win));
+  win.setMenuBarVisibility(false);
+  win.setAutoHideMenuBar(true);
+
+  // Never navigate the app window away from its UI or open new Electron windows;
+  // http(s) links go to the system browser instead.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalSafely(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!isAppUrl(url)) {
+      event.preventDefault();
+      openExternalSafely(url);
     }
-    mainWindow?.show();
-    mainWindow?.focus();
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  // Once the UI has painted, swap the splash for the main window right away.
+  // The main window is shown *before* the splash is destroyed so there is never
+  // a frame with no TypesetOK window on screen.
+  win.once('ready-to-show', () => {
+    trace('main-ready-to-show');
+    win.show();
+    win.focus();
+    trace('main-shown');
+    closeSplash();
+    logger.info('[MAIN] Main window ready to show.');
+    scheduleDeferredStartupWork();
+  });
+
+  // If the UI cannot load at all, don't leave the user staring at the splash.
+  win.webContents.on('did-fail-load', (_e, code, desc, url, isMainFrame) => {
+    if (!isMainFrame || code === -3 /* ERR_ABORTED: superseded navigation */) return;
+    logger.error(`[MAIN] UI failed to load (${code} ${desc}): ${url}`);
+    closeSplash();
+    if (!win.isDestroyed() && !win.isVisible()) win.show();
+  });
+  win.webContents.on('render-process-gone', (_e, details) => {
+    logger.error('[MAIN] Renderer process gone', details);
+  });
+
+  collectRendererTimingsAndMaybeQuit(win);
+
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null;
   });
 }
 
+function closeSplash(): void {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.destroy();
+  }
+  splashWindow = null;
+}
+
+// ---------------------------------------------------------------------------
 // IPC Handlers
-ipcMain.handle('tok:send-command', async (_, cmd: any) => {
-  const cli = getTokCliPath();
+// ---------------------------------------------------------------------------
+handle('tok:send-command', async (_, cmd: any) => {
   const action = typeof cmd === 'string' ? cmd : cmd?.action;
   logger.info(`[IPC] Received send-command: ${action}`);
 
   if (action === 'ping') {
-    return { status: 'ok', version: '0.7.3', cliPath: cli, cliExists: fs.existsSync(cli) };
+    const cli = getTokCliPath();
+    return { status: 'ok', version: getAppVersion(), cliPath: cli, cliExists: fs.existsSync(cli) };
   }
 
   if (action === 'get-demo-html') {
-    return new Promise((resolve, reject) => {
-      const tempPath = path.join(app.getPath('temp'), `tok_demo_${Date.now()}.html`);
-      const proc = spawn(cli, ['render-html', '--demo', tempPath]);
-      let stderr = '';
-      proc.stderr.on('data', (d) => (stderr += d.toString()));
-      proc.on('close', (code) => {
-        if (code === 0 && fs.existsSync(tempPath)) {
-          const content = fs.readFileSync(tempPath, 'utf-8');
-          try { fs.unlinkSync(tempPath); } catch {}
-          resolve({ ok: true, html: content });
-        } else {
-          reject(new Error(`Failed to generate demo HTML (code ${code}): ${stderr}`));
-        }
-      });
-    });
+    const tempPath = path.join(app.getPath('temp'), `tok_demo_${process.pid}_${Date.now()}.html`);
+    try {
+      const { code, stderr } = await runCli(['render-html', '--demo', tempPath]);
+      if (code !== 0) throw new Error(`Failed to generate demo HTML (code ${code}): ${stderr}`);
+      const html = await fs.promises.readFile(tempPath, 'utf-8');
+      return { ok: true, html };
+    } finally {
+      fs.promises.unlink(tempPath).catch(() => {});
+    }
   }
 
   if (action === 'benchmark-typeset') {
-    return new Promise((resolve, reject) => {
-      const proc = spawn(cli, ['benchmark-typeset', '--pages', '100']);
-      let stdout = '';
-      let stderr = '';
-      proc.stdout.on('data', (d) => (stdout += d.toString()));
-      proc.stderr.on('data', (d) => (stderr += d.toString()));
-      proc.on('close', (code) => {
-        if (code === 0) resolve({ ok: true, output: stdout });
-        else reject(new Error(`Benchmark failed: ${stderr}`));
-      });
-    });
+    const { code, stdout, stderr } = await runCli(['benchmark-typeset', '--pages', '100']);
+    if (code === 0) return { ok: true, output: stdout };
+    throw new Error(`Benchmark failed: ${stderr}`);
   }
 
   if (action === 'verify-determinism') {
-    return new Promise((resolve, reject) => {
-      const proc = spawn(cli, ['verify-determinism']);
-      let stdout = '';
-      let stderr = '';
-      proc.stdout.on('data', (d) => (stdout += d.toString()));
-      proc.stderr.on('data', (d) => (stderr += d.toString()));
-      proc.on('close', (code) => {
-        if (code === 0) resolve({ ok: true, output: stdout });
-        else reject(new Error(`Determinism verification failed: ${stderr}`));
-      });
-    });
+    const { code, stdout, stderr } = await runCli(['verify-determinism']);
+    if (code === 0) return { ok: true, output: stdout };
+    throw new Error(`Determinism verification failed: ${stderr}`);
   }
 
   return { status: 'unhandled_command', cmd };
 });
 
-ipcMain.handle('tok:render-pdf', async (_, { inputPath, outputPath }) => {
-  return new Promise((resolve, reject) => {
-    const cli = getTokCliPath();
-    const args = ['render-pdf', inputPath, outputPath];
-    const proc = spawn(cli, args);
+async function renderWithCli(kind: 'pdf' | 'html', payload: any): Promise<string> {
+  const inputPath = requireString(payload?.inputPath, 'inputPath');
+  const outputPath = requireString(payload?.outputPath, 'outputPath');
+  const { code, stdout, stderr } = await runCli([`render-${kind}`, inputPath, outputPath]);
+  if (code !== 0) throw new Error(`tok-cli failed with code ${code}: ${stderr}`);
+  if (kind === 'pdf') logger.info(`[IPC] PDF rendering succeeded to: ${outputPath}`);
+  return stdout;
+}
 
-    let stdout = '';
-    let stderr = '';
-    proc.stdout.on('data', (d) => (stdout += d.toString()));
-    proc.stderr.on('data', (d) => (stderr += d.toString()));
-
-    proc.on('close', (code) => {
-      if (code === 0) {
-        logger.info(`[IPC] PDF rendering succeeded to: ${outputPath}`);
-        resolve(stdout);
-      } else {
-        logger.error(`[IPC] tok-cli failed with code ${code}: ${stderr}`);
-        reject(new Error(`tok-cli failed with code ${code}: ${stderr}`));
-      }
-    });
-  });
-});
-
-ipcMain.handle('tok:render-html', async (_, { inputPath, outputPath }) => {
-  return new Promise((resolve, reject) => {
-    const cli = getTokCliPath();
-    const args = ['render-html', inputPath, outputPath];
-    const proc = spawn(cli, args);
-
-    let stdout = '';
-    let stderr = '';
-    proc.stdout.on('data', (d) => (stdout += d.toString()));
-    proc.stderr.on('data', (d) => (stderr += d.toString()));
-
-    proc.on('close', (code) => {
-      if (code === 0) {
-        resolve(stdout);
-      } else {
-        reject(new Error(`tok-cli failed with code ${code}: ${stderr}`));
-      }
-    });
-  });
-});
+handle('tok:render-pdf', (_, payload) => renderWithCli('pdf', payload));
+handle('tok:render-html', (_, payload) => renderWithCli('html', payload));
 
 // Logger Handlers
-ipcMain.handle('tok:get-recent-logs', async () => {
-  return logger.getRecentLogs(100);
-});
-
-ipcMain.handle('tok:open-logs-folder', async () => {
-  return logger.openLogsFolder();
-});
-
-ipcMain.handle('tok:clean-old-logs', async (_, days?: number) => {
-  return logger.cleanOldLogs(days);
-});
-
-ipcMain.handle('tok:set-log-retention', async (_, days: number) => {
-  logger.setRetentionDays(days);
+handle('tok:get-recent-logs', () => logger.getRecentLogs(100));
+handle('tok:open-logs-folder', () => logger.openLogsFolder());
+handle('tok:clean-old-logs', (_, days?: number) =>
+  logger.cleanOldLogs(Number.isFinite(days) && (days as number) > 0 ? days : undefined)
+);
+handle('tok:set-log-retention', (_, days: number) => {
+  if (Number.isFinite(days) && days > 0) logger.setRetentionDays(days);
 });
 
 // Updater Handlers
-ipcMain.handle('tok:check-for-updates', async () => {
-  return await updater.checkForUpdates();
-});
-
-ipcMain.handle('tok:open-release-url', async (_, url?: string) => {
-  updater.openReleaseUrl(url);
-});
+handle('tok:check-for-updates', () => updater.checkForUpdates());
+handle('tok:open-release-url', (_, url?: string) => updater.openReleaseUrl(url));
 
 // Plugin Handlers
-ipcMain.handle('tok:get-plugins', async () => {
-  return pluginManager.discoverPlugins();
+handle('tok:get-plugins', async () => {
+  trace('ipc-get-plugins-start');
+  const plugins = await pluginManager.discoverPlugins();
+  trace('ipc-get-plugins-end');
+  return plugins;
 });
-
-ipcMain.handle('tok:toggle-plugin', async (_, { pluginId, enabled }) => {
-  return pluginManager.togglePlugin(pluginId, enabled);
-});
-
-ipcMain.handle('tok:open-plugins-folder', async () => {
-  pluginManager.openPluginsFolder();
-});
-
-ipcMain.handle('tok:reload-plugins', async () => {
-  return pluginManager.discoverPlugins();
-});
+handle('tok:toggle-plugin', (_, payload) => pluginManager.togglePlugin(payload?.pluginId, payload?.enabled));
+handle('tok:open-plugins-folder', () => pluginManager.openPluginsFolder());
+handle('tok:reload-plugins', () => pluginManager.discoverPlugins());
 
 // System Handlers
-ipcMain.handle('tok:open-external', async (_, url: string) => {
-  if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
-    shell.openExternal(url);
-  }
+handle('tok:open-external', (_, url: string) => openExternalSafely(url));
+handle('tok:get-app-info', () => ({
+  version: getAppVersion(),
+  name: 'TypesetOK (TOK)',
+  repoUrl: APP_REPO_URL
+}));
+
+// ---------------------------------------------------------------------------
+// App lifecycle
+// ---------------------------------------------------------------------------
+
+/**
+ * Housekeeping that must not delay the first frame (log retention sweep).
+ * Runs a few seconds after the main window is visible.
+ */
+let deferredWorkScheduled = false;
+function scheduleDeferredStartupWork(): void {
+  if (deferredWorkScheduled) return;
+  deferredWorkScheduled = true;
+  setTimeout(() => {
+    logger.cleanOldLogs().catch(() => {});
+  }, 3000);
+}
+
+process.on('unhandledRejection', (reason: any) => {
+  logger.error('[MAIN] Unhandled promise rejection', { reason: reason?.message ?? String(reason) });
 });
 
-ipcMain.handle('tok:get-app-info', async () => {
-  return {
-    version: '0.7.3',
-    name: 'TypesetOK (TOK)',
-    repoUrl: 'https://github.com/TypesetOK/typesetok'
-  };
-});
-
-app.whenReady().then(() => {
-  createSplashWindow();
-  createWindow();
-  // Asynchronously initialize logger and plugins concurrently without delaying window creation
-  Promise.resolve().then(() => {
-    logger.init(14);
-    pluginManager.init();
+// Defense in depth: no <webview> anywhere, no new windows from any web contents.
+app.on('web-contents-created', (_e, contents) => {
+  contents.on('will-attach-webview', (event) => event.preventDefault());
+  contents.setWindowOpenHandler(({ url }) => {
+    openExternalSafely(url);
+    return { action: 'deny' };
   });
 });
+
+// A second launch focuses the running instance instead of starting a competing
+// copy on the same profile.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    const win = mainWindow;
+    if (win && !win.isDestroyed()) {
+      if (win.isMinimized()) win.restore();
+      if (!win.isVisible()) win.show();
+      win.focus();
+    }
+  });
+
+  app.whenReady().then(() => {
+    trace('app-ready');
+    // Splash first so feedback appears as early as possible. (Creating the main window
+    // first starts its renderer ~40 ms earlier, but the splash creation then delays the
+    // main page's load by about as much; measured no net gain.)
+    createSplashWindow();
+    createWindow();
+    trace('main-window-created');
+    // Cheap: resolves the log dir; file writes are async and buffered.
+    // The plugin manager initialises lazily on first use (tok:get-plugins).
+    logger.init(14);
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -382,7 +513,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (mainWindow === null) {
+  if (mainWindow === null && app.isReady()) {
     createWindow();
   }
 });

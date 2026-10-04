@@ -1,5 +1,5 @@
 import { app, shell } from 'electron';
-import * as https from 'https';
+import type { IncomingMessage } from 'http';
 import { logger } from './logger';
 
 export interface UpdateCheckResult {
@@ -14,17 +14,59 @@ export interface UpdateCheckResult {
   error?: string;
 }
 
+const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+const REQUEST_TIMEOUT_MS = 8000;
+
+/**
+ * The app version. Packaged builds carry it in resources/app/package.json
+ * (app.getVersion()); when running from source Electron would report its own
+ * version, so the monorepo root package.json is used instead.
+ */
+let cachedVersion: string | undefined;
+export function getAppVersion(): string {
+  if (cachedVersion) return cachedVersion;
+  let v = '';
+  if (app.isPackaged) {
+    v = app.getVersion();
+  } else {
+    try {
+      // packages/tok-electron/dist -> repo root
+      v = require('../../../package.json').version;
+    } catch {
+      v = '';
+    }
+  }
+  cachedVersion = v || '0.7.3';
+  return cachedVersion;
+}
+
+/** Only http(s) URLs may be handed to the OS shell. */
+export function isSafeExternalUrl(url: unknown): url is string {
+  if (typeof url !== 'string') return false;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' || u.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export class TokUpdater {
   private repoOwner = 'TypesetOK';
   private repoName = 'typesetok';
-  private currentVersion: string;
+  private currentVersion?: string;
+  private inFlight: Promise<UpdateCheckResult> | null = null;
 
   constructor(currentVersion?: string) {
-    this.currentVersion = currentVersion || app.getVersion() || '0.7.3';
+    this.currentVersion = currentVersion;
   }
 
   public getCurrentVersion(): string {
-    return this.currentVersion;
+    return this.currentVersion || getAppVersion();
+  }
+
+  private get releasesPage(): string {
+    return `https://github.com/${this.repoOwner}/${this.repoName}/releases`;
   }
 
   /**
@@ -47,116 +89,140 @@ export class TokUpdater {
     return 0;
   }
 
+  private failure(error: string): UpdateCheckResult {
+    const current = this.getCurrentVersion();
+    return {
+      hasUpdate: false,
+      currentVersion: current,
+      latestVersion: current,
+      releaseName: '',
+      releaseNotes: '',
+      releaseUrl: this.releasesPage,
+      error
+    };
+  }
+
+  private parseRelease(data: string): UpdateCheckResult {
+    const current = this.getCurrentVersion();
+    const release = JSON.parse(data);
+    if (!release || typeof release !== 'object') throw new Error('unexpected response shape');
+    const tagName: string = String(release.tag_name || release.name || '');
+    const latestVersion = tagName.replace(/^v/i, '');
+    const hasUpdate = latestVersion !== '' && this.compareVersions(latestVersion, current) > 0;
+    const releaseUrl = isSafeExternalUrl(release.html_url) ? release.html_url : this.releasesPage;
+
+    // Prefer a Windows installer or zip asset if available
+    let downloadUrl = releaseUrl;
+    if (Array.isArray(release.assets)) {
+      const asset = release.assets.find((a: any) =>
+        typeof a?.name === 'string' && (a.name.endsWith('.exe') || a.name.endsWith('.zip'))
+      );
+      if (asset && isSafeExternalUrl(asset.browser_download_url)) {
+        downloadUrl = asset.browser_download_url;
+      }
+    }
+
+    return {
+      hasUpdate,
+      currentVersion: current,
+      latestVersion: latestVersion || current,
+      releaseName: String(release.name || tagName),
+      releaseNotes: typeof release.body === 'string' && release.body ? release.body : 'אין הערות שחרור זמינות',
+      releaseUrl,
+      downloadUrl,
+      publishedAt: typeof release.published_at === 'string' ? release.published_at : undefined
+    };
+  }
+
   /**
    * Checks GitHub Releases API for the latest published release.
+   * Never rejects: network/parse problems are reported in `error`.
+   * Concurrent calls share one request.
    */
-  public async checkForUpdates(): Promise<UpdateCheckResult> {
+  public checkForUpdates(): Promise<UpdateCheckResult> {
+    if (!this.inFlight) {
+      this.inFlight = this.doCheck().finally(() => {
+        this.inFlight = null;
+      });
+    }
+    return this.inFlight;
+  }
+
+  private doCheck(): Promise<UpdateCheckResult> {
     logger.info('[UPDATER] Checking for updates against GitHub Releases...');
     const url = `https://api.github.com/repos/${this.repoOwner}/${this.repoName}/releases/latest`;
+    // Loaded on demand: the TLS stack is not needed on the startup path.
+    const https: typeof import('https') = require('https');
 
     return new Promise((resolve) => {
-      const options = {
-        headers: {
-          'User-Agent': `TypesetOK-Desktop/${this.currentVersion}`,
-          'Accept': 'application/vnd.github.v3+json'
-        },
-        timeout: 8000
+      let settled = false;
+      const finish = (r: UpdateCheckResult) => {
+        if (!settled) {
+          settled = true;
+          resolve(r);
+        }
       };
 
-      const req = https.get(url, options, (res) => {
-        let data = '';
-        res.on('data', chunk => (data += chunk));
-        res.on('end', () => {
-          if (res.statusCode === 200) {
-            try {
-              const release = JSON.parse(data);
-              const tagName: string = release.tag_name || release.name || '';
-              const latestVersion = tagName.replace(/^v/i, '');
-              const hasUpdate = this.compareVersions(latestVersion, this.currentVersion) > 0;
-
-              // Find Windows installer or zip asset if available
-              let downloadUrl = release.html_url;
-              if (Array.isArray(release.assets)) {
-                const exeAsset = release.assets.find((a: any) =>
-                  a.name && (a.name.endsWith('.exe') || a.name.endsWith('.zip'))
-                );
-                if (exeAsset && exeAsset.browser_download_url) {
-                  downloadUrl = exeAsset.browser_download_url;
-                }
-              }
-
-              const result: UpdateCheckResult = {
-                hasUpdate,
-                currentVersion: this.currentVersion,
-                latestVersion,
-                releaseName: release.name || tagName,
-                releaseNotes: release.body || 'אין הערות שחרור זמינות',
-                releaseUrl: release.html_url,
-                downloadUrl,
-                publishedAt: release.published_at
-              };
-
-              logger.info('[UPDATER] Update check completed', { hasUpdate, latestVersion, current: this.currentVersion });
-              resolve(result);
-            } catch (parseErr: any) {
-              logger.warn('[UPDATER] Failed to parse release JSON', { error: parseErr.message });
-              resolve({
-                hasUpdate: false,
-                currentVersion: this.currentVersion,
-                latestVersion: this.currentVersion,
-                releaseName: '',
-                releaseNotes: '',
-                releaseUrl: '',
-                error: `שגיאה בפענוח נתוני שחרור: ${parseErr.message}`
-              });
+      const req = https.get(
+        url,
+        {
+          headers: {
+            'User-Agent': `TypesetOK-Desktop/${this.getCurrentVersion()}`,
+            'Accept': 'application/vnd.github.v3+json'
+          },
+          timeout: REQUEST_TIMEOUT_MS
+        },
+        (res: IncomingMessage) => {
+          const chunks: Buffer[] = [];
+          let size = 0;
+          res.on('data', (chunk: Buffer) => {
+            size += chunk.length;
+            if (size > MAX_RESPONSE_BYTES) {
+              req.destroy();
+              finish(this.failure('תגובת שרת גדולה מדי'));
+              return;
             }
-          } else {
-            logger.warn(`[UPDATER] Release API responded with status ${res.statusCode}`);
-            resolve({
-              hasUpdate: false,
-              currentVersion: this.currentVersion,
-              latestVersion: this.currentVersion,
-              releaseName: '',
-              releaseNotes: '',
-              releaseUrl: `https://github.com/${this.repoOwner}/${this.repoName}/releases`,
-              error: `תגובת שרת GitHub: ${res.statusCode}`
-            });
-          }
-        });
-      });
+            chunks.push(chunk);
+          });
+          res.on('error', (err) => finish(this.failure(`שגיאת רשת בבדיקת עדכון: ${err.message}`)));
+          res.on('end', () => {
+            if (res.statusCode !== 200) {
+              logger.warn(`[UPDATER] Release API responded with status ${res.statusCode}`);
+              finish(this.failure(`תגובת שרת GitHub: ${res.statusCode}`));
+              return;
+            }
+            try {
+              const result = this.parseRelease(Buffer.concat(chunks).toString('utf-8'));
+              logger.info('[UPDATER] Update check completed', {
+                hasUpdate: result.hasUpdate,
+                latestVersion: result.latestVersion,
+                current: result.currentVersion
+              });
+              finish(result);
+            } catch (parseErr: any) {
+              logger.warn('[UPDATER] Failed to parse release JSON', { error: parseErr?.message });
+              finish(this.failure(`שגיאה בפענוח נתוני שחרור: ${parseErr?.message}`));
+            }
+          });
+        }
+      );
 
       req.on('error', (err) => {
         logger.warn('[UPDATER] Network error checking for updates', { error: err.message });
-        resolve({
-          hasUpdate: false,
-          currentVersion: this.currentVersion,
-          latestVersion: this.currentVersion,
-          releaseName: '',
-          releaseNotes: '',
-          releaseUrl: `https://github.com/${this.repoOwner}/${this.repoName}/releases`,
-          error: `שגיאת רשת בבדיקת עדכון: ${err.message}`
-        });
+        finish(this.failure(`שגיאת רשת בבדיקת עדכון: ${err.message}`));
       });
 
       req.on('timeout', () => {
         req.destroy();
         logger.warn('[UPDATER] Timeout checking for updates');
-        resolve({
-          hasUpdate: false,
-          currentVersion: this.currentVersion,
-          latestVersion: this.currentVersion,
-          releaseName: '',
-          releaseNotes: '',
-          releaseUrl: `https://github.com/${this.repoOwner}/${this.repoName}/releases`,
-          error: 'פסק זמן בבדיקת עדכונים מול השרת'
-        });
+        finish(this.failure('פסק זמן בבדיקת עדכונים מול השרת'));
       });
     });
   }
 
   public openReleaseUrl(url?: string): void {
-    const target = url || `https://github.com/${this.repoOwner}/${this.repoName}/releases`;
-    shell.openExternal(target);
+    const target = isSafeExternalUrl(url) ? url : this.releasesPage;
+    shell.openExternal(target).catch((err) => logger.warn('[UPDATER] Failed to open release URL', { error: err?.message }));
   }
 }
 

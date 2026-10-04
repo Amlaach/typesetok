@@ -8,12 +8,13 @@
   ],
   "scripts": {
     "build:ts": "tsc --build",
-    "bundle:ui": "esbuild packages/tok-ui/src/renderer.ts --bundle --outfile=packages/tok-ui/dist/renderer.js --platform=browser --target=es2022 && node -e \"fs.copyFileSync('packages/tok-ui/src/index.html', 'packages/tok-ui/dist/index.html')\"",
+    "bundle:ui": "node scripts/bundle-ui.mjs",
     "build": "npm run build:ts && npm run bundle:ui",
     "package:desktop": "node scripts/build-desktop-bundle.mjs",
     "package:installer": "node scripts/build-installer.mjs",
     "test": "node --test test/frontend.test.mjs test/milestone_features.test.mjs",
-    "start": "electron packages/tok-electron/dist/main.js"
+    "start": "electron packages/tok-electron/dist/main.js",
+    "perf:startup": "node scripts/measure-startup.mjs"
   },
   "devDependencies": {
     "electron": "^29.1.0",

@@ -4,8 +4,13 @@
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 
+; build-installer.mjs passes /DVERSION=<package.json version>
+!ifndef VERSION
+  !define VERSION "0.7.3"
+!endif
+
 Name "TypesetOK"
-OutFile "..\dist\TypesetOK-v0.7.3-NSIS-Setup.exe"
+OutFile "..\dist\TypesetOK-v${VERSION}-NSIS-Setup.exe"
 InstallDir "$PROGRAMFILES64\TypesetOK"
 InstallDirRegKey HKLM "Software\TypesetOK" "Install_Dir"
 RequestExecutionLevel admin
@@ -43,7 +48,7 @@ FunctionEnd
 Section "TypesetOK Application (Required)" SecApp
   SectionIn RO
   SetOutPath "$INSTDIR"
-  File /r "..\dist\TypesetOK-v0.7.3-windows-x64\*.*"
+  File /r "..\dist\TypesetOK-v${VERSION}-windows-x64\*.*"
 
   ; Create shortcuts
   CreateDirectory "$SMPROGRAMS\TypesetOK"
@@ -62,7 +67,7 @@ Section "TypesetOK Application (Required)" SecApp
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "DisplayIcon" '"$INSTDIR\TypesetOK.exe"'
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "Publisher" "TypesetOK Team"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "DisplayVersion" "0.7.3"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK" "DisplayVersion" "${VERSION}"
 SectionEnd
 
 Section "Uninstall"

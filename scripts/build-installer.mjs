@@ -76,12 +76,12 @@ if (!foundIscc) {
 if (foundIscc) {
   console.log(`[BUILD-INSTALLER] Compiling with Inno Setup: ${foundIscc}`);
   const issFile = path.join(rootDir, 'scripts/installer.iss');
-  execSync(`"${foundIscc}" "${issFile}"`, { cwd: rootDir, stdio: 'inherit' });
+  execSync(`"${foundIscc}" "/DMyAppVersion=${version}" "${issFile}"`, { cwd: rootDir, stdio: 'inherit' });
   console.log(`[BUILD-INSTALLER] SUCCESS! Installer created in dist/TypesetOK-v${version}-Setup-x64.exe`);
 } else if (foundNsis) {
   console.log(`[BUILD-INSTALLER] Compiling with NSIS: ${foundNsis}`);
   const nsiFile = path.join(rootDir, 'scripts/installer.nsi');
-  execSync(`"${foundNsis}" "${nsiFile}"`, { cwd: rootDir, stdio: 'inherit' });
+  execSync(`"${foundNsis}" "/DVERSION=${version}" "${nsiFile}"`, { cwd: rootDir, stdio: 'inherit' });
   console.log(`[BUILD-INSTALLER] SUCCESS! Installer created in dist/TypesetOK-v${version}-NSIS-Setup.exe`);
 } else {
   console.log('[BUILD-INSTALLER] Note: Inno Setup (ISCC.exe) and NSIS (makensis.exe) were not found in standard paths.');

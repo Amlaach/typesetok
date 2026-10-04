@@ -2,6 +2,9 @@
 <html dir="rtl" lang="he">
 <head>
   <meta charset="utf-8">
+  <!-- Only local code may run. 'unsafe-eval' is required by the plugin engine (new Function);
+       inline styles are used throughout the component code. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TypesetOK (TOK) - תוכנת עימוד מקצועית</title>
   <style>
