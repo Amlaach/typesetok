@@ -460,10 +460,40 @@ impl TypesettingEngine {
         let mut pages = Vec::new();
         let mut current_page_lines = Vec::new();
         let mut current_height = 0.0;
+        let mut prev_space_after: f32 = 0.0;
+        let mut prev_section_idx: Option<usize> = None;
 
         for (&(sec_idx, p_idx, p), p_lines) in jobs.iter().zip(laid_out) {
+            // Reset margin collapsing on section boundaries
+            if prev_section_idx != Some(sec_idx) {
+                prev_section_idx = Some(sec_idx);
+                prev_space_after = 0.0;
+            }
+
+            let (space_before, space_after) = doc
+                .paragraph_styles
+                .iter()
+                .find(|s| s.id == p.style_id)
+                .map(|style| (style.space_before_pt.max(0.0), style.space_after_pt.max(0.0)))
+                .unwrap_or((0.0, 0.0));
+
+            if p_lines.is_empty() {
+                // Empty paragraph collapses its own margins with adjacent margins
+                prev_space_after = prev_space_after.max(space_before).max(space_after);
+                continue;
+            }
+
+            let mut is_first_line = true;
             for mut line in p_lines {
-                if current_height + line.height > content_height && !current_page_lines.is_empty() {
+                let margin = if is_first_line && !current_page_lines.is_empty() {
+                    prev_space_after.max(space_before)
+                } else {
+                    0.0
+                };
+
+                if current_height + margin + line.height > content_height
+                    && !current_page_lines.is_empty()
+                {
                     // Page is full: commit page
                     let page = self.new_page(
                         pages.len() + 1,
@@ -486,15 +516,24 @@ impl TypesettingEngine {
                     );
                     pages.push(page);
                     current_height = 0.0;
+                    // Top-of-page margin collapses to 0.0
                 }
 
-                // Baselines are frame-relative: the line sits right below
-                // everything already placed on this page.
+                let margin_to_apply = if is_first_line && !current_page_lines.is_empty() {
+                    prev_space_after.max(space_before)
+                } else {
+                    0.0
+                };
+
+                current_height += margin_to_apply;
                 line.baseline_y = current_height + line.height;
                 line.line_index = current_page_lines.len();
                 current_height += line.height;
                 current_page_lines.push(line);
+                is_first_line = false;
             }
+
+            prev_space_after = space_after;
         }
 
         // Flush final page
@@ -569,6 +608,8 @@ mod tests {
     #[test]
     fn baselines_advance_by_one_line_height() {
         let mut doc = DocumentRoot::new("t");
+        doc.paragraph_styles[0].space_before_pt = 0.0;
+        doc.paragraph_styles[0].space_after_pt = 0.0;
         let flow = doc.sections[0].main_flow_mut().unwrap();
         let long = "מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית מִשָּׁעָה שֶׁהַכֹּהֲנִים נִכְנָסִים לֶאֱכֹל בִּתְרוּמָתָן עַד סוֹף הָאַשְׁמוּרָה הָרִאשׁוֹנָה דִּבְרֵי רַבִּי אֱלִיעֶזֶר וַחֲכָמִים אוֹמְרִים עַד חֲצוֹת ".repeat(6);
         for i in 0..40 {
@@ -725,5 +766,121 @@ mod tests {
         let order = visual_order(&[(0, 0), (1, 1), (1, 2), (0, 3)]);
         assert_eq!(order, vec![0, 2, 1, 3]);
         assert!(visual_order(&[]).is_empty());
+    }
+
+    #[test]
+    fn test_paragraph_space_before_after_margin_collapsing() {
+        use tok_core::styles::ParagraphStyle;
+
+        let mut doc = DocumentRoot::new("test");
+        let s1 = ParagraphStyle {
+            id: "s1".to_string(),
+            line_height_pt: 14.0,
+            space_before_pt: 0.0,
+            space_after_pt: 10.0,
+            ..ParagraphStyle::default()
+        };
+        let s2 = ParagraphStyle {
+            id: "s2".to_string(),
+            line_height_pt: 14.0,
+            space_before_pt: 6.0,
+            space_after_pt: 4.0,
+            ..ParagraphStyle::default()
+        };
+        let s3 = ParagraphStyle {
+            id: "s3".to_string(),
+            line_height_pt: 14.0,
+            space_before_pt: 15.0,
+            space_after_pt: 0.0,
+            ..ParagraphStyle::default()
+        };
+        doc.paragraph_styles = vec![s1, s2, s3];
+
+        let flow = doc.sections[0].main_flow_mut().unwrap();
+        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p1"), "s1", "פסקה אחת"));
+        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p2"), "s2", "פסקה שתיים"));
+        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p3"), "s3", "פסקה שלוש"));
+
+        let pages = engine().typeset_document(&doc);
+        assert_eq!(pages.len(), 1);
+        let lines = &pages[0].frames[0].lines;
+        assert_eq!(lines.len(), 3);
+
+        // Top of page: space_before collapses to 0.0
+        assert_eq!(lines[0].baseline_y, 14.0);
+
+        // Collapsed margin between s1.after (10.0) and s2.before (6.0) is 10.0.max(6.0) = 10.0
+        // baseline = 14.0 + 10.0 + 14.0 = 38.0
+        assert_eq!(lines[1].baseline_y, 38.0);
+
+        // Collapsed margin between s2.after (4.0) and s3.before (15.0) is 4.0.max(15.0) = 15.0
+        // baseline = 38.0 + 15.0 + 14.0 = 67.0
+        assert_eq!(lines[2].baseline_y, 67.0);
+    }
+
+    #[test]
+    fn test_margin_collapsing_at_page_boundary() {
+        use tok_core::styles::ParagraphStyle;
+
+        let mut doc = DocumentRoot::new("boundary");
+        let style = ParagraphStyle {
+            id: "styled".to_string(),
+            line_height_pt: 14.0,
+            space_before_pt: 30.0,
+            space_after_pt: 30.0,
+            ..ParagraphStyle::default()
+        };
+        doc.paragraph_styles = vec![style];
+
+        let flow = doc.sections[0].main_flow_mut().unwrap();
+        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p1"), "styled", "פסקה ראשונה בעמוד"));
+
+        let pages = engine().typeset_document(&doc);
+        assert_eq!(pages.len(), 1);
+        let lines = &pages[0].frames[0].lines;
+        // Top of page: space_before must collapse to 0.0
+        assert_eq!(lines[0].baseline_y, 14.0);
+    }
+
+    #[test]
+    fn test_empty_paragraph_collapses_margins() {
+        use tok_core::styles::ParagraphStyle;
+
+        let mut doc = DocumentRoot::new("empty_test");
+        let s1 = ParagraphStyle {
+            id: "s1".to_string(),
+            line_height_pt: 14.0,
+            space_before_pt: 0.0,
+            space_after_pt: 5.0,
+            ..ParagraphStyle::default()
+        };
+        let s_empty = ParagraphStyle {
+            id: "s_empty".to_string(),
+            line_height_pt: 14.0,
+            space_before_pt: 12.0,
+            space_after_pt: 8.0,
+            ..ParagraphStyle::default()
+        };
+        let s2 = ParagraphStyle {
+            id: "s2".to_string(),
+            line_height_pt: 14.0,
+            space_before_pt: 6.0,
+            space_after_pt: 0.0,
+            ..ParagraphStyle::default()
+        };
+        doc.paragraph_styles = vec![s1, s_empty, s2];
+
+        let flow = doc.sections[0].main_flow_mut().unwrap();
+        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p01"), "s1", "פסקה ראשונה"));
+        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p02"), "s_empty", ""));
+        flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("p03"), "s2", "פסקה שנייה"));
+
+        let pages = engine().typeset_document(&doc);
+        let lines = &pages[0].frames[0].lines;
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].baseline_y, 14.0);
+        // Margins collapsed: 5.0.max(12.0).max(8.0).max(6.0) = 12.0
+        // baseline = 14.0 + 12.0 + 14.0 = 40.0
+        assert_eq!(lines[1].baseline_y, 40.0);
     }
 }
