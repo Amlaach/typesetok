@@ -1,4 +1,5 @@
 import { renderIcon } from '../icons';
+import { t, i18n } from '../i18n';
 
 export interface StatusBarCallbacks {
   onZoomChange: (zoomPercent: number) => void;
@@ -6,20 +7,32 @@ export interface StatusBarCallbacks {
   onPreflightClick: () => void;
 }
 
+export const ZOOM_PRESETS = [50, 75, 100, 125, 150, 200];
+
 export class StatusBar {
   public element: HTMLElement;
   private callbacks: StatusBarCallbacks;
-  private pageLabel = 'דף ב ע"א (3 מתוך 142)';
+  private pageLabel = '';
   private zoom = 100;
   private wordCount = 4210;
   private activeFlow = 'גמרא (ראשי)';
   private preflightStatus: 'clean' | 'warning' | 'error' = 'clean';
 
+  // Live nodes updated in place by updateStats() (the bar used to be rebuilt on every
+  // page change while scrolling).
+  private pageText!: HTMLElement;
+  private countText!: HTMLElement;
+  private flowText!: HTMLElement;
+  private pfDot!: HTMLElement;
+  private pfText!: HTMLElement;
+  private zoomSelect!: HTMLSelectElement;
+
   constructor(callbacks: StatusBarCallbacks) {
     this.callbacks = callbacks;
     this.element = document.createElement('footer');
     this.element.className = 'tok-status-bar';
-    this.element.dir = 'rtl';
+    this.element.setAttribute('role', 'status');
+    this.element.dir = i18n.getDirection();
     this.element.style.height = 'var(--tok-status-height)';
     this.element.style.minHeight = 'var(--tok-status-height)';
     this.element.style.background = 'var(--tok-bg-app)';
@@ -32,7 +45,12 @@ export class StatusBar {
     this.element.style.color = 'var(--tok-text-secondary)';
     this.element.style.userSelect = 'none';
 
-    this.render();
+    i18n.onChange(() => {
+      this.element.dir = i18n.getDirection();
+      this.build();
+    });
+
+    this.build();
   }
 
   public updateStats(params: {
@@ -47,115 +65,145 @@ export class StatusBar {
     if (params.wordCount !== undefined) this.wordCount = params.wordCount;
     if (params.activeFlow !== undefined) this.activeFlow = params.activeFlow;
     if (params.preflightStatus !== undefined) this.preflightStatus = params.preflightStatus;
-    this.render();
+    this.refresh();
   }
 
-  private render(): void {
+  /** Writes the current state into the existing nodes. All values go in as text, never HTML. */
+  private refresh(): void {
+    this.pageText.textContent = this.pageLabel;
+    this.countText.textContent = `${t('statusTextLength')}: ${this.wordCount.toLocaleString()} ${t('statusWords')}`;
+    this.flowText.textContent = this.activeFlow;
+
+    const colors = { clean: '#10B981', warning: '#F59E0B', error: '#EF4444' };
+    this.pfDot.style.background = colors[this.preflightStatus];
+    this.pfText.style.color = colors[this.preflightStatus];
+    this.pfText.textContent =
+      this.preflightStatus === 'clean' ? t('statusPreflightClean')
+        : this.preflightStatus === 'warning' ? t('statusPreflightWarnings')
+          : t('statusPreflightErrors');
+
+    // A zoom value that is not a preset (e.g. set programmatically) still needs an option to show.
+    if (!ZOOM_PRESETS.includes(this.zoom) && !this.zoomSelect.querySelector(`option[value="${this.zoom}"]`)) {
+      this.zoomSelect.appendChild(this.createZoomOption(this.zoom));
+    }
+    this.zoomSelect.value = String(this.zoom);
+  }
+
+  private createZoomOption(z: number): HTMLOptionElement {
+    const opt = document.createElement('option');
+    opt.value = z.toString();
+    opt.textContent = `${t('statusZoom')}: ${z}%`;
+    return opt;
+  }
+
+  private build(): void {
     this.element.innerHTML = '';
 
-    // Right side (Leading in RTL)
+    // Leading side
     const right = document.createElement('div');
     right.style.display = 'flex';
     right.style.alignItems = 'center';
     right.style.gap = '14px';
 
-    // Page indicator
-    const pageItem = document.createElement('div');
+    // Page indicator (opens the command palette)
+    const pageItem = document.createElement('button');
+    pageItem.type = 'button';
     pageItem.style.cursor = 'pointer';
     pageItem.style.display = 'flex';
     pageItem.style.alignItems = 'center';
     pageItem.style.gap = '6px';
-    pageItem.innerHTML = `${renderIcon('pages', 13)}<span>${this.pageLabel}</span>`;
+    pageItem.style.background = 'transparent';
+    pageItem.style.border = 'none';
+    pageItem.style.color = 'inherit';
+    pageItem.style.font = 'inherit';
+    pageItem.style.padding = '0';
+    pageItem.title = t('statusGoToPage');
+    pageItem.innerHTML = renderIcon('pages', 13);
+    this.pageText = document.createElement('span');
+    pageItem.appendChild(this.pageText);
     pageItem.addEventListener('click', () => this.callbacks.onPageClick());
     right.appendChild(pageItem);
 
     right.appendChild(this.createSeparator());
 
-    // Word Count
-    const countItem = document.createElement('span');
-    countItem.textContent = `אורך טקסט: ${this.wordCount.toLocaleString()} מילים`;
-    right.appendChild(countItem);
+    this.countText = document.createElement('span');
+    right.appendChild(this.countText);
 
     right.appendChild(this.createSeparator());
 
-    // Active flow
     const flowItem = document.createElement('span');
-    flowItem.innerHTML = `<span>תזרים פעיל: </span><strong style="color:#60A5FA;">${this.activeFlow}</strong>`;
+    const flowLabel = document.createElement('span');
+    flowLabel.textContent = `${t('statusActiveFlow')}: `;
+    flowItem.appendChild(flowLabel);
+    this.flowText = document.createElement('strong');
+    this.flowText.style.color = '#60A5FA';
+    flowItem.appendChild(this.flowText);
     right.appendChild(flowItem);
 
     this.element.appendChild(right);
 
-    // Left side (Trailing in RTL)
+    // Trailing side
     const left = document.createElement('div');
     left.style.display = 'flex';
     left.style.alignItems = 'center';
     left.style.gap = '14px';
 
-    // Line Breaking Engine info
     const engineItem = document.createElement('span');
-    engineItem.textContent = 'חוקי יישור: Knuth-Plass + אהלתר"ם';
+    engineItem.textContent = t('statusJustificationRules');
     left.appendChild(engineItem);
 
     left.appendChild(this.createSeparator());
 
-    // Continuous Preflight Status
-    const pfItem = document.createElement('div');
+    const pfItem = document.createElement('button');
+    pfItem.type = 'button';
     pfItem.style.cursor = 'pointer';
     pfItem.style.display = 'flex';
     pfItem.style.alignItems = 'center';
     pfItem.style.gap = '6px';
+    pfItem.style.background = 'transparent';
+    pfItem.style.border = 'none';
+    pfItem.style.font = 'inherit';
+    pfItem.style.padding = '0';
 
-    const pfDot = document.createElement('span');
-    pfDot.style.width = '8px';
-    pfDot.style.height = '8px';
-    pfDot.style.borderRadius = '50%';
-    pfDot.style.background = this.preflightStatus === 'clean' ? '#10B981' : this.preflightStatus === 'warning' ? '#F59E0B' : '#EF4444';
-    pfItem.appendChild(pfDot);
+    this.pfDot = document.createElement('span');
+    this.pfDot.style.width = '8px';
+    this.pfDot.style.height = '8px';
+    this.pfDot.style.borderRadius = '50%';
+    this.pfDot.setAttribute('aria-hidden', 'true');
+    pfItem.appendChild(this.pfDot);
 
-    const pfText = document.createElement('span');
-    pfText.style.fontWeight = '600';
-    pfText.style.color = this.preflightStatus === 'clean' ? '#10B981' : '#F59E0B';
-    pfText.textContent = this.preflightStatus === 'clean' ? 'Preflight: תקין (100% K)' : 'Preflight: אזהרות';
-    pfItem.appendChild(pfText);
+    this.pfText = document.createElement('span');
+    this.pfText.style.fontWeight = '600';
+    pfItem.appendChild(this.pfText);
 
     pfItem.addEventListener('click', () => this.callbacks.onPreflightClick());
     left.appendChild(pfItem);
 
     left.appendChild(this.createSeparator());
 
-    // Interactive Zoom Presets
-    const zoomItem = document.createElement('div');
-    zoomItem.style.display = 'flex';
-    zoomItem.style.alignItems = 'center';
-    zoomItem.style.gap = '4px';
-
-    const zoomSelect = document.createElement('select');
-    zoomSelect.className = 'tok-select';
-    zoomSelect.style.height = '20px';
-    zoomSelect.style.fontSize = '10px';
-    zoomSelect.style.padding = '0 4px';
-    zoomSelect.style.background = 'transparent';
-    zoomSelect.style.border = 'none';
-    zoomSelect.style.color = 'var(--tok-text-secondary)';
-    zoomSelect.style.cursor = 'pointer';
-
-    const zoomPresets = [50, 75, 100, 125, 150, 200];
-    for (const z of zoomPresets) {
-      const opt = document.createElement('option');
-      opt.value = z.toString();
-      opt.textContent = `זום: ${z}%`;
-      if (z === this.zoom) opt.selected = true;
-      zoomSelect.appendChild(opt);
+    this.zoomSelect = document.createElement('select');
+    this.zoomSelect.className = 'tok-select';
+    this.zoomSelect.setAttribute('aria-label', t('statusZoom'));
+    this.zoomSelect.style.height = '20px';
+    this.zoomSelect.style.fontSize = '10px';
+    this.zoomSelect.style.padding = '0 4px';
+    this.zoomSelect.style.background = 'transparent';
+    this.zoomSelect.style.border = 'none';
+    this.zoomSelect.style.color = 'var(--tok-text-secondary)';
+    this.zoomSelect.style.cursor = 'pointer';
+    for (const z of ZOOM_PRESETS) {
+      this.zoomSelect.appendChild(this.createZoomOption(z));
     }
-    zoomSelect.addEventListener('change', () => {
-      const z = parseInt(zoomSelect.value, 10);
+    this.zoomSelect.addEventListener('change', () => {
+      const z = parseInt(this.zoomSelect.value, 10);
+      if (!Number.isFinite(z)) return;
       this.zoom = z;
       this.callbacks.onZoomChange(z);
     });
-    zoomItem.appendChild(zoomSelect);
-    left.appendChild(zoomItem);
+    left.appendChild(this.zoomSelect);
 
     this.element.appendChild(left);
+    this.refresh();
   }
 
   private createSeparator(): HTMLElement {
@@ -163,6 +211,7 @@ export class StatusBar {
     sep.style.width = '1px';
     sep.style.height = '12px';
     sep.style.background = 'var(--tok-border-subtle)';
+    sep.setAttribute('aria-hidden', 'true');
     return sep;
   }
 }

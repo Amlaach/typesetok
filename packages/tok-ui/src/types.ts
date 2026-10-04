@@ -95,5 +95,7 @@ export interface PageThumbnailItem {
   pageIndex: number;
   gematria: string;
   label: string;
-  isSpreadRight: boolean; // In RTL, right is recto
+  // Right-hand page of its spread. In an RTL-bound book the right page is the verso
+  // (ע"ב); use isRightHandPage()/isRectoPage() from components/SpreadCanvas to derive it.
+  isSpreadRight: boolean;
 }

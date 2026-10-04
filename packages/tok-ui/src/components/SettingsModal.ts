@@ -1,7 +1,8 @@
-import { t, i18n, Language } from '../i18n';
-import { themeManager, ACCENT_PRESETS, CANVAS_TONE_PRESETS, THEME_PALETTES } from '../theme';
+import { t, tf, onOff, i18n, Language } from '../i18n';
+import { themeManager, ACCENT_PRESETS, CANVAS_TONE_PRESETS, FONT_SCALES, THEME_PALETTES } from '../theme';
 import { PluginEngine } from '../plugins/PluginEngine';
 import { renderIcon, IconName } from '../icons';
+import { ModalController } from './ModalController';
 
 export interface SettingsModalCallbacks {
   onLanguageChange: (lang: Language) => void;
@@ -10,12 +11,23 @@ export interface SettingsModalCallbacks {
   showToast: (msg: string) => void;
 }
 
+/**
+ * Preset names are stored bilingually as "עברית (English)". Show the half that matches
+ * the UI language (English mode used to show the Hebrew half / the whole string).
+ */
+export function localizedPresetName(name: string, lang: Language = i18n.getLanguage()): string {
+  const m = name.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  if (!m) return name.trim();
+  return (lang === 'en' ? m[2] : m[1]).trim() || name.trim();
+}
+
 export class SettingsModal {
   public element: HTMLElement;
   private callbacks: SettingsModalCallbacks;
   private activeTab: 'appearance' | 'accessibility' | 'language' | 'logs' | 'updates' | 'plugins' = 'appearance';
   private isVisible = false;
   private logRetentionDays = 14;
+  private modal: ModalController;
 
   constructor(callbacks: SettingsModalCallbacks) {
     this.callbacks = callbacks;
@@ -35,8 +47,11 @@ export class SettingsModal {
 
     try {
       const savedRetention = localStorage.getItem('tok_log_retention');
-      if (savedRetention) this.logRetentionDays = parseInt(savedRetention, 10) || 14;
+      const parsed = savedRetention ? parseInt(savedRetention, 10) : NaN;
+      if (parsed >= 1 && parsed <= 365) this.logRetentionDays = parsed;
     } catch {}
+
+    this.modal = new ModalController(this.element, () => this.hide(), { closeOnBackdrop: true });
 
     i18n.onChange(() => {
       if (this.isVisible) this.render();
@@ -48,17 +63,26 @@ export class SettingsModal {
     this.isVisible = true;
     this.element.style.display = 'flex';
     this.render();
+    this.modal.opened();
   }
 
   public hide(): void {
+    if (!this.isVisible) return;
     this.isVisible = false;
     this.element.style.display = 'none';
+    this.modal.closed();
     this.callbacks.onClose();
   }
 
   private render(): void {
+    const focusKey = this.modal.captureFocus();
+    this.renderContent();
+    this.modal.afterRender(focusKey);
+  }
+
+  private renderContent(): void {
     this.element.innerHTML = '';
-    this.element.style.direction = i18n.getLanguage() === 'he' ? 'rtl' : 'ltr';
+    this.element.style.direction = i18n.getDirection();
 
     const card = document.createElement('div');
     card.className = 'tok-settings-card';
@@ -99,6 +123,7 @@ export class SettingsModal {
     title.style.fontWeight = '700';
     title.style.color = '#F8FAFC';
     title.textContent = t('settingsTitle');
+    title.dataset.modalTitle = '';
     titleWrap.appendChild(title);
 
     header.appendChild(titleWrap);
@@ -113,6 +138,9 @@ export class SettingsModal {
     closeBtn.style.alignItems = 'center';
     closeBtn.style.justifyContent = 'center';
     closeBtn.innerHTML = renderIcon('close', 14);
+    closeBtn.title = t('aboutClose');
+    closeBtn.setAttribute('aria-label', t('aboutClose'));
+    closeBtn.dataset.focusKey = 'close';
     closeBtn.addEventListener('click', () => this.hide());
     header.appendChild(closeBtn);
 
@@ -134,6 +162,8 @@ export class SettingsModal {
     tabsCol.style.display = 'flex';
     tabsCol.style.flexDirection = 'column';
     tabsCol.style.gap = '4px';
+    tabsCol.setAttribute('role', 'tablist');
+    tabsCol.setAttribute('aria-orientation', 'vertical');
 
     const tabs: { id: 'appearance' | 'accessibility' | 'language' | 'logs' | 'updates' | 'plugins'; label: string; icon: IconName }[] = [
       { id: 'appearance', label: t('settingsTabAppearance'), icon: 'typography' },
@@ -161,9 +191,24 @@ export class SettingsModal {
       tabBtn.style.transition = 'all 0.15s';
 
       tabBtn.innerHTML = `${renderIcon(tab.icon, 14)} <span>${tab.label}</span>`;
+      tabBtn.setAttribute('role', 'tab');
+      tabBtn.setAttribute('aria-selected', String(this.activeTab === tab.id));
+      tabBtn.dataset.focusKey = `tab-${tab.id}`;
+      if (this.activeTab === tab.id) tabBtn.dataset.autofocus = '';
       tabBtn.addEventListener('click', () => {
+        if (this.activeTab === tab.id) return;
         this.activeTab = tab.id;
         this.render();
+      });
+      // Arrow keys move between tabs (vertical tablist).
+      tabBtn.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+        e.preventDefault();
+        const idx = tabs.findIndex((x) => x.id === tab.id);
+        const next = tabs[(idx + (e.key === 'ArrowDown' ? 1 : tabs.length - 1)) % tabs.length];
+        this.activeTab = next.id;
+        this.render();
+        (this.element.querySelector(`[data-focus-key="tab-${next.id}"]`) as HTMLElement | null)?.focus();
       });
       tabsCol.appendChild(tabBtn);
     }
@@ -175,6 +220,7 @@ export class SettingsModal {
     contentArea.style.flex = '1';
     contentArea.style.padding = '24px 28px';
     contentArea.style.overflowY = 'auto';
+    contentArea.setAttribute('role', 'tabpanel');
 
     if (this.activeTab === 'appearance') {
       this.renderAppearanceTab(contentArea);
@@ -302,8 +348,10 @@ export class SettingsModal {
       btn.appendChild(dot);
 
       const label = document.createElement('span');
-      label.textContent = preset.name.split('(')[0].trim();
+      label.textContent = localizedPresetName(preset.name);
       btn.appendChild(label);
+      btn.dataset.focusKey = `accent-${preset.id}`;
+      btn.setAttribute('aria-pressed', String(currentTheme.accentColor === preset.value));
 
       btn.addEventListener('click', () => {
         themeManager.setAccentColor(preset.value);
@@ -353,8 +401,10 @@ export class SettingsModal {
       btn.appendChild(box);
 
       const label = document.createElement('span');
-      label.textContent = preset.name;
+      label.textContent = localizedPresetName(preset.name);
       btn.appendChild(label);
+      btn.dataset.focusKey = `tone-${preset.id}`;
+      btn.setAttribute('aria-pressed', String(currentTheme.canvasTone === preset.value));
 
       btn.addEventListener('click', () => {
         themeManager.setCanvasTone(preset.value);
@@ -395,6 +445,8 @@ export class SettingsModal {
       btn.style.cursor = 'pointer';
       btn.style.fontWeight = currentTheme.density === d.id ? '600' : 'normal';
       btn.textContent = d.label;
+      btn.dataset.focusKey = `density-${d.id}`;
+      btn.setAttribute('aria-pressed', String(currentTheme.density === d.id));
       btn.addEventListener('click', () => {
         themeManager.setDensity(d.id);
         this.render();
@@ -424,7 +476,7 @@ export class SettingsModal {
       currentTheme.highContrast,
       (val) => {
         themeManager.setHighContrast(val);
-        this.callbacks.showToast(`מצב ניגודיות גבוהה: ${val ? 'הופעל' : 'הושבת'}`);
+        this.callbacks.showToast(`${t('accessHighContrast')}: ${onOff(val)}`);
         this.render();
       }
     );
@@ -468,8 +520,7 @@ export class SettingsModal {
     scaleButtons.style.display = 'flex';
     scaleButtons.style.gap = '8px';
 
-    const scales = [100, 110, 120, 130];
-    for (const sc of scales) {
+    for (const sc of FONT_SCALES) {
       const btn = document.createElement('button');
       btn.style.flex = '1';
       btn.style.padding = '6px 8px';
@@ -480,6 +531,8 @@ export class SettingsModal {
       btn.style.cursor = 'pointer';
       btn.style.fontSize = '12px';
       btn.textContent = `${sc}%`;
+      btn.dataset.focusKey = `scale-${sc}`;
+      btn.setAttribute('aria-pressed', String(currentTheme.fontScale === sc));
       btn.addEventListener('click', () => {
         themeManager.setFontScale(sc);
         this.render();
@@ -497,7 +550,7 @@ export class SettingsModal {
       currentTheme.reducedMotion,
       (val) => {
         themeManager.setReducedMotion(val);
-        this.callbacks.showToast(`הפחתת אנימציות: ${val ? 'פעיל' : 'מושבת'}`);
+        this.callbacks.showToast(`${t('accessReducedMotion')}: ${onOff(val)}`);
       }
     );
 
@@ -509,7 +562,7 @@ export class SettingsModal {
       currentTheme.enhancedFocus,
       (val) => {
         themeManager.setEnhancedFocus(val);
-        this.callbacks.showToast(`הדגשת פוקוס במקלדת: ${val ? 'פעיל' : 'מושבת'}`);
+        this.callbacks.showToast(`${t('accessEnhancedFocus')}: ${onOff(val)}`);
       }
     );
 
@@ -521,7 +574,7 @@ export class SettingsModal {
       currentTheme.accessibleFont,
       (val) => {
         themeManager.setAccessibleFont(val);
-        this.callbacks.showToast(`גופן ממשק נגיש: ${val ? 'הופעל' : 'הושבת'}`);
+        this.callbacks.showToast(`${t('accessDyslexicFont')}: ${onOff(val)}`);
       }
     );
   }
@@ -533,7 +586,9 @@ export class SettingsModal {
     checked: boolean,
     onChange: (val: boolean) => void
   ): void {
-    const card = document.createElement('div');
+    // A <label> so clicking anywhere on the card toggles the switch, and the checkbox
+    // gets the title as its accessible name.
+    const card = document.createElement('label');
     card.style.display = 'flex';
     card.style.alignItems = 'center';
     card.style.justifyContent = 'space-between';
@@ -542,11 +597,13 @@ export class SettingsModal {
     card.style.border = '1px solid #334155';
     card.style.borderRadius = '8px';
     card.style.marginBottom = '12px';
+    card.style.cursor = 'pointer';
 
     const textWrap = document.createElement('div');
     textWrap.style.flex = '1';
-    textWrap.style.paddingLeft = i18n.getLanguage() === 'he' ? '0' : '14px';
-    textWrap.style.paddingRight = i18n.getLanguage() === 'he' ? '14px' : '0';
+    // Space between the text and the switch, i.e. on the text's inline-end side in both
+    // directions (the old left/right logic padded the outer edge in Hebrew).
+    textWrap.style.paddingInlineEnd = '14px';
 
     const titleEl = document.createElement('div');
     titleEl.style.fontSize = '13px';
@@ -570,6 +627,7 @@ export class SettingsModal {
     toggle.style.width = '18px';
     toggle.style.height = '18px';
     toggle.style.cursor = 'pointer';
+    toggle.dataset.focusKey = `toggle-${title}`;
     toggle.addEventListener('change', () => onChange(toggle.checked));
     card.appendChild(toggle);
 
@@ -592,8 +650,21 @@ export class SettingsModal {
       { id: 'en', label: t('languageEnglish') }
     ];
 
+    const group = document.createElement('div');
+    group.setAttribute('role', 'radiogroup');
+    group.setAttribute('aria-label', t('languageSelect'));
+    container.appendChild(group);
+
     for (const l of langs) {
-      const card = document.createElement('div');
+      // A real button (was a <div>): reachable with Tab and activated with Enter/Space.
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.setAttribute('role', 'radio');
+      card.setAttribute('aria-checked', String(currentLang === l.id));
+      card.dataset.focusKey = `lang-${l.id}`;
+      card.style.width = '100%';
+      card.style.font = 'inherit';
+      card.style.textAlign = 'start';
       card.style.display = 'flex';
       card.style.alignItems = 'center';
       card.style.justifyContent = 'space-between';
@@ -638,12 +709,14 @@ export class SettingsModal {
       }
 
       card.addEventListener('click', () => {
+        if (i18n.getLanguage() === l.id) return;
+        // setLanguage notifies the i18n listener registered in the constructor, which
+        // re-renders this modal; rendering here as well built the whole modal twice.
         i18n.setLanguage(l.id);
         this.callbacks.onLanguageChange(l.id);
-        this.render();
       });
 
-      container.appendChild(card);
+      group.appendChild(card);
     }
   }
 
@@ -677,8 +750,16 @@ export class SettingsModal {
     select.style.background = '#0F172A';
     select.style.color = '#F8FAFC';
     select.style.border = '1px solid #334155';
+    select.setAttribute('aria-label', t('logsRetentionLabel'));
+    select.dataset.focusKey = 'log-retention';
 
     const options = [3, 7, 14, 30, 60];
+    // Keep a stored value that is not one of the presets visible instead of silently
+    // showing the first option.
+    if (!options.includes(this.logRetentionDays)) {
+      options.push(this.logRetentionDays);
+      options.sort((a, b) => a - b);
+    }
     for (const opt of options) {
       const option = document.createElement('option');
       option.value = opt.toString();
@@ -694,9 +775,11 @@ export class SettingsModal {
       } catch {}
       const win = window as any;
       if (win.tokIpc && win.tokIpc.setLogRetention) {
-        win.tokIpc.setLogRetention(this.logRetentionDays);
+        Promise.resolve(win.tokIpc.setLogRetention(this.logRetentionDays)).catch((e: any) => {
+          console.warn('[SETTINGS] setLogRetention failed:', e?.message ?? e);
+        });
       }
-      this.callbacks.showToast(`מדיניות מחיקת יומנים עודכנה ל-${this.logRetentionDays} ימים`);
+      this.callbacks.showToast(tf('logsRetentionUpdated', { n: this.logRetentionDays }));
     });
     retentionRow.appendChild(select);
     container.appendChild(retentionRow);
@@ -718,9 +801,13 @@ export class SettingsModal {
     openFolderBtn.addEventListener('click', async () => {
       const win = window as any;
       if (win.tokIpc && win.tokIpc.openLogsFolder) {
-        await win.tokIpc.openLogsFolder();
+        try {
+          await win.tokIpc.openLogsFolder();
+        } catch (e: any) {
+          this.callbacks.showToast(`${t('actionFailed')}: ${e?.message ?? e}`);
+        }
       } else {
-        this.callbacks.showToast('פתיחת תיקייה נתמכת בסביבת שולחן העבודה Electron');
+        this.callbacks.showToast(t('desktopOnlyFeature'));
       }
     });
     actionsRow.appendChild(openFolderBtn);
@@ -736,11 +823,15 @@ export class SettingsModal {
     cleanNowBtn.addEventListener('click', async () => {
       const win = window as any;
       if (win.tokIpc && win.tokIpc.cleanOldLogs) {
-        const deleted = await win.tokIpc.cleanOldLogs(this.logRetentionDays);
-        this.callbacks.showToast(`ניקוי הושלם: נמחקו ${deleted} קובצי יומן ישנים`);
-        this.render();
+        try {
+          const deleted = await win.tokIpc.cleanOldLogs(this.logRetentionDays);
+          this.callbacks.showToast(tf('logsCleanedCount', { n: Number(deleted) || 0 }));
+        } catch (e: any) {
+          this.callbacks.showToast(`${t('actionFailed')}: ${e?.message ?? e}`);
+        }
+        if (this.isVisible && this.activeTab === 'logs') this.render();
       } else {
-        this.callbacks.showToast('ניקוי יומנים הושלם בהצלחה');
+        this.callbacks.showToast(t('logsCleaned'));
       }
     });
     actionsRow.appendChild(cleanNowBtn);
@@ -767,14 +858,22 @@ export class SettingsModal {
     logBox.style.color = '#CBD5E1';
     logBox.style.overflowY = 'auto';
     logBox.style.whiteSpace = 'pre-wrap';
-    logBox.textContent = 'טוען רשומות מיומן המערכת...';
+    logBox.textContent = t('logsLoading');
+
+    // Log lines are English/ISO text: lay them out LTR, otherwise the bidi algorithm in
+    // the RTL modal reorders the "[timestamp] [LEVEL]" brackets.
+    logBox.dir = 'ltr';
+    logBox.style.textAlign = 'left';
+    logBox.tabIndex = 0;
+    logBox.setAttribute('role', 'log');
+    logBox.setAttribute('aria-label', t('logsRecentTitle'));
 
     const win = window as any;
     if (win.tokIpc && win.tokIpc.getRecentLogs) {
       win.tokIpc.getRecentLogs().then((lines: string[]) => {
-        logBox.textContent = lines.length ? lines.join('\n') : '[אין רשומות יומן להצגה]';
+        logBox.textContent = Array.isArray(lines) && lines.length ? lines.join('\n') : t('logsEmpty');
       }).catch((e: any) => {
-        logBox.textContent = `[שגיאה בטעינת יומן: ${e.message}]`;
+        logBox.textContent = `[${t('logsLoadFailed')}: ${e?.message ?? e}]`;
       });
     } else {
       logBox.textContent = `[${new Date().toISOString()}] [INFO] TypesetOK Desktop Publishing Platform.\n[${new Date().toISOString()}] [INFO] Knuth-Plass Hebrew Breaker and Pre-press pipeline active.`;
@@ -803,8 +902,8 @@ export class SettingsModal {
 
     const currentInfo = document.createElement('div');
     currentInfo.innerHTML = `
-      <div style="font-size: 13px; font-weight: 600; color: #F8FAFC;">TypesetOK v0.7.3</div>
-      <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">ערוץ שחרור רשמי יציב (Official Stable Channel)</div>
+      <div style="font-size: 13px; font-weight: 600; color: #F8FAFC;">TypesetOK v0.8.0</div>
+      <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">${t('updatesCurrentChannel')}</div>
     `;
     currentCard.appendChild(currentInfo);
 
@@ -813,6 +912,7 @@ export class SettingsModal {
     checkBtn.style.display = 'inline-flex';
     checkBtn.style.alignItems = 'center';
     checkBtn.style.gap = '6px';
+    checkBtn.dataset.focusKey = 'check-updates';
     checkBtn.innerHTML = `${renderIcon('refresh', 13)} <span>${t('updatesCheckNow')}</span>`;
     currentCard.appendChild(checkBtn);
 
@@ -826,40 +926,59 @@ export class SettingsModal {
     resultBox.style.borderRadius = '8px';
     resultBox.style.fontSize = '12.5px';
     resultBox.style.color = '#94A3B8';
-    resultBox.textContent = 'לחץ על "בדיקת עדכונים כעת" כדי לבדוק שחרורים מול מאגר GitHub.';
+    resultBox.setAttribute('aria-live', 'polite');
+    resultBox.textContent = t('updatesHint');
     container.appendChild(resultBox);
 
     checkBtn.addEventListener('click', async () => {
+      if (checkBtn.disabled) return;
+      checkBtn.disabled = true;
       checkBtn.innerHTML = `${renderIcon('refresh', 13)} <span>${t('updatesStatusChecking')}</span>`;
       const win = window as any;
       if (win.tokIpc && win.tokIpc.checkForUpdates) {
         try {
           const res = await win.tokIpc.checkForUpdates();
-          if (res.hasUpdate) {
-            resultBox.innerHTML = `
-              <div style="color: #34D399; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                ${renderIcon('sparkle', 14)} <span>${t('updatesStatusAvailable')} (גרסה v${res.latestVersion})</span>
-              </div>
-              <div style="font-size: 12px; color: #E2E8F0; margin-bottom: 10px;">${res.releaseNotes}</div>
-              <button id="tok-download-btn" class="tok-btn tok-btn-primary" style="height: 30px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
-                ${renderIcon('export', 13)} <span>${t('updatesDownload')}</span>
-              </button>
-            `;
-            const dlBtn = resultBox.querySelector('#tok-download-btn');
-            dlBtn?.addEventListener('click', () => {
-              win.tokIpc.openReleaseUrl(res.downloadUrl || res.releaseUrl);
+          if (res && res.error) {
+            // The updater resolves (never rejects) on network/HTTP/parse failures and
+            // reports them in `error`; this used to be shown as "you are up to date".
+            resultBox.textContent = `${t('updatesCheckFailed')}: ${res.error}`;
+          } else if (res && res.hasUpdate) {
+            // Release name/notes come from the GitHub API: render them as text, never as HTML.
+            resultBox.innerHTML = '';
+            const headline = document.createElement('div');
+            headline.style.cssText = 'color: #34D399; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;';
+            headline.innerHTML = renderIcon('sparkle', 14);
+            const headlineText = document.createElement('span');
+            headlineText.textContent = `${t('updatesStatusAvailable')} (v${String(res.latestVersion ?? '')})`;
+            headline.appendChild(headlineText);
+            resultBox.appendChild(headline);
+
+            const notes = document.createElement('div');
+            notes.style.cssText = 'font-size: 12px; color: #E2E8F0; margin-bottom: 10px; white-space: pre-wrap; max-height: 160px; overflow-y: auto;';
+            notes.textContent = String(res.releaseNotes ?? '');
+            resultBox.appendChild(notes);
+
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'tok-btn tok-btn-primary';
+            dlBtn.style.cssText = 'height: 30px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;';
+            dlBtn.innerHTML = `${renderIcon('export', 13)} <span>${t('updatesDownload')}</span>`;
+            dlBtn.addEventListener('click', () => {
+              Promise.resolve(win.tokIpc.openReleaseUrl(res.downloadUrl || res.releaseUrl)).catch((e: any) => {
+                this.callbacks.showToast(`${t('updatesCheckFailed')}: ${e?.message ?? e}`);
+              });
             });
+            resultBox.appendChild(dlBtn);
           } else {
             resultBox.innerHTML = `<span style="color: #60A5FA; display: inline-flex; align-items: center; gap: 6px;">${renderIcon('check', 14)} <span>${t('updatesStatusLatest')}</span></span>`;
           }
         } catch (err: any) {
-          resultBox.textContent = `שגיאה בבדיקת עדכונים: ${err.message}`;
+          resultBox.textContent = `${t('updatesCheckFailed')}: ${err?.message ?? err}`;
         }
       } else {
-        setTimeout(() => {
-          resultBox.innerHTML = `<span style="color: #60A5FA; display: inline-flex; align-items: center; gap: 6px;">${renderIcon('check', 14)} <span>${t('updatesStatusLatest')}</span></span>`;
-        }, 300);
+        await new Promise((r) => setTimeout(r, 300));
+        resultBox.innerHTML = `<span style="color: #60A5FA; display: inline-flex; align-items: center; gap: 6px;">${renderIcon('check', 14)} <span>${t('updatesStatusLatest')}</span></span>`;
       }
+      checkBtn.disabled = false;
       checkBtn.innerHTML = `${renderIcon('refresh', 13)} <span>${t('updatesCheckNow')}</span>`;
     });
   }
@@ -887,8 +1006,11 @@ export class SettingsModal {
     openFolderBtn.style.justifyContent = 'center';
     openFolderBtn.style.gap = '7px';
     openFolderBtn.innerHTML = `${renderIcon('folder', 14)} <span>${t('pluginsOpenFolder')}</span>`;
+    openFolderBtn.dataset.focusKey = 'plugins-folder';
     openFolderBtn.addEventListener('click', () => {
-      this.callbacks.pluginEngine.openPluginsFolder();
+      this.callbacks.pluginEngine.openPluginsFolder().catch((e: any) => {
+        this.callbacks.showToast(`${t('actionFailed')}: ${e?.message ?? e}`);
+      });
     });
     actionsRow.appendChild(openFolderBtn);
 
@@ -900,10 +1022,16 @@ export class SettingsModal {
     reloadBtn.style.justifyContent = 'center';
     reloadBtn.style.gap = '7px';
     reloadBtn.innerHTML = `${renderIcon('refresh', 14)} <span>${t('pluginsReload')}</span>`;
+    reloadBtn.dataset.focusKey = 'plugins-reload';
     reloadBtn.addEventListener('click', async () => {
-      await this.callbacks.pluginEngine.loadPlugins();
-      this.callbacks.showToast('התוספים נטענו מחדש בהצלחה');
-      this.render();
+      reloadBtn.disabled = true;
+      try {
+        await this.callbacks.pluginEngine.loadPlugins();
+        this.callbacks.showToast(t('pluginsReloaded'));
+      } catch (e: any) {
+        this.callbacks.showToast(`${t('actionFailed')}: ${e?.message ?? e}`);
+      }
+      if (this.isVisible && this.activeTab === 'plugins') this.render();
     });
     actionsRow.appendChild(reloadBtn);
 
@@ -972,6 +1100,16 @@ export class SettingsModal {
       desc.textContent = plugin.description;
       left.appendChild(desc);
 
+      if (plugin.error) {
+        // e.g. "Main entry file not found" from the main process; previously never shown.
+        const err = document.createElement('div');
+        err.style.fontSize = '11px';
+        err.style.color = '#F87171';
+        err.style.marginTop = '4px';
+        err.textContent = `: ${plugin.error}`;
+        left.appendChild(err);
+      }
+
       card.appendChild(left);
 
       // Toggle switch
@@ -984,10 +1122,9 @@ export class SettingsModal {
       const toggle = document.createElement('input');
       toggle.type = 'checkbox';
       toggle.checked = plugin.enabled;
-      toggle.addEventListener('change', async () => {
-        await this.callbacks.pluginEngine.togglePlugin(plugin.id, toggle.checked);
-        this.callbacks.showToast(`תוסף ${plugin.name} ${toggle.checked ? 'הופעל' : 'הושבת'}`);
-      });
+      toggle.disabled = !!plugin.error;
+      toggle.dataset.focusKey = `plugin-${plugin.id}`;
+      toggle.setAttribute('aria-label', plugin.name);
 
       toggleLabel.appendChild(toggle);
       const toggleText = document.createElement('span');
@@ -995,6 +1132,22 @@ export class SettingsModal {
       toggleText.style.color = '#CBD5E1';
       toggleText.textContent = plugin.enabled ? t('pluginsEnabled') : t('pluginsDisabled');
       toggleLabel.appendChild(toggleText);
+
+      toggle.addEventListener('change', async () => {
+        const wanted = toggle.checked;
+        toggle.disabled = true;
+        try {
+          await this.callbacks.pluginEngine.togglePlugin(plugin.id, wanted);
+          toggleText.textContent = wanted ? t('pluginsEnabled') : t('pluginsDisabled');
+          this.callbacks.showToast(`${plugin.name}: ${onOff(wanted)}`);
+        } catch (e: any) {
+          // The state was not persisted: put the switch back where it really is.
+          toggle.checked = !wanted;
+          this.callbacks.showToast(`${t('actionFailed')}: ${e?.message ?? e}`);
+        } finally {
+          toggle.disabled = false;
+        }
+      });
 
       card.appendChild(toggleLabel);
       container.appendChild(card);

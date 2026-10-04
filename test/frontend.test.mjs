@@ -279,3 +279,366 @@ describe('3-Tier Hebrew Justification Model (Section 15)', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Regression tests that execute the real TypeScript sources.
+// Each module is bundled on the fly with esbuild (already a devDependency) into
+// the OS temp dir and imported; a minimal fake DOM stands in for the browser.
+// ---------------------------------------------------------------------------
+
+class FakeClassList {
+  constructor() { this.set = new Set(); }
+  add(...c) { c.forEach((x) => this.set.add(x)); }
+  remove(...c) { c.forEach((x) => this.set.delete(x)); }
+  contains(c) { return this.set.has(c); }
+}
+
+class FakeStyle {
+  setProperty(k, v) { this[k] = String(v); }
+  removeProperty(k) { delete this[k]; }
+  getPropertyValue(k) { return this[k] ?? ''; }
+}
+
+class FakeElement {
+  constructor(tag = 'div') {
+    this.tagName = tag.toUpperCase();
+    this.children = [];
+    this.style = new FakeStyle();
+    this.dataset = {};
+    this.classList = new FakeClassList();
+    this.listeners = {};
+    this._html = '';
+    this.offsetTop = 0;
+    this.offsetHeight = 0;
+    this.scrollTop = 0;
+    this.clientHeight = 0;
+    this.attributes = {};
+  }
+  set innerHTML(v) { this._html = v; this.children = []; }
+  get innerHTML() { return this._html; }
+  appendChild(c) { this.children.push(c); c.parentElement = this; return c; }
+  setAttribute(k, v) { this.attributes[k] = String(v); }
+  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+  removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn); }
+  scrollIntoView() {}
+}
+
+function installFakeDom() {
+  const storage = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (storage.has(k) ? storage.get(k) : null),
+    setItem: (k, v) => storage.set(k, String(v)),
+    removeItem: (k) => storage.delete(k),
+    clear: () => storage.clear(),
+  };
+  const documentElement = new FakeElement('html');
+  globalThis.document = {
+    documentElement,
+    body: new FakeElement('body'),
+    activeElement: null,
+    createElement: (tag) => new FakeElement(tag),
+  };
+  globalThis.getComputedStyle = () => ({ position: 'static', direction: 'rtl' });
+  globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
+  globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
+  if (!globalThis.window) globalThis.window = globalThis;
+  return { storage, documentElement };
+}
+
+const fakeDom = installFakeDom();
+
+let esbuildMod = null;
+async function loadTs(relPath) {
+  esbuildMod ||= await import('esbuild');
+  const os = await import('node:os');
+  const { pathToFileURL } = await import('node:url');
+  const outfile = path.join(
+    os.tmpdir(),
+    `tok-test-${process.pid}-${relPath.replace(/[^a-zA-Z0-9]+/g, '_')}-${Date.now()}.mjs`
+  );
+  esbuildMod.buildSync({
+    entryPoints: [path.join(rootDir, relPath)],
+    bundle: true,
+    format: 'esm',
+    platform: 'neutral',
+    outfile,
+    logLevel: 'silent',
+  });
+  try {
+    return await import(pathToFileURL(outfile).href);
+  } finally {
+    fs.rmSync(outfile, { force: true });
+  }
+}
+
+describe('Regression: i18n coverage (every key used in the UI exists in Hebrew and English)', () => {
+  test('all translation entries have non-empty he and en strings', async () => {
+    const { strings } = await loadTs('packages/tok-ui/src/i18n.ts');
+    for (const [key, entry] of Object.entries(strings)) {
+      assert.ok(entry.he && entry.he.trim(), `missing Hebrew for ${key}`);
+      assert.ok(entry.en && entry.en.trim(), `missing English for ${key}`);
+    }
+  });
+
+  test('every t()/tf()/labelKey reference in tok-ui resolves to a defined key', async () => {
+    const { strings } = await loadTs('packages/tok-ui/src/i18n.ts');
+    const srcDir = path.join(rootDir, 'packages/tok-ui/src');
+    const files = [];
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (p.endsWith('.ts')) files.push(p);
+      }
+    };
+    walk(srcDir);
+    const patterns = [
+      /\btf?\(\s*'(\w+)'/g,
+      /labelKey:\s*'(\w+)'/g,
+      /\bt\([^()]*?\?\s*'(\w+)'\s*:\s*'(\w+)'\s*\)/g,
+    ];
+    const missing = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf-8');
+      for (const re of patterns) {
+        for (const m of src.matchAll(re)) {
+          for (const key of m.slice(1).filter(Boolean)) {
+            if (/^(div|span|p|button|input|select|option|label|header|footer|main|aside|kbd|h[1-6]|canvas|strong)$/.test(key)) continue;
+            if (!strings[key]) missing.push(`${path.basename(file)}: ${key}`);
+          }
+        }
+      }
+    }
+    assert.deepEqual(missing, []);
+  });
+
+  test('tf() substitutes placeholders and onOff() is localized', async () => {
+    const mod = await loadTs('packages/tok-ui/src/i18n.ts');
+    mod.i18n.setLanguage('en');
+    assert.equal(mod.tf('logsRetentionUpdated', { n: 30 }), 'Log retention set to 30 days');
+    assert.equal(mod.onOff(true), 'enabled');
+    assert.equal(fakeDom.documentElement.dir, 'ltr');
+    mod.i18n.setLanguage('he');
+    assert.equal(fakeDom.documentElement.dir, 'rtl');
+    assert.equal(fakeDom.documentElement.lang, 'he');
+  });
+});
+
+describe('Regression: Command Palette shortcuts & search', () => {
+  test('Ctrl+K works with a Hebrew keyboard layout (key "ל", code KeyK)', async () => {
+    const { isPaletteToggleHotkey } = await loadTs('packages/tok-ui/src/components/CommandPalette.ts');
+    assert.equal(isPaletteToggleHotkey({ key: 'ל', code: 'KeyK', ctrlKey: true, metaKey: false, altKey: false, shiftKey: false }), true);
+    assert.equal(isPaletteToggleHotkey({ key: 'k', code: 'KeyK', ctrlKey: false, metaKey: true, altKey: false, shiftKey: false }), true);
+    assert.equal(isPaletteToggleHotkey({ key: 'ל', code: 'KeyK', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false }), false);
+    assert.equal(isPaletteToggleHotkey({ key: 'k', code: 'KeyK', ctrlKey: true, metaKey: false, altKey: true, shiftKey: false }), false);
+  });
+
+  test('"/" does not hijack typing in the story editor or form fields', async () => {
+    const { isPaletteSlashHotkey } = await loadTs('packages/tok-ui/src/components/CommandPalette.ts');
+    const ev = { key: '/', code: 'Slash', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false };
+    assert.equal(isPaletteSlashHotkey(ev, { tagName: 'DIV', isContentEditable: true }), false);
+    assert.equal(isPaletteSlashHotkey(ev, { tagName: 'P', isContentEditable: true }), false);
+    assert.equal(isPaletteSlashHotkey(ev, { tagName: 'INPUT' }), false);
+    assert.equal(isPaletteSlashHotkey(ev, { tagName: 'SELECT' }), false);
+    assert.equal(isPaletteSlashHotkey(ev, { tagName: 'MAIN', isContentEditable: false }), true);
+    assert.equal(isPaletteSlashHotkey({ ...ev, ctrlKey: true }, { tagName: 'MAIN' }), false);
+  });
+
+  test('search ignores niqqud and treats ״/" and ׳/\' alike; all terms must match', async () => {
+    const { matchesPaletteQuery } = await loadTs('packages/tok-ui/src/components/CommandPalette.ts');
+    const item = { title: 'נַרְמֵל ניקוד וטעמים (ת״י 6100)', category: 'פעולות טיפוגרפיה', subtitle: 'תיקון סדר תווי יוניקוד', shortcut: 'Ctrl+Shift+N' };
+    assert.equal(matchesPaletteQuery(item, 'נרמל'), true);
+    assert.equal(matchesPaletteQuery(item, 'ת"י'), true);
+    assert.equal(matchesPaletteQuery(item, 'נרמל יוניקוד'), true);
+    assert.equal(matchesPaletteQuery(item, 'נרמל גימטריה'), false);
+    assert.equal(matchesPaletteQuery(item, '  '), true);
+  });
+});
+
+describe('Regression: spread geometry is consistent (RTL book: recto = left page)', () => {
+  test('groupIntoSpreads keeps page 0 alone and pairs the rest', async () => {
+    const { groupIntoSpreads } = await loadTs('packages/tok-ui/src/components/SpreadCanvas.ts');
+    assert.deepEqual(groupIntoSpreads(0), []);
+    assert.deepEqual(groupIntoSpreads(1), [[0]]);
+    assert.deepEqual(groupIntoSpreads(4), [[0], [1, 2], [3]]);
+    assert.deepEqual(groupIntoSpreads(5), [[0], [1, 2], [3, 4]]);
+  });
+
+  test('even pages are recto (ע"א, left); odd pages are verso (ע"ב, right)', async () => {
+    const { isRectoPage, isRightHandPage, groupIntoSpreads } = await loadTs('packages/tok-ui/src/components/SpreadCanvas.ts');
+    for (const spread of groupIntoSpreads(12).slice(1)) {
+      // In each 2-page spread the first (rightmost in RTL) is the verso.
+      assert.equal(isRightHandPage(spread[0]), true);
+      assert.equal(isRectoPage(spread[0]), false);
+      if (spread[1] !== undefined) {
+        assert.equal(isRightHandPage(spread[1]), false);
+        assert.equal(isRectoPage(spread[1]), true);
+      }
+    }
+    assert.equal(isRectoPage(0), true);
+  });
+});
+
+describe('Regression: inspector value scrubber keeps decimals', () => {
+  test('parse/clamp/format', async () => {
+    const m = await loadTs('packages/tok-ui/src/components/ContextualInspector.ts');
+    assert.equal(m.parseScrubberValue('11.5 pt'), 11.5);
+    assert.equal(m.parseScrubberValue('12,5 pt'), 12.5);
+    assert.equal(m.parseScrubberValue('-3 מ"מ'), -3);
+    assert.equal(m.parseScrubberValue('abc'), null);
+    assert.equal(m.clampScrubberValue(200, 6, 72), 72);
+    assert.equal(m.clampScrubberValue(11.46, 6, 72), 11.5);
+    assert.equal(m.formatScrubberValue(11.5, 'pt'), '11.5 pt');
+  });
+});
+
+describe('Regression: theme settings', () => {
+  test('corrupt persisted settings are sanitized field by field', async () => {
+    const { sanitizeThemeSettings } = await loadTs('packages/tok-ui/src/theme.ts');
+    const defaults = { accentColor: '#2563EB', canvasTone: '#0B132B', density: 'comfortable', highContrast: false, fontScale: 100, reducedMotion: false, enhancedFocus: false, accessibleFont: false };
+    const out = sanitizeThemeSettings({ fontScale: 'abc', density: 'huge', accentColor: 'red;}body{display:none', highContrast: 'yes', reducedMotion: true, canvasTone: '#121212' }, defaults);
+    assert.equal(out.fontScale, 100);
+    assert.equal(out.density, 'comfortable');
+    assert.equal(out.accentColor, '#2563EB');
+    assert.equal(out.highContrast, false);
+    assert.equal(out.reducedMotion, true);
+    assert.equal(out.canvasTone, '#121212');
+    assert.deepEqual(sanitizeThemeSettings(null, defaults), defaults);
+    assert.equal(sanitizeThemeSettings({ paletteId: 'parchment' }, defaults).paletteId, 'parchment');
+    assert.equal(sanitizeThemeSettings({ paletteId: 'nope' }, defaults).paletteId, defaults.paletteId);
+  });
+
+  test('turning high contrast off does not leave the black app background behind', async () => {
+    fakeDom.storage.set('tok_theme_settings', JSON.stringify({ highContrast: true, canvasTone: '#123456' }));
+    const { themeManager, THEME_PALETTES } = await loadTs('packages/tok-ui/src/theme.ts');
+    const style = fakeDom.documentElement.style;
+    assert.equal(style.getPropertyValue('--tok-bg-app'), '#000000');
+    themeManager.setHighContrast(false);
+    assert.equal(style.getPropertyValue('--tok-bg-app'), THEME_PALETTES[0].appBg);
+    assert.equal(style.getPropertyValue('--tok-bg-canvas'), '#123456');
+    fakeDom.storage.delete('tok_theme_settings');
+  });
+});
+
+describe('Regression: settings modal preset names follow the UI language', () => {
+  test('localizedPresetName', async () => {
+    const { localizedPresetName } = await loadTs('packages/tok-ui/src/components/SettingsModal.ts');
+    assert.equal(localizedPresetName('כחול קלאסי (Classic Blue)', 'he'), 'כחול קלאסי');
+    assert.equal(localizedPresetName('כחול קלאסי (Classic Blue)', 'en'), 'Classic Blue');
+    assert.equal(localizedPresetName('Plain', 'en'), 'Plain');
+  });
+});
+
+describe('Regression: plugin engine', () => {
+  test('malformed entries are skipped, plugins activate once, failed toggles change nothing', async () => {
+    const { PluginEngine, normalizePluginEntry } = await loadTs('packages/tok-ui/src/plugins/PluginEngine.ts');
+    assert.equal(normalizePluginEntry(null), null);
+    assert.equal(normalizePluginEntry({ sourceType: 'js' }), null);
+
+    let runs = 0;
+    let failToggle = false;
+    globalThis.__tokPluginRun = () => runs++;
+    const code = 'function activate(tok){ globalThis.__tokPluginRun(); tok.registerCommand({ id: "c", title: "t", category: "x", action(){} }); }';
+    globalThis.tokIpc = {
+      getPlugins: async () => [
+        { sourceType: 'js', enabled: true },
+        { manifest: { id: 'good', name: 'Good', version: '1.0.0', description: '' }, sourceType: 'js', enabled: true, compiledCode: code },
+        { manifest: { id: 'off', name: 'Off', version: '1.0.0', description: '' }, sourceType: 'js', enabled: false, compiledCode: code },
+        { manifest: { id: 'good', name: 'Dup', version: '9.9.9', description: '' }, sourceType: 'js', enabled: true, compiledCode: code },
+      ],
+      togglePlugin: async () => { if (failToggle) throw new Error('disk full'); return true; },
+    };
+    try {
+      const registered = [];
+      const unregistered = [];
+      const engine = new PluginEngine((cmd) => registered.push(cmd.id), undefined, (id) => unregistered.push(id));
+      await engine.loadPlugins();
+      assert.deepEqual(engine.getPlugins().map((p) => p.id), ['good', 'off']);
+      assert.equal(runs, 1);
+
+      await engine.loadPlugins(); // "Reload All Plugins" must not run plugin code again
+      assert.equal(runs, 1);
+
+      await engine.togglePlugin('off', true); // enabling activates immediately
+      assert.equal(runs, 2);
+      assert.equal(engine.isActivated('off'), true);
+
+      failToggle = true;
+      await assert.rejects(engine.togglePlugin('good', false));
+      assert.equal(engine.getPlugins().find((p) => p.id === 'good').enabled, true);
+      assert.equal(registered.length, 2);
+      assert.deepEqual(unregistered, []);
+
+      failToggle = false;
+      await engine.togglePlugin('good', false); // its command leaves the palette
+      assert.deepEqual(unregistered, ['c']);
+      await engine.togglePlugin('good', true); // and comes back without re-running the code
+      assert.equal(runs, 2);
+      assert.equal(registered.length, 3);
+    } finally {
+      delete globalThis.tokIpc;
+      delete globalThis.__tokPluginRun;
+    }
+  });
+});
+
+describe('Regression: page virtualizer maps pageIndex to positions', () => {
+  const makePages = (first, count, html = (i) => `<div>${i}</div>`) =>
+    Array.from({ length: count }, (_, k) => ({
+      pageIndex: first + k, gematriaNumber: '', widthPt: 100, heightPt: 100, htmlContent: html(first + k),
+    }));
+  const mountedPositions = (container) =>
+    container.children.map((c, i) => (c.classList.contains('tok-page-mounted') ? i : -1)).filter((i) => i >= 0);
+
+  test('computeActiveWindow', async () => {
+    const { computeActiveWindow } = await loadTs('packages/tok-viewer/src/virtualizer.ts');
+    assert.deepEqual(computeActiveWindow(0, 1000), { start: 0, end: 1 });
+    assert.deepEqual(computeActiveWindow(500, 1000), { start: 499, end: 501 });
+    assert.deepEqual(computeActiveWindow(999, 1000), { start: 998, end: 999 });
+    assert.deepEqual(computeActiveWindow(0, 0), { start: 0, end: -1 });
+  });
+
+  test('documents whose page numbers do not start at 0 mount the right pages', async () => {
+    const { PageDomVirtualizer } = await loadTs('packages/tok-viewer/src/virtualizer.ts');
+    const container = new FakeElement('div');
+    const v = new PageDomVirtualizer(container);
+    v.setPages(makePages(10, 8));
+    assert.deepEqual(mountedPositions(container), [0, 1]);
+    assert.equal(container.children[0].innerHTML, '<div>10</div>');
+
+    v.scrollToPage(15); // position 5
+    assert.deepEqual(mountedPositions(container), [4, 5, 6]);
+    assert.equal(container.children[5].innerHTML, '<div>15</div>');
+    assert.equal(container.children[0].innerHTML, '');
+    assert.equal(v.getActivePage(), 15);
+
+    v.updateActiveWindow(17);
+    assert.deepEqual(mountedPositions(container), [6, 7]);
+    v.destroy();
+  });
+
+  test('text-only pages are tracked as mounted and the scroll listener is removed on destroy', async () => {
+    const { PageDomVirtualizer } = await loadTs('packages/tok-viewer/src/virtualizer.ts');
+    const container = new FakeElement('div');
+    const v = new PageDomVirtualizer(container);
+    v.setPages(makePages(0, 5, (i) => `plain text ${i}`));
+    assert.deepEqual(mountedPositions(container), [0, 1]);
+    assert.equal(container.listeners.scroll.length, 1);
+    v.destroy();
+    assert.equal(container.listeners.scroll.length, 0);
+  });
+});
+
+describe('Regression: UI page numbering matches the Rust gematria engine', () => {
+  test('taboo substitutions, 15/16 after hundreds and thousands', async () => {
+    const { toHebrewGematria } = await loadTs('packages/tok-ui/src/gematria.ts');
+    const expected = {
+      1: 'א׳', 15: 'ט״ו', 16: 'ט״ז', 115: 'קט״ו', 216: 'רט״ז', 248: 'רמ״ח',
+      270: 'ע״ר', 272: 'ער״ב', 275: 'ער״ה', 298: 'חר״צ', 304: 'ד״ש', 314: 'שי״ד',
+      344: 'שד״מ', 359: 'נט״ש', 644: 'תרמ״ד', 698: 'תרח״צ', 744: 'תשד״מ',
+      1000: 'א׳', 5784: 'ה׳תשפ״ד',
+    };
+    for (const [n, s] of Object.entries(expected)) assert.equal(toHebrewGematria(Number(n)), s, `n=${n}`);
+    assert.equal(toHebrewGematria(0), '');
+  });
+});
+

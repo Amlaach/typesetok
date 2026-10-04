@@ -40,6 +40,12 @@ export class CanvasInteractionOverlay {
   private isBlinkVisible = true;
   private isDragging = false;
   private dragStart: { x: number; y: number } | null = null;
+  private readonly onWindowResize = () => this.resizeCanvas();
+  private readonly onWindowMouseUp = () => {
+    this.isDragging = false;
+    this.dragStart = null;
+  };
+  private destroyed = false;
 
   public onCaretMoved?: CaretMovedCallback;
   public onSelectionChanged?: SelectionChangedCallback;
@@ -66,7 +72,7 @@ export class CanvasInteractionOverlay {
     this.ctx = ctx;
 
     this.resizeCanvas();
-    window.addEventListener('resize', () => this.resizeCanvas());
+    window.addEventListener('resize', this.onWindowResize);
     this.startCaretBlink();
     this.bindEvents();
   }
@@ -113,15 +119,14 @@ export class CanvasInteractionOverlay {
       this.onSelectionChanged?.(this.selection);
     });
 
-    const onMouseUp = () => {
-      this.isDragging = false;
-      this.dragStart = null;
-    };
-    this.canvas.addEventListener('mouseup', onMouseUp);
-    window.addEventListener('mouseup', onMouseUp);
+    // A single window listener also covers mouseup over the canvas itself.
+    window.addEventListener('mouseup', this.onWindowMouseUp);
 
     this.canvas.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // IME composition (and the 'Process' key Chromium reports during it) must not be
+      // treated as a typed character.
+      if (e.isComposing || e.key === 'Process' || e.key === 'Dead') return;
 
       if (e.key === 'Backspace') {
         e.preventDefault();
@@ -138,7 +143,8 @@ export class CanvasInteractionOverlay {
         e.preventDefault();
         this.caret.x += 8.0;
         this.render();
-      } else if (e.key.length === 1) {
+      } else if ([...e.key].length === 1) {
+        // One code point (`e.key.length` is 2 for astral characters such as emoji).
         // Printable character typed: Hebrew / Latin / punctuation
         e.preventDefault();
         const approxWidth = e.key === ' ' ? 4.5 : 8.0;
@@ -229,8 +235,17 @@ export class CanvasInteractionOverlay {
     }
   }
 
+  /** Stops the blink timer and removes the canvas and every window-level listener it installed. */
   public destroy(): void {
-    if (this.blinkTimer) clearInterval(this.blinkTimer);
+    if (this.destroyed) return;
+    this.destroyed = true;
+    if (this.blinkTimer !== null) clearInterval(this.blinkTimer);
+    this.blinkTimer = null;
+    window.removeEventListener('resize', this.onWindowResize);
+    window.removeEventListener('mouseup', this.onWindowMouseUp);
+    this.onCaretMoved = this.onSelectionChanged = this.onTextInserted = undefined;
+    this.onBackspacePressed = undefined;
+    this.hitTestProvider = undefined;
     this.canvas.remove();
   }
 }

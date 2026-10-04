@@ -10,3 +10,4 @@ export * from './components/SpreadCanvas';
 export * from './components/WelcomeModal';
 export * from './components/SettingsModal';
 export * from './components/AboutModal';
+export * from './plugins/PluginEngine';

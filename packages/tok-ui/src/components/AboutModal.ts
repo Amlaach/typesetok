@@ -1,5 +1,6 @@
 import { t, i18n } from '../i18n';
 import { renderIcon } from '../icons';
+import { ModalController } from './ModalController';
 
 export interface AboutModalCallbacks {
   onClose: () => void;
@@ -9,6 +10,7 @@ export class AboutModal {
   public element: HTMLElement;
   private callbacks: AboutModalCallbacks;
   private isVisible = false;
+  private modal: ModalController;
 
   constructor(callbacks: AboutModalCallbacks) {
     this.callbacks = callbacks;
@@ -26,6 +28,8 @@ export class AboutModal {
     this.element.style.alignItems = 'center';
     this.element.style.justifyContent = 'center';
 
+    this.modal = new ModalController(this.element, () => this.hide(), { closeOnBackdrop: true });
+
     i18n.onChange(() => {
       if (this.isVisible) this.render();
     });
@@ -35,17 +39,26 @@ export class AboutModal {
     this.isVisible = true;
     this.element.style.display = 'flex';
     this.render();
+    this.modal.opened();
   }
 
   public hide(): void {
+    if (!this.isVisible) return;
     this.isVisible = false;
     this.element.style.display = 'none';
+    this.modal.closed();
     this.callbacks.onClose();
   }
 
   private render(): void {
+    const focusKey = this.modal.captureFocus();
+    this.renderContent();
+    this.modal.afterRender(focusKey);
+  }
+
+  private renderContent(): void {
     this.element.innerHTML = '';
-    this.element.style.direction = i18n.getLanguage() === 'he' ? 'rtl' : 'ltr';
+    this.element.style.direction = i18n.getDirection();
 
     const card = document.createElement('div');
     card.className = 'tok-about-card';
@@ -85,6 +98,7 @@ export class AboutModal {
     title.style.color = '#60A5FA';
     title.style.letterSpacing = '-0.3px';
     title.textContent = 'TypesetOK (TOK)';
+    title.dataset.modalTitle = '';
     card.appendChild(title);
 
     const subtitle = document.createElement('p');
@@ -113,11 +127,11 @@ export class AboutModal {
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
         <span style="color: #64748B;">${t('aboutCoreLabel')}</span>
-        <span style="color: #38BDF8;">Rust Native (Knuth-Plass + אהלתר״ם)</span>
+        <span style="color: #38BDF8;">${t('aboutRustVersion')}</span>
       </div>
       <div style="display: flex; justify-content: space-between;">
         <span style="color: #64748B;">${t('aboutShellLabel')}</span>
-        <span style="color: #F8FAFC;">Electron + Chromium Pre-Press Platform</span>
+        <span style="color: #F8FAFC;">${t('aboutShellValue')}</span>
       </div>
     `;
     card.appendChild(metaBox);
@@ -134,15 +148,18 @@ export class AboutModal {
     ghBtn.style.alignItems = 'center';
     ghBtn.style.justifyContent = 'center';
     ghBtn.style.gap = '8px';
+    ghBtn.dataset.focusKey = 'github';
     ghBtn.innerHTML = `${renderIcon('brand', 15)} <span>${t('aboutGithubBtn')}</span>`;
 
     ghBtn.addEventListener('click', () => {
       const url = 'https://github.com/TypesetOK/typesetok';
       const win = window as any;
       if (win.tokIpc && win.tokIpc.openExternal) {
-        win.tokIpc.openExternal(url);
+        Promise.resolve(win.tokIpc.openExternal(url)).catch((e: any) => {
+          console.warn('[ABOUT] openExternal failed:', e?.message ?? e);
+        });
       } else {
-        window.open(url, '_blank');
+        window.open(url, '_blank', 'noopener,noreferrer');
       }
     });
     card.appendChild(ghBtn);
@@ -153,6 +170,8 @@ export class AboutModal {
     closeBtn.style.width = '100%';
     closeBtn.style.height = '34px';
     closeBtn.textContent = t('aboutClose');
+    closeBtn.dataset.focusKey = 'close';
+    closeBtn.dataset.autofocus = '';
     closeBtn.addEventListener('click', () => this.hide());
     card.appendChild(closeBtn);
 

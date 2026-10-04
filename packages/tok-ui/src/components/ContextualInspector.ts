@@ -5,6 +5,27 @@ import {
   TypographySettings
 } from '../types';
 import { renderIcon, IconName } from '../icons';
+import { t, i18n } from '../i18n';
+
+/**
+ * Parses a scrubber field such as "11.5 pt", "-3 מ"מ" or "12,5". Returns null when no
+ * number is present. (parseInt used to truncate 11.5pt to 11 on every edit/drag.)
+ */
+export function parseScrubberValue(text: string): number | null {
+  const m = String(text).replace(',', '.').match(/-?\d+(?:\.\d+)?/);
+  if (!m) return null;
+  const v = parseFloat(m[0]);
+  return Number.isFinite(v) ? v : null;
+}
+
+/** Clamps to [min, max] and rounds to one decimal place. */
+export function clampScrubberValue(v: number, min: number, max: number): number {
+  return Math.round(Math.max(min, Math.min(max, v)) * 10) / 10;
+}
+
+export function formatScrubberValue(v: number, unit: string): string {
+  return `${Math.round(v * 10) / 10} ${unit}`;
+}
 
 export interface InspectorCallbacks {
   onDocumentChange: (settings: Partial<DocumentSettings>) => void;
@@ -85,15 +106,23 @@ export class ContextualInspector {
     this.callbacks = callbacks;
     this.element = document.createElement('aside');
     this.element.className = 'tok-inspector-bar';
-    this.element.dir = 'rtl';
+    this.element.dir = i18n.getDirection();
+    this.element.setAttribute('aria-label', t('inspAriaLabel'));
     this.element.style.width = 'var(--tok-inspector-width)';
     this.element.style.minWidth = 'var(--tok-inspector-width)';
     this.element.style.background = 'var(--tok-bg-surface-1)';
-    this.element.style.borderRight = '1px solid var(--tok-border-subtle)';
+    // Border on the side facing the canvas in both directions (was always the right edge).
+    this.element.style.borderInlineStart = '1px solid var(--tok-border-subtle)';
     this.element.style.display = 'flex';
     this.element.style.flexDirection = 'column';
     this.element.style.overflowY = 'auto';
     this.element.style.userSelect = 'none';
+
+    i18n.onChange(() => {
+      this.element.dir = i18n.getDirection();
+      this.element.setAttribute('aria-label', t('inspAriaLabel'));
+      this.render();
+    });
 
     this.render();
   }
@@ -136,20 +165,21 @@ export class ContextualInspector {
   // =========================================================================
   private renderZeroSelection(): void {
     // Header
-    this.element.appendChild(this.createHeader('הגדרות מסמך ועמוד', 'מסמך תורני', 'file'));
+    this.element.appendChild(this.createHeader(t('inspDocTitle'), t('inspDocSubtitle'), 'file'));
 
     // 1. Page Size Card
-    const sizeCard = this.createCard('ממדי עמוד ופורמט');
+    const sizeCard = this.createCard(t('inspPageSize'));
     const sizeSelect = document.createElement('select');
     sizeSelect.className = 'tok-select';
     sizeSelect.style.width = '100%';
     sizeSelect.style.marginBottom = '8px';
+    sizeSelect.setAttribute('aria-label', t('inspPageSize'));
 
     const presets = [
-      { id: '17x24', name: 'ספר קודש סטנדרטי (17×24 ס"מ)', w: 170, h: 240 },
-      { id: 'Crown', name: 'פורמט קראון (16.5×23.5 ס"מ)', w: 165, h: 235 },
-      { id: 'A4', name: 'פורמט A4 (21×29.7 ס"מ)', w: 210, h: 297 },
-      { id: 'B5', name: 'פורמט B5 (17.6×25 ס"מ)', w: 176, h: 250 }
+      { id: '17x24', name: t('inspPresetSefer'), w: 170, h: 240 },
+      { id: 'Crown', name: t('inspPresetCrown'), w: 165, h: 235 },
+      { id: 'A4', name: t('inspPresetA4'), w: 210, h: 297 },
+      { id: 'B5', name: t('inspPresetB5'), w: 176, h: 250 }
     ];
     for (const p of presets) {
       const opt = document.createElement('option');
@@ -178,11 +208,11 @@ export class ContextualInspector {
     const dimRow = document.createElement('div');
     dimRow.style.display = 'flex';
     dimRow.style.gap = '8px';
-    dimRow.appendChild(this.createScrubber('רוחב', this.documentSettings.pageWidthMm, 'מ"מ', 50, 400, (v) => {
+    dimRow.appendChild(this.createScrubber(t('inspWidth'), this.documentSettings.pageWidthMm, t('unitMm'), 50, 400, (v) => {
       this.documentSettings.pageWidthMm = v;
       this.callbacks.onDocumentChange({ pageWidthMm: v });
     }));
-    dimRow.appendChild(this.createScrubber('גובה', this.documentSettings.pageHeightMm, 'מ"מ', 50, 500, (v) => {
+    dimRow.appendChild(this.createScrubber(t('inspHeight'), this.documentSettings.pageHeightMm, t('unitMm'), 50, 500, (v) => {
       this.documentSettings.pageHeightMm = v;
       this.callbacks.onDocumentChange({ pageHeightMm: v });
     }));
@@ -190,15 +220,15 @@ export class ContextualInspector {
     this.element.appendChild(sizeCard);
 
     // 2. Graded Margins Card (שוליים מדורגים תורניים)
-    const marginCard = this.createCard('שוליים מדורגים (Graded Margins)');
+    const marginCard = this.createCard(t('inspGradedMargins'));
     const mRow1 = document.createElement('div');
     mRow1.style.display = 'flex';
     mRow1.style.gap = '8px';
-    mRow1.appendChild(this.createScrubber('עליון', this.documentSettings.marginTopMm, 'מ"מ', 5, 80, (v) => {
+    mRow1.appendChild(this.createScrubber(t('inspTop'), this.documentSettings.marginTopMm, t('unitMm'), 5, 80, (v) => {
       this.documentSettings.marginTopMm = v;
       this.callbacks.onDocumentChange({ marginTopMm: v });
     }));
-    mRow1.appendChild(this.createScrubber('תחתון', this.documentSettings.marginBottomMm, 'מ"מ', 5, 80, (v) => {
+    mRow1.appendChild(this.createScrubber(t('inspBottom'), this.documentSettings.marginBottomMm, t('unitMm'), 5, 80, (v) => {
       this.documentSettings.marginBottomMm = v;
       this.callbacks.onDocumentChange({ marginBottomMm: v });
     }));
@@ -207,11 +237,11 @@ export class ContextualInspector {
     const mRow2 = document.createElement('div');
     mRow2.style.display = 'flex';
     mRow2.style.gap = '8px';
-    mRow2.appendChild(this.createScrubber('פנימי/שדרה', this.documentSettings.marginInsideMm, 'מ"מ', 5, 80, (v) => {
+    mRow2.appendChild(this.createScrubber(t('inspInside'), this.documentSettings.marginInsideMm, t('unitMm'), 5, 80, (v) => {
       this.documentSettings.marginInsideMm = v;
       this.callbacks.onDocumentChange({ marginInsideMm: v });
     }));
-    mRow2.appendChild(this.createScrubber('חיצוני', this.documentSettings.marginOutsideMm, 'מ"מ', 5, 80, (v) => {
+    mRow2.appendChild(this.createScrubber(t('inspOutside'), this.documentSettings.marginOutsideMm, t('unitMm'), 5, 80, (v) => {
       this.documentSettings.marginOutsideMm = v;
       this.callbacks.onDocumentChange({ marginOutsideMm: v });
     }));
@@ -219,15 +249,15 @@ export class ContextualInspector {
     this.element.appendChild(marginCard);
 
     // 3. Grid & Baseline Card
-    const gridCard = this.createCard('רשת שורות בסיס (Baseline Grid)');
+    const gridCard = this.createCard(t('inspBaselineGrid'));
     const gRow = document.createElement('div');
     gRow.style.display = 'flex';
     gRow.style.gap = '8px';
-    gRow.appendChild(this.createScrubber('צעד שורה', this.documentSettings.baselineGridPt, 'pt', 8, 30, (v) => {
+    gRow.appendChild(this.createScrubber(t('inspLineStep'), this.documentSettings.baselineGridPt, 'pt', 8, 30, (v) => {
       this.documentSettings.baselineGridPt = v;
       this.callbacks.onDocumentChange({ baselineGridPt: v });
     }));
-    gRow.appendChild(this.createScrubber('היסט עליון', this.documentSettings.baselineOffsetPt, 'pt', 0, 100, (v) => {
+    gRow.appendChild(this.createScrubber(t('inspTopOffset'), this.documentSettings.baselineOffsetPt, 'pt', 0, 100, (v) => {
       this.documentSettings.baselineOffsetPt = v;
       this.callbacks.onDocumentChange({ baselineOffsetPt: v });
     }));
@@ -235,11 +265,11 @@ export class ContextualInspector {
     this.element.appendChild(gridCard);
 
     // 4. Preflight Card (Continuous Preflight)
-    const pfCard = this.createCard('קדם-דפוס רציף (Continuous Preflight)');
-    pfCard.appendChild(this.createStatusRow('סטטוס ייצור', 'תקין (Ready for Print)', '#10B981'));
-    pfCard.appendChild(this.createStatusRow('פרופיל צבע', 'ISO Coated v2 (100% K Black)', '#94A3B8'));
-    pfCard.appendChild(this.createStatusRow('טקסט גולש (Overset)', '0 חריגות', '#10B981'));
-    pfCard.appendChild(this.createStatusRow('רזולוציית תמונות', '300+ DPI (תקין)', '#10B981'));
+    const pfCard = this.createCard(t('inspPreflight'));
+    pfCard.appendChild(this.createStatusRow(t('inspProdStatus'), t('inspReadyForPrint'), '#10B981'));
+    pfCard.appendChild(this.createStatusRow(t('inspColorProfile'), 'ISO Coated v2 (100% K Black)', '#94A3B8'));
+    pfCard.appendChild(this.createStatusRow(t('inspOverset'), t('inspNoIssues'), '#10B981'));
+    pfCard.appendChild(this.createStatusRow(t('inspImageRes'), t('inspImageResOk'), '#10B981'));
     this.element.appendChild(pfCard);
   }
 
@@ -247,18 +277,18 @@ export class ContextualInspector {
   // State 2: Text Frame Selected (Object Mode)
   // =========================================================================
   private renderTextFrameMode(): void {
-    this.element.appendChild(this.createHeader('תיבת טקסט', this.selectedFrame.flowId, 'frame'));
+    this.element.appendChild(this.createHeader(t('inspTextFrame'), this.selectedFrame.flowId, 'frame'));
 
     // 1. Geometry & Coordinates with Value Scrubbing
-    const geoCard = this.createCard('מיקום וממדים (Geometry)');
+    const geoCard = this.createCard(t('inspGeometry'));
     const geoRow1 = document.createElement('div');
     geoRow1.style.display = 'flex';
     geoRow1.style.gap = '8px';
-    geoRow1.appendChild(this.createScrubber('מיקום X', this.selectedFrame.xMm, 'מ"מ', 0, 300, (v) => {
+    geoRow1.appendChild(this.createScrubber(t('inspPosX'), this.selectedFrame.xMm, t('unitMm'), 0, 300, (v) => {
       this.selectedFrame.xMm = v;
       this.callbacks.onFrameChange({ xMm: v });
     }));
-    geoRow1.appendChild(this.createScrubber('מיקום Y', this.selectedFrame.yMm, 'מ"מ', 0, 400, (v) => {
+    geoRow1.appendChild(this.createScrubber(t('inspPosY'), this.selectedFrame.yMm, t('unitMm'), 0, 400, (v) => {
       this.selectedFrame.yMm = v;
       this.callbacks.onFrameChange({ yMm: v });
     }));
@@ -267,11 +297,11 @@ export class ContextualInspector {
     const geoRow2 = document.createElement('div');
     geoRow2.style.display = 'flex';
     geoRow2.style.gap = '8px';
-    geoRow2.appendChild(this.createScrubber('רוחב W', this.selectedFrame.widthMm, 'מ"מ', 10, 300, (v) => {
+    geoRow2.appendChild(this.createScrubber(t('inspWidthW'), this.selectedFrame.widthMm, t('unitMm'), 10, 300, (v) => {
       this.selectedFrame.widthMm = v;
       this.callbacks.onFrameChange({ widthMm: v });
     }));
-    geoRow2.appendChild(this.createScrubber('גובה H', this.selectedFrame.heightMm, 'מ"מ', 10, 400, (v) => {
+    geoRow2.appendChild(this.createScrubber(t('inspHeightH'), this.selectedFrame.heightMm, t('unitMm'), 10, 400, (v) => {
       this.selectedFrame.heightMm = v;
       this.callbacks.onFrameChange({ heightMm: v });
     }));
@@ -279,17 +309,18 @@ export class ContextualInspector {
     this.element.appendChild(geoCard);
 
     // 2. Flow & Threading Card
-    const flowCard = this.createCard('שיוך תזרים ושרשור');
+    const flowCard = this.createCard(t('inspFlowThreading'));
     const flowSelect = document.createElement('select');
     flowSelect.className = 'tok-select';
     flowSelect.style.width = '100%';
     flowSelect.style.marginBottom = '8px';
+    flowSelect.setAttribute('aria-label', t('inspFlowThreading'));
 
     const flows = [
-      { id: 'gemara', name: 'גמרא (טקסט מרכזי)' },
-      { id: 'rashi', name: 'רש"י (פירוש פנימי)' },
-      { id: 'tosafot', name: 'תוספות (פירוש חיצוני)' },
-      { id: 'notes', name: 'הערות שוליים וציונים' }
+      { id: 'gemara', name: t('inspFlowGemara') },
+      { id: 'rashi', name: t('inspFlowRashi') },
+      { id: 'tosafot', name: t('inspFlowTosafot') },
+      { id: 'notes', name: t('inspFlowNotes') }
     ];
     for (const f of flows) {
       const opt = document.createElement('option');
@@ -309,20 +340,20 @@ export class ContextualInspector {
     threadInfo.style.color = 'var(--tok-text-secondary)';
     threadInfo.style.display = 'flex';
     threadInfo.style.justifyContent = 'space-between';
-    threadInfo.innerHTML = `<span>שרשור תזרים:</span><span style="color:#60A5FA;">-> ${this.selectedFrame.nextFrameId || 'ללא'}</span>`;
+    threadInfo.innerHTML = `<span>${t('inspThreading')}</span><span style="color:#60A5FA;">-> ${this.selectedFrame.nextFrameId || t('inspNone')}</span>`;
     flowCard.appendChild(threadInfo);
     this.element.appendChild(flowCard);
 
     // 3. Insets & Vertical Alignment Card
-    const insetCard = this.createCard('שוליים פנימיים ויישור אנכי');
+    const insetCard = this.createCard(t('inspInsets'));
     const inRow1 = document.createElement('div');
     inRow1.style.display = 'flex';
     inRow1.style.gap = '8px';
-    inRow1.appendChild(this.createScrubber('עליון', this.selectedFrame.insetTopMm, 'מ"מ', 0, 30, (v) => {
+    inRow1.appendChild(this.createScrubber(t('inspTop'), this.selectedFrame.insetTopMm, t('unitMm'), 0, 30, (v) => {
       this.selectedFrame.insetTopMm = v;
       this.callbacks.onFrameChange({ insetTopMm: v });
     }));
-    inRow1.appendChild(this.createScrubber('תחתון', this.selectedFrame.insetBottomMm, 'מ"מ', 0, 30, (v) => {
+    inRow1.appendChild(this.createScrubber(t('inspBottom'), this.selectedFrame.insetBottomMm, t('unitMm'), 0, 30, (v) => {
       this.selectedFrame.insetBottomMm = v;
       this.callbacks.onFrameChange({ insetBottomMm: v });
     }));
@@ -331,14 +362,20 @@ export class ContextualInspector {
     const inRow2 = document.createElement('div');
     inRow2.style.display = 'flex';
     inRow2.style.gap = '8px';
-    inRow2.appendChild(this.createScrubber('ימין', this.selectedFrame.insetRightMm, 'מ"מ', 0, 30, (v) => {
+    const rightInset = this.createScrubber(t('inspRight'), this.selectedFrame.insetRightMm, t('unitMm'), 0, 30, (v) => {
       this.selectedFrame.insetRightMm = v;
       this.callbacks.onFrameChange({ insetRightMm: v });
-    }));
-    inRow2.appendChild(this.createScrubber('שמאל', this.selectedFrame.insetLeftMm, 'מ"מ', 0, 30, (v) => {
+    });
+    const leftInset = this.createScrubber(t('inspLeft'), this.selectedFrame.insetLeftMm, t('unitMm'), 0, 30, (v) => {
       this.selectedFrame.insetLeftMm = v;
       this.callbacks.onFrameChange({ insetLeftMm: v });
-    }));
+    });
+    // Keep the physical order (Right field on the right) in both UI directions.
+    if (i18n.getDirection() === 'rtl') {
+      inRow2.append(rightInset, leftInset);
+    } else {
+      inRow2.append(leftInset, rightInset);
+    }
     insetCard.appendChild(inRow2);
 
     // Vertical alignment selector
@@ -346,7 +383,7 @@ export class ContextualInspector {
     vaLabel.style.fontSize = '11px';
     vaLabel.style.color = 'var(--tok-text-secondary)';
     vaLabel.style.margin = '8px 0 4px';
-    vaLabel.textContent = 'יישור אנכי בתיבה:';
+    vaLabel.textContent = t('inspVAlign');
     insetCard.appendChild(vaLabel);
 
     const vaBtnWrap = document.createElement('div');
@@ -354,10 +391,10 @@ export class ContextualInspector {
     vaBtnWrap.style.gap = '4px';
 
     const vaOptions: { id: 'top' | 'center' | 'bottom' | 'justify'; label: string }[] = [
-      { id: 'top', label: 'עליון' },
-      { id: 'center', label: 'מרכז' },
-      { id: 'bottom', label: 'תחתון' },
-      { id: 'justify', label: 'מלא' }
+      { id: 'top', label: t('inspTop') },
+      { id: 'center', label: t('inspCenter') },
+      { id: 'bottom', label: t('inspBottom') },
+      { id: 'justify', label: t('inspJustify') }
     ];
 
     for (const opt of vaOptions) {
@@ -366,6 +403,7 @@ export class ContextualInspector {
       btn.style.flex = '1';
       btn.style.fontSize = '11px';
       btn.textContent = opt.label;
+      btn.setAttribute('aria-pressed', String(this.selectedFrame.verticalAlign === opt.id));
       if (this.selectedFrame.verticalAlign === opt.id) {
         btn.style.background = 'var(--tok-accent-primary)';
         btn.style.color = '#FFFFFF';
@@ -385,10 +423,10 @@ export class ContextualInspector {
   // State 3: Text Edit Mode (Typography, 3-Tier Hebrew Justification, Niqqud)
   // =========================================================================
   private renderTextEditMode(): void {
-    this.element.appendChild(this.createHeader('טיפוגרפיה ועריכה', this.typographySettings.styleTokenName, 'typography'));
+    this.element.appendChild(this.createHeader(t('inspTypography'), this.typographySettings.styleTokenName, 'typography'));
 
     // 1. Style Token Card & Override Sync
-    const styleCard = this.createCard('טוקן סגנון פסקה');
+    const styleCard = this.createCard(t('inspStyleToken'));
     const tokenRow = document.createElement('div');
     tokenRow.style.display = 'flex';
     tokenRow.style.alignItems = 'center';
@@ -410,7 +448,7 @@ export class ContextualInspector {
       overrideBadge.style.background = '#F59E0B';
       overrideBadge.style.color = '#000000';
       overrideBadge.style.fontWeight = 'bold';
-      overrideBadge.textContent = 'שינוי מקומי (+)';
+      overrideBadge.textContent = t('inspLocalOverride');
       tokenRow.appendChild(overrideBadge);
     }
     styleCard.appendChild(tokenRow);
@@ -423,7 +461,7 @@ export class ContextualInspector {
     syncBtn.style.alignItems = 'center';
     syncBtn.style.justifyContent = 'center';
     syncBtn.style.gap = '6px';
-    syncBtn.innerHTML = `${renderIcon('refresh', 13)}<span>עדכן סגנון גלובלי מהשינוי הנוכחי</span>`;
+    syncBtn.innerHTML = `${renderIcon('refresh', 13)}<span>${t('inspSyncStyle')}</span>`;
     syncBtn.addEventListener('click', () => {
       this.typographySettings.isOverride = false;
       this.callbacks.onSyncStyleToken();
@@ -433,11 +471,12 @@ export class ContextualInspector {
     this.element.appendChild(styleCard);
 
     // 2. Character & Font Settings
-    const fontCard = this.createCard('גופן ומרווחים');
+    const fontCard = this.createCard(t('inspFontSpacing'));
     const fontSelect = document.createElement('select');
     fontSelect.className = 'tok-select';
     fontSelect.style.width = '100%';
     fontSelect.style.marginBottom = '8px';
+    fontSelect.setAttribute('aria-label', t('hudFont'));
 
     const fonts = ['וילנא (Vilna)', 'טעמי פרנק (Taamey Frank)', 'דוד (David CLM)', 'כתב רש"י (Rashi)'];
     for (const f of fonts) {
@@ -458,12 +497,12 @@ export class ContextualInspector {
     const fRow1 = document.createElement('div');
     fRow1.style.display = 'flex';
     fRow1.style.gap = '8px';
-    fRow1.appendChild(this.createScrubber('גודל גופן', this.typographySettings.fontSizePt, 'pt', 6, 72, (v) => {
+    fRow1.appendChild(this.createScrubber(t('inspFontSize'), this.typographySettings.fontSizePt, 'pt', 6, 72, (v) => {
       this.typographySettings.fontSizePt = v;
       this.typographySettings.isOverride = true;
       this.callbacks.onTypographyChange({ fontSizePt: v, isOverride: true });
     }));
-    fRow1.appendChild(this.createScrubber('רווח שורות', this.typographySettings.lineHeightPt, 'pt', 8, 90, (v) => {
+    fRow1.appendChild(this.createScrubber(t('inspLeading'), this.typographySettings.lineHeightPt, 'pt', 8, 90, (v) => {
       this.typographySettings.lineHeightPt = v;
       this.typographySettings.isOverride = true;
       this.callbacks.onTypographyChange({ lineHeightPt: v, isOverride: true });
@@ -472,7 +511,7 @@ export class ContextualInspector {
     this.element.appendChild(fontCard);
 
     // 3. Three-Tier Hebrew Justification Controls (Section 15)
-    const justCard = this.createCard('יישור עברי תלת-שלבי (3-Tier)');
+    const justCard = this.createCard(t('inspJustify3'));
     
     // Tier 1: Word Spacing
     const t1Header = document.createElement('div');
@@ -480,17 +519,17 @@ export class ContextualInspector {
     t1Header.style.fontWeight = 'bold';
     t1Header.style.color = '#93C5FD';
     t1Header.style.margin = '4px 0';
-    t1Header.textContent = 'שכבה 1: רווחי מילים (80%–130%)';
+    t1Header.textContent = t('inspTier1');
     justCard.appendChild(t1Header);
 
     const t1Row = document.createElement('div');
     t1Row.style.display = 'flex';
     t1Row.style.gap = '8px';
-    t1Row.appendChild(this.createScrubber('מינימום', this.typographySettings.justification.tier1WordSpacingMin, '%', 60, 100, (v) => {
+    t1Row.appendChild(this.createScrubber(t('inspMin'), this.typographySettings.justification.tier1WordSpacingMin, '%', 60, 100, (v) => {
       this.typographySettings.justification.tier1WordSpacingMin = v;
       this.callbacks.onTypographyChange({ justification: this.typographySettings.justification });
     }));
-    t1Row.appendChild(this.createScrubber('מקסימום', this.typographySettings.justification.tier1WordSpacingMax, '%', 100, 160, (v) => {
+    t1Row.appendChild(this.createScrubber(t('inspMax'), this.typographySettings.justification.tier1WordSpacingMax, '%', 100, 160, (v) => {
       this.typographySettings.justification.tier1WordSpacingMax = v;
       this.callbacks.onTypographyChange({ justification: this.typographySettings.justification });
     }));
@@ -502,7 +541,7 @@ export class ContextualInspector {
     t2Header.style.fontWeight = 'bold';
     t2Header.style.color = '#FDE047';
     t2Header.style.margin = '10px 0 4px';
-    t2Header.textContent = 'שכבה 2: מתיחת אותיות אהלתר"ם';
+    t2Header.textContent = t('inspTier2');
     justCard.appendChild(t2Header);
 
     const t2ToggleRow = document.createElement('div');
@@ -513,12 +552,13 @@ export class ContextualInspector {
 
     const t2Label = document.createElement('span');
     t2Label.style.fontSize = '11px';
-    t2Label.textContent = 'הפעל מתיחת אותיות:';
+    t2Label.textContent = t('inspEnableStretch');
     t2ToggleRow.appendChild(t2Label);
 
     const t2Switch = document.createElement('input');
     t2Switch.type = 'checkbox';
     t2Switch.checked = this.typographySettings.justification.tier2OheltaremEnabled;
+    t2Switch.setAttribute('aria-label', t('inspEnableStretch'));
     t2Switch.addEventListener('change', () => {
       this.typographySettings.justification.tier2OheltaremEnabled = t2Switch.checked;
       this.callbacks.onTypographyChange({ justification: this.typographySettings.justification });
@@ -542,6 +582,7 @@ export class ContextualInspector {
       const isSelected = this.typographySettings.justification.tier2OheltaremLetters.includes(l);
       lBtn.style.background = isSelected ? 'var(--tok-accent-primary)' : 'var(--tok-bg-surface-2)';
       lBtn.style.color = isSelected ? '#FFFFFF' : 'var(--tok-text-secondary)';
+      lBtn.setAttribute('aria-pressed', String(isSelected));
       lBtn.addEventListener('click', () => {
         const arr = this.typographySettings.justification.tier2OheltaremLetters;
         const idx = arr.indexOf(l);
@@ -554,7 +595,7 @@ export class ContextualInspector {
     }
     justCard.appendChild(letterBoxes);
 
-    justCard.appendChild(this.createScrubber('מקסימום מתיחה', this.typographySettings.justification.tier2OheltaremMaxStretch, '%', 100, 180, (v) => {
+    justCard.appendChild(this.createScrubber(t('inspMaxStretch'), this.typographySettings.justification.tier2OheltaremMaxStretch, '%', 100, 180, (v) => {
       this.typographySettings.justification.tier2OheltaremMaxStretch = v;
       this.callbacks.onTypographyChange({ justification: this.typographySettings.justification });
     }));
@@ -565,10 +606,10 @@ export class ContextualInspector {
     t3Header.style.fontWeight = 'bold';
     t3Header.style.color = '#86EFAC';
     t3Header.style.margin = '10px 0 4px';
-    t3Header.textContent = 'שכבה 3: מיקרו-טרקינג (±2%)';
+    t3Header.textContent = t('inspTier3');
     justCard.appendChild(t3Header);
 
-    justCard.appendChild(this.createScrubber('טווח מיקרו-טרקינג', this.typographySettings.justification.tier3MicroTrackingRange, '%', 0, 5, (v) => {
+    justCard.appendChild(this.createScrubber(t('inspTrackingRange'), this.typographySettings.justification.tier3MicroTrackingRange, '%', 0, 5, (v) => {
       this.typographySettings.justification.tier3MicroTrackingRange = v;
       this.callbacks.onTypographyChange({ justification: this.typographySettings.justification });
     }));
@@ -576,7 +617,7 @@ export class ContextualInspector {
     this.element.appendChild(justCard);
 
     // 4. Sacred Typography & Niqqud Card
-    const sacredCard = this.createCard('ניקוד, טעמים ושמות קדושים');
+    const sacredCard = this.createCard(t('inspSacred'));
     const normBtn = document.createElement('button');
     normBtn.className = 'tok-btn tok-btn-primary';
     normBtn.style.width = '100%';
@@ -585,7 +626,7 @@ export class ContextualInspector {
     normBtn.style.alignItems = 'center';
     normBtn.style.justifyContent = 'center';
     normBtn.style.gap = '6px';
-    normBtn.innerHTML = `${renderIcon('sparkle', 13)}<span>נרמל רצף תווי ניקוד (ת"י 6100)</span>`;
+    normBtn.innerHTML = `${renderIcon('sparkle', 13)}<span>${t('inspNormalize')}</span>`;
     normBtn.addEventListener('click', () => {
       this.callbacks.onNormalizeNiqqud();
     });
@@ -598,12 +639,13 @@ export class ContextualInspector {
 
     const divineLabel = document.createElement('span');
     divineLabel.style.fontSize = '11px';
-    divineLabel.textContent = 'מגן שמות קדושים (איסור שבירה):';
+    divineLabel.textContent = t('inspDivineShield');
     divineRow.appendChild(divineLabel);
 
     const divineSwitch = document.createElement('input');
     divineSwitch.type = 'checkbox';
     divineSwitch.checked = this.typographySettings.shieldDivineNames;
+    divineSwitch.setAttribute('aria-label', t('inspDivineShield'));
     divineSwitch.addEventListener('change', () => {
       this.typographySettings.shieldDivineNames = divineSwitch.checked;
       this.callbacks.onTypographyChange({ shieldDivineNames: divineSwitch.checked });
@@ -618,15 +660,16 @@ export class ContextualInspector {
   // State 4: Image Frame Mode
   // =========================================================================
   private renderImageFrameMode(): void {
-    this.element.appendChild(this.createHeader('מסגרת תמונה ועיטור', 'תמונה', 'image'));
+    this.element.appendChild(this.createHeader(t('inspImageFrame'), t('inspImage'), 'image'));
 
-    const imgCard = this.createCard('התאמת תמונה (Fitting)');
+    const imgCard = this.createCard(t('inspFitting'));
     const fitSelect = document.createElement('select');
     fitSelect.className = 'tok-select';
     fitSelect.style.width = '100%';
     fitSelect.style.marginBottom = '8px';
+    fitSelect.setAttribute('aria-label', t('inspFitting'));
 
-    const fits = ['התאם פרופורציונלית', 'מלא מסגרת לחלוטין', 'התאם מסגרת לתוכן'];
+    const fits = [t('inspFitProportional'), t('inspFitFill'), t('inspFitFrame')];
     for (const f of fits) {
       const opt = document.createElement('option');
       opt.textContent = f;
@@ -634,9 +677,9 @@ export class ContextualInspector {
     }
     imgCard.appendChild(fitSelect);
 
-    imgCard.appendChild(this.createStatusRow('רזולוציה אפקטיבית', '300 DPI (תקין)', '#10B981'));
-    imgCard.appendChild(this.createStatusRow('מרחב צבע', 'CMYK Coated', '#94A3B8'));
-    imgCard.appendChild(this.createStatusRow('דחיפת טקסט (Wrap)', 'סביב מסגרת (4mm)', '#60A5FA'));
+    imgCard.appendChild(this.createStatusRow(t('inspEffRes'), t('inspEffResOk'), '#10B981'));
+    imgCard.appendChild(this.createStatusRow(t('inspColorSpace'), 'CMYK Coated', '#94A3B8'));
+    imgCard.appendChild(this.createStatusRow(t('inspWrap'), t('inspWrapAround'), '#60A5FA'));
     this.element.appendChild(imgCard);
   }
 
@@ -644,9 +687,9 @@ export class ContextualInspector {
   // State 5: Multi-Selection Mode (Align & Distribute)
   // =========================================================================
   private renderMultiSelectMode(): void {
-    this.element.appendChild(this.createHeader('בחירה מרובה', '3 אובייקטים', 'layers'));
+    this.element.appendChild(this.createHeader(t('inspMulti'), t('inspMultiCount'), 'layers'));
 
-    const alignCard = this.createCard('יישור ופיזור מהיר (Align & Distribute)');
+    const alignCard = this.createCard(t('inspAlignDist'));
     const alignRow = document.createElement('div');
     alignRow.style.display = 'grid';
     alignRow.style.gridTemplateColumns = 'repeat(3, 1fr)';
@@ -654,12 +697,12 @@ export class ContextualInspector {
     alignRow.style.marginBottom = '8px';
 
     const alignActions = [
-      { id: 'right', label: 'ימין ⇥' },
-      { id: 'center', label: 'מרכז ⇋' },
-      { id: 'left', label: 'שמאל ⇤' },
-      { id: 'top', label: 'מעלה ⇪' },
-      { id: 'middle', label: 'אמצע ⇕' },
-      { id: 'bottom', label: 'מטה ⇩' }
+      { id: 'right', label: t('inspAlignRight') },
+      { id: 'center', label: t('inspAlignCenter') },
+      { id: 'left', label: t('inspAlignLeft') },
+      { id: 'top', label: t('inspAlignTop') },
+      { id: 'middle', label: t('inspAlignMiddle') },
+      { id: 'bottom', label: t('inspAlignBottom') }
     ];
 
     for (const a of alignActions) {
@@ -675,7 +718,7 @@ export class ContextualInspector {
     const distBtn = document.createElement('button');
     distBtn.className = 'tok-btn tok-btn-primary';
     distBtn.style.width = '100%';
-    distBtn.textContent = 'פיזור מרווחים שווה אנכית';
+    distBtn.textContent = t('inspDistribute');
     distBtn.addEventListener('click', () => this.callbacks.onAlignFrames('distribute-vertical'));
     alignCard.appendChild(distBtn);
 
@@ -709,7 +752,7 @@ export class ContextualInspector {
     const lbl = document.createElement('span');
     lbl.className = 'tok-scrubber-label';
     lbl.textContent = label;
-    lbl.title = 'גרור ימינה/שמאלה לכוונון רציף';
+    lbl.title = t('inspScrubHint');
     topRow.appendChild(lbl);
 
     const inputWrap = document.createElement('div');
@@ -718,19 +761,31 @@ export class ContextualInspector {
 
     const input = document.createElement('input');
     input.type = 'text';
+    input.inputMode = 'decimal';
     input.className = 'tok-input tok-input-number tok-scrubber-input';
     input.style.width = '100%';
-    input.value = `${initialVal} ${unit}`;
+    input.value = formatScrubberValue(initialVal, unit);
+    input.setAttribute('aria-label', label);
 
     // Value scrubbing state
     let isDragging = false;
     let startX = 0;
     let startVal = initialVal;
+    let lastVal = initialVal;
+
+    const commit = (v: number) => {
+      input.value = formatScrubberValue(v, unit);
+      if (v !== lastVal) {
+        lastVal = v;
+        onChange(v);
+      }
+    };
 
     const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
       isDragging = true;
       startX = e.clientX;
-      startVal = parseInt(input.value, 10) || initialVal;
+      startVal = parseScrubberValue(input.value) ?? lastVal;
       document.body.style.cursor = 'ew-resize';
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
@@ -739,17 +794,18 @@ export class ContextualInspector {
 
     const onMouseMove = (e: MouseEvent) => {
       if (!isDragging) return;
-      const dx = startX - e.clientX; // In RTL, moving left increases or right increases
+      // Dragging toward the inline end increases the value: right in LTR, left in RTL.
+      const rtl = getComputedStyle(wrap).direction === 'rtl';
+      const dx = rtl ? startX - e.clientX : e.clientX - startX;
       const delta = Math.round(dx / 3);
-      const newVal = Math.max(min, Math.min(max, startVal + delta));
-      input.value = `${newVal} ${unit}`;
-      onChange(newVal);
+      // Only fire onChange when the value actually changes (mousemove fires per pixel).
+      commit(clampScrubberValue(startVal + delta, min, max));
     };
 
     const onMouseUp = () => {
       if (isDragging) {
         isDragging = false;
-        document.body.style.cursor = 'default';
+        document.body.style.cursor = '';
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mouseup', onMouseUp);
       }
@@ -758,12 +814,20 @@ export class ContextualInspector {
     lbl.addEventListener('mousedown', onMouseDown);
 
     input.addEventListener('change', () => {
-      const parsed = parseInt(input.value, 10);
-      if (!isNaN(parsed)) {
-        const clamped = Math.max(min, Math.min(max, parsed));
-        input.value = `${clamped} ${unit}`;
-        onChange(clamped);
+      const parsed = parseScrubberValue(input.value);
+      if (parsed === null) {
+        input.value = formatScrubberValue(lastVal, unit); // restore instead of leaving garbage
+        return;
       }
+      commit(clampScrubberValue(parsed, min, max));
+    });
+
+    // Keyboard stepping: ArrowUp/Down ±1 (Shift: ±10).
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      const step = (e.shiftKey ? 10 : 1) * (e.key === 'ArrowUp' ? 1 : -1);
+      commit(clampScrubberValue((parseScrubberValue(input.value) ?? lastVal) + step, min, max));
     });
 
     inputWrap.appendChild(input);
@@ -806,11 +870,11 @@ export class ContextualInspector {
     right.appendChild(iconSpan);
 
     const textWrap = document.createElement('div');
-    const t = document.createElement('div');
-    t.style.fontWeight = 'bold';
-    t.style.fontSize = '13px';
-    t.textContent = title;
-    textWrap.appendChild(t);
+    const titleEl = document.createElement('div');
+    titleEl.style.fontWeight = 'bold';
+    titleEl.style.fontSize = '13px';
+    titleEl.textContent = title;
+    textWrap.appendChild(titleEl);
 
     const s = document.createElement('div');
     s.style.fontSize = '11px';

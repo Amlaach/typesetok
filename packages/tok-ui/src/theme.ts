@@ -151,6 +151,31 @@ export const CANVAS_TONE_PRESETS = [
   { id: 'zinc', name: 'אבץ כהה (Dark Zinc)', value: '#18181B', appBg: '#27272A' },
 ];
 
+export const FONT_SCALES = [100, 110, 120, 130];
+
+const CSS_COLOR = /^#[0-9a-fA-F]{3,8}$/;
+
+/**
+ * Merges persisted settings over the defaults field by field, dropping anything of the
+ * wrong type or out of range. A corrupt/old localStorage entry used to be spread in
+ * verbatim (e.g. fontScale "abc" -> `font-size: NaNpx`, an unknown density, a color
+ * string containing CSS).
+ */
+export function sanitizeThemeSettings(raw: unknown, defaults: ThemeSettings): ThemeSettings {
+  const out: ThemeSettings = { ...defaults };
+  if (!raw || typeof raw !== 'object') return out;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.paletteId === 'string' && THEME_PALETTES.some(p => p.id === r.paletteId)) out.paletteId = r.paletteId;
+  if (typeof r.accentColor === 'string' && CSS_COLOR.test(r.accentColor)) out.accentColor = r.accentColor;
+  if (typeof r.canvasTone === 'string' && CSS_COLOR.test(r.canvasTone)) out.canvasTone = r.canvasTone;
+  if (r.density === 'comfortable' || r.density === 'compact') out.density = r.density;
+  if (typeof r.fontScale === 'number' && FONT_SCALES.includes(r.fontScale)) out.fontScale = r.fontScale;
+  for (const key of ['highContrast', 'reducedMotion', 'enhancedFocus', 'accessibleFont'] as const) {
+    if (typeof r[key] === 'boolean') out[key] = r[key] as boolean;
+  }
+  return out;
+}
+
 export class ThemeManager {
   private settings: ThemeSettings;
   private listeners: ((settings: ThemeSettings) => void)[] = [];
@@ -171,7 +196,7 @@ export class ThemeManager {
     try {
       const saved = localStorage.getItem('tok_theme_settings');
       if (saved) {
-        this.settings = { ...this.settings, ...JSON.parse(saved) };
+        this.settings = sanitizeThemeSettings(JSON.parse(saved), this.settings);
       }
     } catch {}
 
@@ -237,7 +262,7 @@ export class ThemeManager {
       localStorage.setItem('tok_theme_settings', JSON.stringify(this.settings));
     } catch {}
     this.applyTheme();
-    for (const l of this.listeners) l(this.settings);
+    for (const l of this.listeners) l({ ...this.settings });
   }
 
   public applyTheme(): void {
