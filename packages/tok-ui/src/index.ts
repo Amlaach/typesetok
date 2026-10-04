@@ -7,5 +7,6 @@ export * from './components/ActionHud';
 export * from './components/CommandPalette';
 export * from './components/StatusBar';
 export * from './components/SpreadCanvas';
-export * from './components/Toolbar';
-export * from './components/PagesPanel';
+export * from './components/WelcomeModal';
+export * from './components/SettingsModal';
+export * from './components/AboutModal';
