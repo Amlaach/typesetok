@@ -5,7 +5,7 @@ use tok_core::id::FractionalIndex;
 use tok_core::model::{DocumentModel, DocumentRoot, ParagraphNode};
 use tok_pdf::html_projection::HtmlProjectionCompiler;
 use tok_pdf::pdf_engine::{PdfExportOptions, PdfPrePressEngine, PdfXStandard};
-use tok_storage::package::TokPackage;
+use tok_storage::package::{TokManifest, TokPackage};
 use tok_typeset::engine::{TypesettingEngine, TypesettingEngineConfig};
 
 fn print_usage() {
@@ -62,13 +62,13 @@ fn create_sample_hebrew_document(num_paragraphs: usize) -> DocumentModel {
 
 fn handle_render_pdf(input: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("[TOK-CLI] Rendering document to Pre-Press PDF: {}", output);
-    let doc = if input == "--demo" {
+    let (doc, manifest) = if input == "--demo" {
         println!("  - Generating demo Hebrew document with Niqqud...");
-        create_sample_hebrew_document(30)
+        (create_sample_hebrew_document(30), TokManifest::default())
     } else {
         println!("  - Opening .tok package from: {}", input);
-        let (model, _) = TokPackage::open(input)?;
-        model
+        let (model, pkg) = TokPackage::open(input)?;
+        (model, pkg.manifest)
     };
 
     let start_typeset = Instant::now();
@@ -86,6 +86,8 @@ fn handle_render_pdf(input: &str, output: &str) -> Result<(), Box<dyn std::error
         slug_pt: 28.346,
         draw_crop_marks: true,
         custom_font_data: None,
+        creation_date: Some(manifest.created_at.clone()),
+        mod_date: Some(manifest.modified_at.clone()),
     };
 
     let pdf_bytes =

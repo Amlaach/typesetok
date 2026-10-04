@@ -12,7 +12,7 @@ use crate::boxes::PrePressPageBoxes;
 use crate::font_subsetter::{fnv1a, FontSubsetter, SubsetFontResult, FNV_OFFSET};
 use crate::tounicode::ToUnicodeCMap;
 use pdf_writer::types::{CidFontType, FontFlags, OutputIntentSubtype, SystemInfo, TrappingStatus};
-use pdf_writer::{Content, Finish, Name, Pdf, Rect, Ref, Str, TextStr};
+use pdf_writer::{Content, Date, Finish, Name, Pdf, Rect, Ref, Str, TextStr};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use thiserror::Error;
@@ -35,6 +35,12 @@ pub struct PdfExportOptions {
     /// built without font information, or text-only lines). Defaults to the
     /// embedded Noto Serif Hebrew.
     pub custom_font_data: Option<Vec<u8>>,
+    /// ISO 8601 / RFC 3339 creation timestamp (e.g. from TokManifest).
+    /// If None, a deterministic default is used for bit-for-bit reproducibility.
+    pub creation_date: Option<String>,
+    /// ISO 8601 / RFC 3339 modification timestamp (e.g. from TokManifest).
+    /// If None, creation_date or a deterministic default is used.
+    pub mod_date: Option<String>,
 }
 
 impl Default for PdfExportOptions {
@@ -47,6 +53,8 @@ impl Default for PdfExportOptions {
             slug_pt: 28.346,
             draw_crop_marks: true,
             custom_font_data: None,
+            creation_date: None,
+            mod_date: None,
         }
     }
 }
@@ -218,6 +226,81 @@ impl LineTextWriter {
     }
 }
 
+/// Parses an RFC 3339 / ISO 8601 or PDF formatted date string into a [`pdf_writer::Date`].
+pub fn parse_pdf_date(s: &str) -> Option<Date> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let s = s.strip_prefix("D:").unwrap_or(s);
+
+    // Formats like YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ
+    if s.len() >= 10 && s.as_bytes()[4] == b'-' && s.as_bytes()[7] == b'-' {
+        let year: u16 = s[0..4].parse().ok()?;
+        let month: u8 = s[5..7].parse().ok()?;
+        let day: u8 = s[8..10].parse().ok()?;
+        let mut date = Date::new(year).month(month).day(day);
+
+        let rem = &s[10..];
+        if rem.starts_with('T') || rem.starts_with(' ') {
+            let time_part = &rem[1..];
+            if time_part.len() >= 8
+                && time_part.as_bytes()[2] == b':'
+                && time_part.as_bytes()[5] == b':'
+            {
+                let hour: u8 = time_part[0..2].parse().ok()?;
+                let minute: u8 = time_part[3..5].parse().ok()?;
+                let second: u8 = time_part[6..8].parse().ok()?;
+                date = date.hour(hour).minute(minute).second(second);
+
+                let tz_part = &time_part[8..];
+                if tz_part.starts_with('Z') || tz_part.starts_with('z') {
+                    date = date.utc_offset_hour(0).utc_offset_minute(0);
+                } else if tz_part.starts_with('+') || tz_part.starts_with('-') {
+                    let sign: i8 = if tz_part.starts_with('+') { 1 } else { -1 };
+                    let tz_rest = &tz_part[1..];
+                    if let Some(colon_pos) = tz_rest.find(':') {
+                        let tz_h: i8 = tz_rest[..colon_pos].parse().ok()?;
+                        let tz_m: u8 = tz_rest[colon_pos + 1..colon_pos + 1 + 2.min(tz_rest.len() - colon_pos - 1)].parse().ok()?;
+                        date = date.utc_offset_hour(sign * tz_h).utc_offset_minute(tz_m);
+                    } else if tz_rest.len() >= 2 {
+                        let tz_h: i8 = tz_rest[..2].parse().ok()?;
+                        date = date.utc_offset_hour(sign * tz_h).utc_offset_minute(0);
+                    }
+                } else {
+                    date = date.utc_offset_hour(0).utc_offset_minute(0);
+                }
+            }
+        } else {
+            date = date.hour(0).minute(0).second(0).utc_offset_hour(0).utc_offset_minute(0);
+        }
+        return Some(date);
+    }
+
+    // Compact format YYYYMMDDHHmmSS...
+    if s.len() >= 8 {
+        let year: u16 = s[0..4].parse().ok()?;
+        let month: u8 = s[4..6].parse().ok()?;
+        let day: u8 = s[6..8].parse().ok()?;
+        let mut date = Date::new(year).month(month).day(day);
+        let rem = &s[8..];
+        if rem.len() >= 4 {
+            let hour: u8 = rem[0..2].parse().ok()?;
+            let minute: u8 = rem[2..4].parse().ok()?;
+            let second: u8 = if rem.len() >= 6 {
+                rem[4..6].parse().unwrap_or(0)
+            } else {
+                0
+            };
+            date = date.hour(hour).minute(minute).second(second);
+        }
+        date = date.utc_offset_hour(0).utc_offset_minute(0);
+        return Some(date);
+    }
+
+    None
+}
+
 fn default_font_manager() -> &'static FontManager {
     static FONTS: OnceLock<FontManager> = OnceLock::new();
     FONTS.get_or_init(FontManager::default)
@@ -346,12 +429,26 @@ impl PdfPrePressEngine {
         let info_id = alloc();
 
         // 3. Info dictionary with PDF/X conformance keys
+        let creation_str = options
+            .creation_date
+            .as_deref()
+            .unwrap_or("2026-01-01T00:00:00Z");
+        let mod_str = options.mod_date.as_deref().unwrap_or(creation_str);
+
         {
             let mut info = pdf.document_info(info_id);
             info.title(TextStr(&options.title));
             info.author(TextStr(&options.author));
             info.creator(TextStr("TypesetOK Native Pre-Press Engine 2026"));
             info.trapped(TrappingStatus::NotTrapped);
+
+            if let Some(cdate) = parse_pdf_date(creation_str) {
+                info.creation_date(cdate);
+            }
+            if let Some(mdate) = parse_pdf_date(mod_str) {
+                info.modified_date(mdate);
+            }
+
             match options.standard {
                 PdfXStandard::PdfX1a2001 => {
                     info.pair(Name(b"GTS_PDFXVersion"), TextStr("PDF/X-1:2001"));
@@ -447,6 +544,8 @@ impl PdfPrePressEngine {
 
         // 8. Deterministic file identifier (required by PDF/X).
         id_hash = fnv1a(id_hash, options.title.as_bytes());
+        id_hash = fnv1a(id_hash, creation_str.as_bytes());
+        id_hash = fnv1a(id_hash, mod_str.as_bytes());
         let file_id = [id_hash.to_be_bytes(), fnv1a(id_hash, b"tok").to_be_bytes()].concat();
         pdf.set_file_id((file_id.clone(), file_id));
 
@@ -801,5 +900,34 @@ mod tests {
         let bytes = PdfPrePressEngine::export_pdf(&[], &options).unwrap();
         assert!(bytes.starts_with(b"%PDF-1.6"));
         assert!(String::from_utf8_lossy(&bytes).contains("/GTS_PDFXVersion (PDF/X-4)"));
+    }
+
+    #[test]
+    fn test_parse_pdf_date() {
+        let d = parse_pdf_date("2026-10-04T20:14:37Z").unwrap();
+        let mut buf = Vec::new();
+        pdf_writer::Primitive::write(d, &mut buf);
+        assert_eq!(std::str::from_utf8(&buf).unwrap(), "(D:20261004201437Z)");
+
+        let d_tz = parse_pdf_date("2026-10-04T20:14:37+02:00").unwrap();
+        let mut buf_tz = Vec::new();
+        pdf_writer::Primitive::write(d_tz, &mut buf_tz);
+        assert_eq!(std::str::from_utf8(&buf_tz).unwrap(), "(D:20261004201437+02'00)");
+
+        let d_pdf = parse_pdf_date("D:20261004201437Z").unwrap();
+        assert_eq!(d, d_pdf);
+    }
+
+    #[test]
+    fn test_pdf_export_manifest_dates() {
+        let options = PdfExportOptions {
+            creation_date: Some("2026-10-04T20:14:37Z".to_string()),
+            mod_date: Some("2026-10-04T22:30:00Z".to_string()),
+            ..Default::default()
+        };
+        let bytes = PdfPrePressEngine::export_pdf(&[], &options).unwrap();
+        let s = String::from_utf8_lossy(&bytes);
+        assert!(s.contains("/CreationDate (D:20261004201437Z)"));
+        assert!(s.contains("/ModDate (D:20261004223000Z)"));
     }
 }
