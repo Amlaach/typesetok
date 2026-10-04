@@ -11,10 +11,15 @@
 //!    - 272 -> ער״ב (avoid "רָעָב")
 //!    - 275 -> ער״ה (avoid "רָעָה")
 //!    - 298 -> חר״צ (avoid "רֶצַח")
-//!    - 304 -> שי״ד (avoid "שְׁדֹד")
-//!    - 314 -> שי״ד (avoid divine name Sh-d-y in profane contexts)
-//!    - 359 -> נט״ש (avoid "שָׂטָן")
-//!    - 644 -> תשי״ד (avoid "תשדד")
+//!    - 304 -> ד״ש (avoid "שֵׁד"; the natural ש״ד spells "demon")
+//!    - 314 -> שי״ד (the natural order; never the divine name Sh-d-y)
+//!    - 344 -> שד״מ (avoid "שְׁמַד")
+//!    - 359 -> נט״ש (avoid "שָׂטָן")
+//!    - 698 -> תרח״צ (avoid "רֶצַח")
+//!    - 744 -> תשד״מ (avoid "שְׁמַד", e.g. the year ה׳תשד״מ)
+//!
+//! Every substitution is a reordering of the same letters, so the numeric value
+//! of the output always equals the input.
 
 pub const HEBREW_GERESH: char = '\u{05F3}'; // ׳
 pub const HEBREW_GERSHAYIM: char = '\u{05F4}'; // ״
@@ -23,6 +28,7 @@ pub struct GematriaEngine;
 
 impl GematriaEngine {
     /// Formats an unsigned integer into standard Hebrew numerals with correct punctuation.
+    /// Zero has no Hebrew numeral and yields an empty string.
     pub fn to_hebrew_numeral(number: usize) -> String {
         if number == 0 {
             return String::new();
@@ -34,32 +40,49 @@ impl GematriaEngine {
         let mut result = String::new();
 
         if thousands > 0 {
-            let thousands_letters = Self::convert_sub_1000(thousands);
-            result.push_str(&thousands_letters);
+            result.push_str(&Self::to_letters(thousands));
             result.push(HEBREW_GERESH);
         }
 
         if remainder > 0 {
-            let remainder_letters = Self::convert_sub_1000(remainder);
-            result.push_str(&Self::punctuate_number(&remainder_letters));
+            Self::push_punctuated(&mut result, &Self::convert_sub_1000(remainder));
         }
 
         result
     }
 
-    /// Converts a number 1..999 to Hebrew letters, applying taboo substitutions.
+    /// Letters for an arbitrary positive count (used for the thousands part,
+    /// which can itself exceed 999 for very large inputs).
+    fn to_letters(num: usize) -> String {
+        let mut s = String::new();
+        let mut rest = num;
+        // Beyond 999 there is no further multiplier letter: spell every extra
+        // thousand as תתר (400 + 400 + 200), which keeps the value exact.
+        while rest >= 1000 {
+            s.push_str("תתר");
+            rest -= 1000;
+        }
+        s.push_str(&Self::convert_sub_1000(rest));
+        s
+    }
+
+    /// Converts a number 0..=999 to Hebrew letters, applying taboo substitutions.
     fn convert_sub_1000(mut num: usize) -> String {
-        // Check exact taboo replacements first
-        match num {
-            270 => return "ער".to_string(),
-            272 => return "ערב".to_string(),
-            275 => return "ערה".to_string(),
-            298 => return "חרצ".to_string(),
-            304 => return "שיד".to_string(),
-            314 => return "שיד".to_string(),
-            359 => return "נטש".to_string(),
-            644 => return "תשיד".to_string(),
-            _ => {}
+        // Exact taboo replacements first (each one keeps the same letters).
+        let taboo = match num {
+            270 => Some("ער"),
+            272 => Some("ערב"),
+            275 => Some("ערה"),
+            298 => Some("חרצ"),
+            304 => Some("דש"),
+            344 => Some("שדמ"),
+            359 => Some("נטש"),
+            698 => Some("תרחצ"),
+            744 => Some("תשדמ"),
+            _ => None,
+        };
+        if let Some(letters) = taboo {
+            return letters.to_string();
         }
 
         let mut s = String::new();
@@ -80,51 +103,40 @@ impl GematriaEngine {
             num -= 100;
         }
 
-        // Tens & Units (special handling for 15 and 16)
-        if num == 15 {
-            s.push('ט');
-            s.push('ו');
-            return s;
-        } else if num == 16 {
-            s.push('ט');
-            s.push('ז');
-            return s;
-        }
-
-        // Standard Tens
-        let tens_chars = [' ', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
-        let tens_digit = num / 10;
-        if tens_digit > 0 && tens_digit <= 9 {
-            s.push(tens_chars[tens_digit]);
-            num %= 10;
-        }
-
-        // Standard Units
-        let units_chars = [' ', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
-        if num > 0 && num <= 9 {
-            s.push(units_chars[num]);
+        // Tens & Units (15 and 16 avoid spelling the divine name)
+        match num {
+            15 => s.push_str("טו"),
+            16 => s.push_str("טז"),
+            _ => {
+                const TENS: [char; 10] = [' ', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
+                const UNITS: [char; 10] = [' ', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+                if num >= 10 {
+                    s.push(TENS[num / 10]);
+                }
+                if !num.is_multiple_of(10) {
+                    s.push(UNITS[num % 10]);
+                }
+            }
         }
 
         s
     }
 
-    /// Injects Hebrew Geresh or Gershayim into a Hebrew letter sequence.
-    fn punctuate_number(letters: &str) -> String {
-        let count = letters.chars().count();
-        if count == 0 {
-            return String::new();
-        }
-        if count == 1 {
-            // Single-letter numeral: append Hebrew Geresh U+05F3
-            let mut out = letters.to_string();
-            out.push(HEBREW_GERESH);
-            out
-        } else {
-            // Multi-letter numeral: insert Hebrew Gershayim U+05F4 before the last character
-            let mut chars: Vec<char> = letters.chars().collect();
-            let last_idx = chars.len() - 1;
-            chars.insert(last_idx, HEBREW_GERSHAYIM);
-            chars.into_iter().collect()
+    /// Appends `letters` with a Geresh (single letter) or with Gershayim
+    /// inserted before the last letter (multi-letter numerals).
+    fn push_punctuated(out: &mut String, letters: &str) {
+        let mut chars = letters.chars();
+        match chars.next_back() {
+            None => {}
+            Some(last) if chars.as_str().is_empty() => {
+                out.push(last);
+                out.push(HEBREW_GERESH);
+            }
+            Some(last) => {
+                out.push_str(chars.as_str());
+                out.push(HEBREW_GERSHAYIM);
+                out.push(last);
+            }
         }
     }
 }
@@ -132,6 +144,50 @@ impl GematriaEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Numeric value of a Hebrew numeral produced by this engine
+    /// (letters before a Geresh that is not the final mark are thousands).
+    fn value_of(s: &str) -> usize {
+        fn letter(c: char) -> usize {
+            match c {
+                'א' => 1,
+                'ב' => 2,
+                'ג' => 3,
+                'ד' => 4,
+                'ה' => 5,
+                'ו' => 6,
+                'ז' => 7,
+                'ח' => 8,
+                'ט' => 9,
+                'י' => 10,
+                'כ' => 20,
+                'ל' => 30,
+                'מ' => 40,
+                'נ' => 50,
+                'ס' => 60,
+                'ע' => 70,
+                'פ' => 80,
+                'צ' => 90,
+                'ק' => 100,
+                'ר' => 200,
+                'ש' => 300,
+                'ת' => 400,
+                _ => 0,
+            }
+        }
+        let chars: Vec<char> = s.chars().collect();
+        let mut total = 0;
+        let mut current = 0;
+        for (i, &c) in chars.iter().enumerate() {
+            if c == HEBREW_GERESH && i + 1 < chars.len() {
+                total += current * 1000;
+                current = 0;
+            } else {
+                current += letter(c);
+            }
+        }
+        total + current
+    }
 
     #[test]
     fn test_single_letter_geresh() {
@@ -175,57 +231,28 @@ mod tests {
 
     #[test]
     fn test_taboo_substitutions() {
-        // 15 -> ט״ו
-        assert_eq!(
-            GematriaEngine::to_hebrew_numeral(15),
-            format!("ט{}ו", HEBREW_GERSHAYIM)
-        );
-        // 16 -> ט״ז
-        assert_eq!(
-            GematriaEngine::to_hebrew_numeral(16),
-            format!("ט{}ז", HEBREW_GERSHAYIM)
-        );
-        // 115 -> קט״ו
-        assert_eq!(
-            GematriaEngine::to_hebrew_numeral(115),
-            format!("קט{}ו", HEBREW_GERSHAYIM)
-        );
-        // 216 -> רט״ז
-        assert_eq!(
-            GematriaEngine::to_hebrew_numeral(216),
-            format!("רט{}ז", HEBREW_GERSHAYIM)
-        );
-
-        // 270 -> ע״ר
-        assert_eq!(
-            GematriaEngine::to_hebrew_numeral(270),
-            format!("ע{}ר", HEBREW_GERSHAYIM)
-        );
-        // 272 -> ער״ב
-        assert_eq!(
-            GematriaEngine::to_hebrew_numeral(272),
-            format!("ער{}ב", HEBREW_GERSHAYIM)
-        );
-        // 275 -> ער״ה
-        assert_eq!(
-            GematriaEngine::to_hebrew_numeral(275),
-            format!("ער{}ה", HEBREW_GERSHAYIM)
-        );
-        // 298 -> חר״צ
-        assert_eq!(
-            GematriaEngine::to_hebrew_numeral(298),
-            format!("חר{}צ", HEBREW_GERSHAYIM)
-        );
-        // 359 -> נט״ש
-        assert_eq!(
-            GematriaEngine::to_hebrew_numeral(359),
-            format!("נט{}ש", HEBREW_GERSHAYIM)
-        );
-        // 644 -> תשי״ד
-        assert_eq!(
-            GematriaEngine::to_hebrew_numeral(644),
-            format!("תשי{}ד", HEBREW_GERSHAYIM)
-        );
+        let g = HEBREW_GERSHAYIM;
+        let cases = [
+            (15, format!("ט{g}ו")),
+            (16, format!("ט{g}ז")),
+            (115, format!("קט{g}ו")),
+            (216, format!("רט{g}ז")),
+            (715, format!("תשט{g}ו")),
+            (270, format!("ע{g}ר")),
+            (272, format!("ער{g}ב")),
+            (275, format!("ער{g}ה")),
+            (298, format!("חר{g}צ")),
+            (304, format!("ד{g}ש")),
+            (314, format!("שי{g}ד")),
+            (344, format!("שד{g}מ")),
+            (359, format!("נט{g}ש")),
+            (644, format!("תרמ{g}ד")),
+            (698, format!("תרח{g}צ")),
+            (744, format!("תשד{g}מ")),
+        ];
+        for (n, expected) in cases {
+            assert_eq!(GematriaEngine::to_hebrew_numeral(n), expected, "for {n}");
+        }
     }
 
     #[test]
@@ -233,5 +260,46 @@ mod tests {
         // 5786 (ה'תשפ"ו)
         let expected = format!("ה{}תשפ{}ו", HEBREW_GERESH, HEBREW_GERSHAYIM);
         assert_eq!(GematriaEngine::to_hebrew_numeral(5786), expected);
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(1000),
+            format!("א{}", HEBREW_GERESH)
+        );
+        assert_eq!(
+            GematriaEngine::to_hebrew_numeral(5744),
+            format!("ה{}תשד{}מ", HEBREW_GERESH, HEBREW_GERSHAYIM)
+        );
+    }
+
+    #[test]
+    fn test_zero_is_empty() {
+        assert_eq!(GematriaEngine::to_hebrew_numeral(0), "");
+    }
+
+    /// Regression: 304 used to print שי״ד (= 314) and 644 printed תשי״ד (= 714).
+    #[test]
+    fn every_numeral_has_the_value_of_its_input() {
+        for n in 1..=6000 {
+            let s = GematriaEngine::to_hebrew_numeral(n);
+            if n % 1000 == 0 {
+                // Whole thousands are written like their multiplier (ה׳ = 5000).
+                assert_eq!(s, GematriaEngine::to_hebrew_numeral(n / 1000));
+                continue;
+            }
+            assert_eq!(value_of(&s), n, "{n} rendered as {s}");
+        }
+        for n in [999_999, 1_000_001, 2_345_678] {
+            let s = GematriaEngine::to_hebrew_numeral(n);
+            assert_eq!(value_of(&s), n, "{n} rendered as {s}");
+        }
+    }
+
+    #[test]
+    fn no_numeral_spells_the_divine_name() {
+        for n in 1..=999 {
+            let s = GematriaEngine::to_hebrew_numeral(n);
+            let letters: String = s.chars().filter(|c| *c != HEBREW_GERSHAYIM).collect();
+            assert!(!letters.ends_with("יה"), "{n} rendered as {s}");
+            assert!(!letters.ends_with("יו"), "{n} rendered as {s}");
+        }
     }
 }

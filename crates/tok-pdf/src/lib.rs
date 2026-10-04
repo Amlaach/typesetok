@@ -9,5 +9,5 @@ pub use boxes::PrePressPageBoxes;
 pub use color::CmykColor;
 pub use font_subsetter::{FontSubsetter, SubsetFontResult};
 pub use html_projection::HtmlProjectionCompiler;
-pub use pdf_engine::{PdfExportOptions, PdfPrePressEngine, PdfXStandard};
+pub use pdf_engine::{PdfError, PdfExportOptions, PdfPrePressEngine, PdfXStandard};
 pub use tounicode::ToUnicodeCMap;

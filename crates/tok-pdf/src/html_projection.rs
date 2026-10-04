@@ -121,9 +121,12 @@ div.tok-line {{
                 ).unwrap();
 
                 for line in &frame.lines {
+                    // The document is RTL; LTR lines must say so or the browser
+                    // reorders and right-aligns them.
+                    let dir = if line.is_rtl { "" } else { " dir=\"ltr\"" };
                     writeln!(html,
-                        "    <div class=\"tok-line\" style=\"height: {:.2}pt; line-height: {:.2}pt;\">{}</div>",
-                        line.height, line.height, html_escape(&line.text)
+                        "    <div class=\"tok-line\"{} style=\"height: {:.2}pt; line-height: {:.2}pt;\">{}</div>",
+                        dir, line.height, line.height, html_escape(&line.text)
                     ).unwrap();
                 }
 
@@ -179,6 +182,7 @@ mod tests {
                 glyphs: Vec::new(),
                 text: "טקסט עברי מעומד".to_string(),
                 is_rtl: true,
+                fonts: Vec::new(),
             }],
         };
 
@@ -199,6 +203,37 @@ mod tests {
         assert!(html.contains("dir=\"rtl\""));
         assert!(html.contains("tok-page"));
         assert!(html.contains("tok-line"));
+    }
+
+    #[test]
+    fn ltr_lines_carry_their_direction() {
+        let line = |text: &str, is_rtl: bool| LineBox {
+            line_index: 0,
+            paragraph_id: None,
+            baseline_y: 14.5,
+            height: 14.5,
+            width: 300.0,
+            glyphs: Vec::new(),
+            text: text.to_string(),
+            is_rtl,
+            fonts: Vec::new(),
+        };
+        let page = PageLayoutBox {
+            page_index: 0,
+            page_number_gematria: "א׳".to_string(),
+            dimensions: PhysicalRect::a4_portrait(),
+            frames: vec![TextFrameBox {
+                frame_id: "f1".to_string(),
+                flow_id: "main".to_string(),
+                rect: PhysicalRect::new(50.0, 50.0, 400.0, 600.0),
+                lines: vec![line("שלום", true), line("Hello <world>", false)],
+            }],
+            break_token: None,
+        };
+        let html = HtmlProjectionCompiler::compile_to_html(&[page], 210.0, 297.0);
+        assert!(html.contains("<div class=\"tok-line\" dir=\"ltr\""));
+        assert!(html.contains("Hello &lt;world&gt;"));
+        assert_eq!(html.matches("dir=\"ltr\"").count(), 1);
     }
 
     #[test]
