@@ -15,6 +15,7 @@ export class StoryEditor {
   private container: HTMLElement;
   private editorEl: HTMLDivElement;
   private onTextChangeCallback?: (paraId: string, newText: string) => void;
+  private onSelectionChange = () => this.markCurrentParagraph();
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -43,7 +44,12 @@ export class StoryEditor {
     });
 
     // Highlight the paragraph that holds the caret.
-    document.addEventListener('selectionchange', () => this.markCurrentParagraph());
+    document.addEventListener('selectionchange', this.onSelectionChange);
+  }
+
+  public destroy(): void {
+    document.removeEventListener('selectionchange', this.onSelectionChange);
+    this.editorEl.remove();
   }
 
   /** The editable element (for focusing and scrolling from the host). */
