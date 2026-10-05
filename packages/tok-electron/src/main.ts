@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, IpcMainInvokeEvent } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
@@ -452,6 +452,26 @@ handle('tok:get-app-info', () => ({
   name: 'TypesetOK (TOK)',
   repoUrl: APP_REPO_URL
 }));
+
+// File Dialogs
+handle('tok:show-save-dialog', async (_, options?: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) => {
+  if (!mainWindow) return null;
+  const res = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: options?.defaultPath,
+    filters: options?.filters ?? [{ name: 'All Files', extensions: ['*'] }],
+  });
+  if (res.canceled) return null;
+  return res.filePath;
+});
+
+handle('tok:show-open-dialog', async (_, options?: { filters?: { name: string; extensions: string[] }[] }) => {
+  if (!mainWindow) return null;
+  const res = await dialog.showOpenDialog(mainWindow, {
+    filters: options?.filters ?? [{ name: 'TypesetOK Document', extensions: ['tok'] }],
+  });
+  if (res.canceled || !res.filePaths.length) return null;
+  return res.filePaths[0];
+});
 
 // ---------------------------------------------------------------------------
 // App lifecycle

@@ -1,4 +1,5 @@
 import { t, i18n } from '../i18n';
+import { el, icon, iconButton, selectField } from '../ui';
 
 export interface ActionHudCallbacks {
   onFontChange: (fontFamily: string) => void;
@@ -25,7 +26,6 @@ export class ActionHud {
     this.element.className = 'tok-action-hud';
     this.element.setAttribute('role', 'toolbar');
     this.element.setAttribute('aria-label', t('hudQuickStyle'));
-    // The stylesheet pins the HUD to RTL; follow the UI language.
     this.element.style.direction = i18n.getDirection();
     i18n.onChange(() => {
       this.element.style.direction = i18n.getDirection();
@@ -82,60 +82,27 @@ export class ActionHud {
   private render(): void {
     this.element.innerHTML = '';
 
-    // 1. Font Family Picker
-    const fontSelect = document.createElement('select');
-    fontSelect.className = 'tok-select';
-    fontSelect.style.height = '26px';
-    fontSelect.style.fontSize = '12px';
-    fontSelect.style.padding = '0 6px';
-    fontSelect.style.background = 'var(--tok-bg-surface-2)';
-
+    // 1. Font family
     const fonts = ['וילנא (Vilna)', 'טעמי פרנק (Taamey Frank)', 'דוד (David CLM)', 'כתב רש"י (Rashi)'];
-    for (const f of fonts) {
-      const opt = document.createElement('option');
-      opt.value = f.split(' ')[0];
-      opt.textContent = f;
-      if (opt.value === this.currentFont) opt.selected = true;
-      fontSelect.appendChild(opt);
-    }
-    fontSelect.title = t('hudFont');
-    fontSelect.setAttribute('aria-label', t('hudFont'));
-    fontSelect.addEventListener('change', () => {
-      this.currentFont = fontSelect.value;
-      this.callbacks.onFontChange(fontSelect.value);
-    });
+    const fontSelect = selectField(t('hudFont'), fonts.map((f) => ({ value: f.split(' ')[0], label: f })), this.currentFont, (value) => {
+      this.currentFont = value;
+      this.callbacks.onFontChange(value);
+    }, { title: t('hudFont') });
     this.element.appendChild(fontSelect);
 
     this.element.appendChild(this.createDivider());
 
-    // 2. Font Size with Scrubber / Stepper
-    const sizeWrap = document.createElement('div');
-    sizeWrap.style.display = 'flex';
-    sizeWrap.style.alignItems = 'center';
-    sizeWrap.style.gap = '2px';
-
-    const minusBtn = document.createElement('button');
-    minusBtn.className = 'tok-btn';
-    minusBtn.textContent = '−';
-    minusBtn.style.padding = '0 5px';
-    minusBtn.style.height = '24px';
-    minusBtn.title = t('hudSmaller');
-    minusBtn.setAttribute('aria-label', t('hudSmaller'));
-    minusBtn.addEventListener('click', () => {
-      this.currentSize = Math.max(6, this.currentSize - 1);
+    // 2. Font size stepper
+    const sizeInput = el('input', 'tok-input tok-input-number', { type: 'text', 'aria-label': t('inspFontSize') });
+    sizeInput.value = `${this.currentSize}pt`;
+    sizeInput.style.width = '52px';
+    sizeInput.style.textAlign = 'center';
+    sizeInput.style.padding = '0 4px';
+    const step = (delta: number) => {
+      this.currentSize = Math.max(6, Math.min(150, this.currentSize + delta));
       sizeInput.value = `${this.currentSize}pt`;
       this.callbacks.onSizeChange(this.currentSize);
-    });
-    sizeWrap.appendChild(minusBtn);
-
-    const sizeInput = document.createElement('input');
-    sizeInput.type = 'text';
-    sizeInput.className = 'tok-input tok-input-number';
-    sizeInput.value = `${this.currentSize}pt`;
-    sizeInput.style.width = '44px';
-    sizeInput.style.height = '24px';
-    sizeInput.style.padding = '0 2px';
-    sizeInput.setAttribute('aria-label', t('inspFontSize'));
+    };
     sizeInput.addEventListener('change', () => {
       const parsed = parseInt(sizeInput.value, 10);
       // Same 6–150pt range the −/+ steppers enforce.
@@ -145,98 +112,51 @@ export class ActionHud {
       }
       sizeInput.value = `${this.currentSize}pt`;
     });
-    sizeWrap.appendChild(sizeInput);
-
-    const plusBtn = document.createElement('button');
-    plusBtn.className = 'tok-btn';
-    plusBtn.textContent = '+';
-    plusBtn.style.padding = '0 5px';
-    plusBtn.style.height = '24px';
-    plusBtn.title = t('hudLarger');
-    plusBtn.setAttribute('aria-label', t('hudLarger'));
-    plusBtn.addEventListener('click', () => {
-      this.currentSize = Math.min(150, this.currentSize + 1);
-      sizeInput.value = `${this.currentSize}pt`;
-      this.callbacks.onSizeChange(this.currentSize);
-    });
-    sizeWrap.appendChild(plusBtn);
-
-    this.element.appendChild(sizeWrap);
+    this.element.appendChild(iconButton('minus', t('hudSmaller'), () => step(-1), { size: 14, className: 'tok-hud-btn' }));
+    this.element.appendChild(sizeInput);
+    this.element.appendChild(iconButton('plus', t('hudLarger'), () => step(1), { size: 14, className: 'tok-hud-btn' }));
 
     this.element.appendChild(this.createDivider());
 
-    // 3. Bold Toggle
-    const boldBtn = document.createElement('button');
-    boldBtn.className = 'tok-btn';
-    boldBtn.textContent = 'B';
-    boldBtn.style.fontWeight = 'bold';
-    boldBtn.style.width = '26px';
-    boldBtn.style.height = '24px';
-    boldBtn.style.background = this.isBold ? 'var(--tok-accent-primary)' : 'var(--tok-bg-surface-2)';
-    boldBtn.style.color = this.isBold ? '#FFFFFF' : 'var(--tok-text-primary)';
-    boldBtn.title = t('hudBold');
-    boldBtn.setAttribute('aria-label', t('hudBold'));
-    boldBtn.setAttribute('aria-pressed', String(this.isBold));
+    // 3. Bold
+    const boldBtn = el('button', 'tok-hud-btn', { type: 'button', title: t('hudBold'), 'aria-label': t('hudBold'), 'aria-pressed': String(this.isBold) }, 'B');
+    boldBtn.style.fontWeight = '700';
     boldBtn.addEventListener('click', () => {
       this.isBold = !this.isBold;
-      boldBtn.style.background = this.isBold ? 'var(--tok-accent-primary)' : 'var(--tok-bg-surface-2)';
-      boldBtn.style.color = this.isBold ? '#FFFFFF' : 'var(--tok-text-primary)';
       boldBtn.setAttribute('aria-pressed', String(this.isBold));
       this.callbacks.onWeightChange(this.isBold);
     });
     this.element.appendChild(boldBtn);
 
-    // 4. Basic Alignment Toggle (Right / Center / Justify)
-    const alignBtn = document.createElement('button');
-    alignBtn.className = 'tok-btn';
-    const alignLabel = () => `≡ ${t(this.currentAlign === 'justify' ? 'hudAlignJustify' : this.currentAlign === 'center' ? 'hudAlignCenter' : 'hudAlignRight')}`;
-    alignBtn.textContent = alignLabel();
-    alignBtn.style.height = '24px';
-    alignBtn.style.fontSize = '11px';
-    alignBtn.style.padding = '0 6px';
-    alignBtn.title = t('hudAlignTitle');
+    // 4. Alignment (cycles right → justify → center)
+    const alignIcon = () => (this.currentAlign === 'justify' ? 'alignJustify' : this.currentAlign === 'center' ? 'alignCenter' : 'alignRight');
+    const alignLabel = () => t(this.currentAlign === 'justify' ? 'hudAlignJustify' : this.currentAlign === 'center' ? 'hudAlignCenter' : 'hudAlignRight');
+    const alignBtn = el('button', 'tok-hud-btn', { type: 'button', title: t('hudAlignTitle') });
+    const paintAlign = () => {
+      alignBtn.replaceChildren(icon(alignIcon(), 15), el('span', undefined, undefined, alignLabel()));
+      alignBtn.setAttribute('aria-label', `${t('hudAlignTitle')}: ${alignLabel()}`);
+    };
+    paintAlign();
     alignBtn.addEventListener('click', () => {
-      if (this.currentAlign === 'right') {
-        this.currentAlign = 'justify';
-      } else if (this.currentAlign === 'justify') {
-        this.currentAlign = 'center';
-      } else {
-        this.currentAlign = 'right';
-      }
-      alignBtn.textContent = alignLabel();
+      this.currentAlign = this.currentAlign === 'right' ? 'justify' : this.currentAlign === 'justify' ? 'center' : 'right';
+      paintAlign();
       this.callbacks.onAlignChange(this.currentAlign);
     });
     this.element.appendChild(alignBtn);
 
     this.element.appendChild(this.createDivider());
 
-    // 5. Quick Style Selector Badge
-    const styleSelect = document.createElement('select');
-    styleSelect.className = 'tok-select';
-    styleSelect.style.height = '24px';
-    styleSelect.style.fontSize = '11px';
-    styleSelect.style.padding = '0 4px';
-    styleSelect.title = t('hudQuickStyle');
-
+    // 5. Quick style
     const styles = [
-      { id: 'gemara', name: 'גמרא' },
-      { id: 'rashi', name: 'רש"י' },
-      { id: 'tosafot', name: 'תוספות' },
-      { id: 'heading', name: 'כותרת' }
+      { value: 'gemara', label: 'גמרא' },
+      { value: 'rashi', label: 'רש"י' },
+      { value: 'tosafot', label: 'תוספות' },
+      { value: 'heading', label: 'כותרת' }
     ];
-    for (const s of styles) {
-      const opt = document.createElement('option');
-      opt.value = s.id;
-      opt.textContent = s.name;
-      if (s.id === this.currentStyle) opt.selected = true;
-      styleSelect.appendChild(opt);
-    }
-    styleSelect.setAttribute('aria-label', t('hudQuickStyle'));
-    styleSelect.addEventListener('change', () => {
-      this.currentStyle = styleSelect.value;
-      this.callbacks.onStyleChange(styleSelect.value);
-    });
-    this.element.appendChild(styleSelect);
+    this.element.appendChild(selectField(t('hudQuickStyle'), styles, this.currentStyle, (value) => {
+      this.currentStyle = value;
+      this.callbacks.onStyleChange(value);
+    }, { title: t('hudQuickStyle') }));
   }
 
   private createDivider(): HTMLElement {
