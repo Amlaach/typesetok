@@ -5,7 +5,7 @@ import { DOCUMENT_FONTS, DEFAULT_DOCUMENT_FONT } from '../fonts';
 export interface ActionHudCallbacks {
   onFontChange: (fontFamily: string) => void;
   onSizeChange: (sizePt: number) => void;
-  onWeightChange: (isBold: boolean) => void;
+  onWeightChange: (isBold: boolean, fontWeight?: number) => void;
   onAlignChange: (align: 'right' | 'center' | 'left' | 'justify') => void;
   onStyleChange: (styleToken: string) => void;
   onDismiss: () => void;
@@ -50,11 +50,19 @@ export class ActionHud {
     font?: string;
     size?: number;
     bold?: boolean;
+    fontWeight?: 'normal' | 'bold' | '600' | '700' | number;
+    font_weight?: number;
     align?: 'right' | 'center' | 'left' | 'justify';
     style?: string;
   }): void {
     if (initialValues?.size) this.currentSize = initialValues.size;
-    if (initialValues?.bold !== undefined) this.isBold = initialValues.bold;
+    if (initialValues?.bold !== undefined) {
+      this.isBold = initialValues.bold;
+    } else if (initialValues?.fontWeight !== undefined) {
+      this.isBold = initialValues.fontWeight === 'bold' || initialValues.fontWeight === '700' || (typeof initialValues.fontWeight === 'number' && initialValues.fontWeight >= 700);
+    } else if (initialValues?.font_weight !== undefined) {
+      this.isBold = initialValues.font_weight >= 700;
+    }
     if (initialValues?.align) this.currentAlign = initialValues.align;
 
     if (initialValues?.style) this.currentStyle = initialValues.style;
@@ -124,7 +132,7 @@ export class ActionHud {
     boldBtn.addEventListener('click', () => {
       this.isBold = !this.isBold;
       boldBtn.setAttribute('aria-pressed', String(this.isBold));
-      this.callbacks.onWeightChange(this.isBold);
+      this.callbacks.onWeightChange(this.isBold, this.isBold ? 700 : 400);
     });
     this.element.appendChild(boldBtn);
 

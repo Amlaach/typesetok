@@ -28,9 +28,12 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 export function icon(name: IconName, size = 16): HTMLElement {
   const span = document.createElement('span');
   span.innerHTML = renderIcon(name, size);
-  const inner = span.firstElementChild as HTMLElement;
-  inner.setAttribute('aria-hidden', 'true');
-  return inner;
+  const inner = span.firstElementChild as HTMLElement | null;
+  if (inner) {
+    inner.setAttribute('aria-hidden', 'true');
+    return inner;
+  }
+  return span;
 }
 
 /** Button with an optional leading icon and a text label. */
