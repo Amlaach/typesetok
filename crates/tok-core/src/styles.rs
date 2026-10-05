@@ -56,14 +56,21 @@ pub enum AhaltermStretchMode {
     StaticSwash,
 }
 
+pub const FONT_WEIGHT_REGULAR: u16 = 400;
+pub const FONT_WEIGHT_BOLD: u16 = 700;
+
+fn default_font_weight() -> u16 {
+    FONT_WEIGHT_REGULAR
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParagraphStyle {
     pub id: String,
     pub name: String,
     pub font_family: String,
-    /// Bold (700) weight; absent in documents written before it existed.
-    #[serde(default)]
-    pub bold: bool,
+    /// CSS-style weight: 400 regular, 700 bold. Absent in older documents.
+    #[serde(default = "default_font_weight")]
+    pub font_weight: u16,
     pub font_size_pt: f32,
     pub line_height_pt: f32,
     pub space_before_pt: f32,
@@ -83,7 +90,7 @@ impl Default for ParagraphStyle {
             id: "default-body".to_string(),
             name: "גוף הטקסט".to_string(),
             font_family: "Frank Ruhl Libre".to_string(),
-            bold: false,
+            font_weight: FONT_WEIGHT_REGULAR,
             font_size_pt: 11.0,
             line_height_pt: 14.5,
             space_before_pt: 0.0,
@@ -126,10 +133,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn paragraph_style_without_bold_field_loads_as_regular() {
+    fn paragraph_style_without_weight_loads_as_regular() {
         let mut json = serde_json::to_value(ParagraphStyle::default()).unwrap();
-        json.as_object_mut().unwrap().remove("bold");
+        assert_eq!(json["font_weight"], 400);
+        json.as_object_mut().unwrap().remove("font_weight");
         let style: ParagraphStyle = serde_json::from_value(json).unwrap();
-        assert!(!style.bold);
+        assert_eq!(style.font_weight, FONT_WEIGHT_REGULAR);
     }
 }

@@ -217,6 +217,8 @@ impl<'a> ShapingSession<'a> {
 pub struct FontManager {
     // BTreeMap: lookups that fall back to "any font" must be deterministic.
     fonts: BTreeMap<String, Arc<FontData>>,
+    /// family -> weight -> registered face (see [`FontManager::face_for`]).
+    weights: BTreeMap<String, BTreeMap<u16, String>>,
     default_hebrew_family: String,
     fallback_families: Vec<String>,
 }
@@ -235,6 +237,10 @@ impl Default for FontManager {
             let font = FontData::from_bytes(family, bytes.to_vec())
                 .unwrap_or_else(|e| panic!("embedded {family} must be a valid font: {e}"));
             mgr.register_font(font);
+        }
+        for family in ["Frank Ruhl Libre", "Noto Rashi Hebrew"] {
+            mgr.register_weight(family, 400, family);
+            mgr.register_weight(family, 700, &format!("{family}{BOLD_SUFFIX}"));
         }
 
         mgr.set_default_hebrew_family(DEFAULT_FAMILY);
@@ -262,6 +268,7 @@ impl FontManager {
     pub fn new() -> Self {
         Self {
             fonts: BTreeMap::new(),
+            weights: BTreeMap::new(),
             default_hebrew_family: String::new(),
             fallback_families: Vec::new(),
         }
@@ -301,21 +308,34 @@ impl FontManager {
         })
     }
 
-    /// The family to shape a style with: `family` resolved through aliases and
-    /// the default, switched to its bold face when `bold` is set and one is
-    /// registered (otherwise the regular face is used).
-    pub fn styled_family(&self, family: &str, bold: bool) -> String {
+    /// Registers `face` (a registered family name) as `family` at `weight`.
+    /// A family's own regular face is weight 400 unless registered otherwise.
+    pub fn register_weight(&mut self, family: &str, weight: u16, face: &str) {
+        self.weights
+            .entry(family.to_string())
+            .or_default()
+            .insert(weight, face.to_string());
+    }
+
+    /// The registered face to shape `family` at `weight` with: aliases and the
+    /// default are resolved first, then the closest weight is chosen as CSS
+    /// does (up to 500: lighter first, then heavier; above: heavier first).
+    pub fn face_for(&self, family: &str, weight: u16) -> String {
         let Some(font) = self.font_ref(family) else {
             return family.to_string();
         };
-        let resolved = font.family_name.as_str();
-        if bold {
-            let bold_family = format!("{resolved}{BOLD_SUFFIX}");
-            if self.fonts.contains_key(&bold_family) {
-                return bold_family;
-            }
-        }
-        resolved.to_string()
+        let base = font.family_name.as_str();
+        let Some(faces) = self.weights.get(base) else {
+            return base.to_string();
+        };
+        let lighter = || faces.range(..=weight).next_back();
+        let heavier = || faces.range(weight..).next();
+        let chosen = if weight <= 500 {
+            lighter().or_else(heavier)
+        } else {
+            heavier().or_else(lighter)
+        };
+        chosen.map_or_else(|| base.to_string(), |(_, face)| face.clone())
     }
 
     /// Exact lookup of a registered family or alias, without default fallback.
@@ -487,20 +507,25 @@ mod tests {
     }
 
     #[test]
-    fn styled_family_picks_the_bold_face_when_shipped() {
+    fn face_for_picks_the_closest_shipped_weight() {
         let mgr = FontManager::default();
-        assert_eq!(
-            mgr.styled_family("Frank Ruhl Libre", false),
-            "Frank Ruhl Libre"
-        );
-        assert_eq!(
-            mgr.styled_family("Frank Ruhl Libre", true),
-            "Frank Ruhl Libre Bold"
-        );
-        assert_eq!(mgr.styled_family("Vilna", true), "Frank Ruhl Libre Bold");
-        assert_eq!(mgr.styled_family("Rashi", true), "Noto Rashi Hebrew Bold");
-        assert_eq!(mgr.styled_family("David CLM", true), "David Libre");
-        assert_eq!(mgr.styled_family("unknown", true), "Frank Ruhl Libre Bold");
+        for (family, weight, face) in [
+            ("Frank Ruhl Libre", 400, "Frank Ruhl Libre"),
+            ("Frank Ruhl Libre", 700, "Frank Ruhl Libre Bold"),
+            // CSS matching: 500 and below prefer lighter, 600 and above heavier.
+            ("Frank Ruhl Libre", 300, "Frank Ruhl Libre"),
+            ("Frank Ruhl Libre", 500, "Frank Ruhl Libre"),
+            ("Frank Ruhl Libre", 600, "Frank Ruhl Libre Bold"),
+            ("Frank Ruhl Libre", 900, "Frank Ruhl Libre Bold"),
+            ("Vilna", 700, "Frank Ruhl Libre Bold"),
+            ("Rashi", 700, "Noto Rashi Hebrew Bold"),
+            ("Rashi", 400, "Noto Rashi Hebrew"),
+            // No bold David Libre is shipped: the regular face is used.
+            ("David CLM", 700, "David Libre"),
+            ("unknown", 700, "Frank Ruhl Libre Bold"),
+        ] {
+            assert_eq!(mgr.face_for(family, weight), face, "{family} {weight}");
+        }
         let bold = mgr.get_font("Frank Ruhl Libre Bold").unwrap();
         let face = ttf_parser::Face::parse(&bold.raw_bytes, 0).unwrap();
         assert_eq!(face.weight().to_number(), 700);

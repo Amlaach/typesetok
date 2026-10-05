@@ -7,7 +7,7 @@ import {
 import { IconName } from '../icons';
 import { t, i18n } from '../i18n';
 import { el, icon, button, switchRow, segmented, selectField } from '../ui';
-import { DOCUMENT_FONTS, DEFAULT_DOCUMENT_FONT } from '../fonts';
+import { DOCUMENT_FONTS, DEFAULT_DOCUMENT_FONT, FONT_WEIGHT_BOLD, FONT_WEIGHT_REGULAR } from '../fonts';
 
 /**
  * Parses a scrubber field such as "11.5 pt", "-3 מ"מ" or "12,5". Returns null when no
@@ -84,7 +84,7 @@ export class ContextualInspector {
   private typographySettings: TypographySettings = {
     fontFamily: DEFAULT_DOCUMENT_FONT,
     fontSizePt: 15,
-    fontWeight: 'bold',
+    fontWeight: FONT_WEIGHT_BOLD,
     lineHeightPt: 19,
     paragraphSpacingPt: 8,
     firstLineIndentMm: 0,
@@ -367,6 +367,17 @@ export class ContextualInspector {
       this.callbacks.onTypographyChange({ fontFamily: value, isOverride: true });
       this.render();
     }));
+    const weight = this.typographySettings.fontWeight >= 600 ? FONT_WEIGHT_BOLD : FONT_WEIGHT_REGULAR;
+    fontCard.appendChild(segmented(t('inspWeight'), [
+      { id: String(FONT_WEIGHT_REGULAR), label: t('inspWeightRegular') },
+      { id: String(FONT_WEIGHT_BOLD), label: t('inspWeightBold') },
+    ], String(weight), (id) => {
+      const fontWeight = Number(id);
+      this.typographySettings.fontWeight = fontWeight;
+      this.typographySettings.isOverride = true;
+      this.callbacks.onTypographyChange({ fontWeight, isOverride: true });
+      this.render();
+    }, { fill: true, focusPrefix: 'weight' }));
     fontCard.appendChild(this.row(
       this.createScrubber(t('inspFontSize'), this.typographySettings.fontSizePt, 'pt', 6, 72, (v) => {
         this.typographySettings.fontSizePt = v;

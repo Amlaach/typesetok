@@ -695,6 +695,24 @@ describe('Regression: document fonts are the ones the engine embeds', () => {
     for (const { family } of DOCUMENT_FONTS) assert.ok(fontRs.includes(`("${family}", EMBEDDED_`), `${family} is not registered in font.rs`);
   });
 
+  test('UI font weights are the engine ParagraphStyle.font_weight values', async () => {
+    const { FONT_WEIGHT_REGULAR, FONT_WEIGHT_BOLD } = await loadTs('packages/tok-ui/src/fonts.ts');
+    const styles = fs.readFileSync(path.join(rootDir, 'crates/tok-core/src/styles.rs'), 'utf-8');
+    assert.ok(styles.includes(`FONT_WEIGHT_REGULAR: u16 = ${FONT_WEIGHT_REGULAR};`));
+    assert.ok(styles.includes(`FONT_WEIGHT_BOLD: u16 = ${FONT_WEIGHT_BOLD};`));
+    const srcDir = path.join(rootDir, 'packages/tok-ui/src');
+    const offenders = [];
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (p.endsWith('.ts') && /fontWeight:\s*['"]/.test(fs.readFileSync(p, 'utf-8'))) offenders.push(path.relative(rootDir, p));
+      }
+    };
+    walk(srcDir);
+    assert.deepEqual(offenders, [], 'fontWeight must be numeric (400/700), as in the engine');
+  });
+
   test('no legacy font names (not shipped) remain in the UI', () => {
     const srcDir = path.join(rootDir, 'packages/tok-ui/src');
     const legacy = /Taamey Frank|David CLM|\bVilna\b|['"]Rashi['"]/;

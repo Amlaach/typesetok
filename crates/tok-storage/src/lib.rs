@@ -225,6 +225,32 @@ mod tests {
     }
 
     #[test]
+    fn migration_turns_legacy_bold_into_font_weight() {
+        let mut doc = serde_json::to_value(DocumentRoot::new("Doc")).unwrap();
+        let style = serde_json::to_value(tok_core::styles::ParagraphStyle::default()).unwrap();
+        let legacy = |bold: bool| {
+            let mut s = style.clone();
+            let obj = s.as_object_mut().unwrap();
+            obj.remove("font_weight");
+            obj.insert("bold".to_string(), serde_json::json!(bold));
+            s
+        };
+        let mut explicit = legacy(true);
+        explicit["font_weight"] = serde_json::json!(600);
+        doc["paragraph_styles"] = serde_json::json!([legacy(true), legacy(false), explicit]);
+
+        let migrated = MigrationPipeline::migrate_document_json(doc).unwrap();
+        let root: DocumentRoot = serde_json::from_value(migrated.clone()).unwrap();
+        let weights: Vec<u16> = root
+            .paragraph_styles
+            .iter()
+            .map(|s| s.font_weight)
+            .collect();
+        assert_eq!(weights, [700, 400, 600]);
+        assert!(migrated["paragraph_styles"][0].get("bold").is_none());
+    }
+
+    #[test]
     fn migration_accepts_a_legacy_top_level_version() {
         let mut doc = serde_json::to_value(DocumentRoot::new("Doc")).unwrap();
         doc["metadata"]

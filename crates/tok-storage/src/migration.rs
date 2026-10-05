@@ -43,10 +43,9 @@ impl MigrationPipeline {
     ///
     /// The version lives in `metadata.schema_version` (a top-level
     /// `schema_version` is accepted for older files) and may be written as
-    /// `major.minor` ("1.0"). Version-specific upgrade steps belong here,
-    /// keyed on the normalized version; there are none yet.
+    /// `major.minor` ("1.0"). Upgrade steps for older field layouts follow.
     pub fn migrate_document_json(
-        json_val: serde_json::Value,
+        mut json_val: serde_json::Value,
     ) -> Result<serde_json::Value, StorageError> {
         let declared = json_val
             .pointer("/metadata/schema_version")
@@ -55,7 +54,32 @@ impl MigrationPipeline {
             .unwrap_or(CURRENT_SCHEMA_VERSION);
 
         Self::validate_version(&Self::normalize_version(declared))?;
+        Self::bold_to_font_weight(&mut json_val);
         Ok(json_val)
+    }
+
+    /// Paragraph styles briefly stored `"bold": bool`; they now store
+    /// `"font_weight": 400 | 700`. An explicit `font_weight` wins.
+    fn bold_to_font_weight(json_val: &mut serde_json::Value) {
+        let Some(styles) = json_val
+            .get_mut("paragraph_styles")
+            .and_then(|s| s.as_array_mut())
+        else {
+            return;
+        };
+        for style in styles.iter_mut().filter_map(|s| s.as_object_mut()) {
+            let Some(bold) = style.remove("bold") else {
+                continue;
+            };
+            if !style.contains_key("font_weight") {
+                let weight = if bold.as_bool() == Some(true) {
+                    700
+                } else {
+                    400
+                };
+                style.insert("font_weight".to_string(), serde_json::json!(weight));
+            }
+        }
     }
 
     /// "1" -> "1.0.0", "1.0" -> "1.0.0"; anything else is returned unchanged.
