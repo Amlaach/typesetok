@@ -489,11 +489,17 @@ export class SpreadCanvas {
       }
     });
 
-    // Ctrl + wheel zooms the pages.
+    // Ctrl + wheel zooms the pages (supports mouse wheel discrete steps and trackpad continuous pinch).
     this.scroller.addEventListener('wheel', (e) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
-      this.applyUserZoom(this.zoomPercent + (e.deltaY < 0 ? 10 : -10));
+      let delta = 0;
+      if (Math.abs(e.deltaY) < 25) {
+        delta = e.deltaY < 0 ? 2 : -2;
+      } else {
+        delta = e.deltaY < 0 ? 10 : -10;
+      }
+      this.applyUserZoom(this.zoomPercent + delta);
     }, { passive: false });
 
     // Report the page under the viewport center so the status bar and page list follow scrolling.
