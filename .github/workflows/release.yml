@@ -4,12 +4,14 @@ on:
   push:
     tags:
       - 'v*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name for release (e.g. v0.7.0)'
+        description: 'Tag name for release (e.g. v0.7.5)'
         required: false
-        default: 'v0.7.0'
+        default: 'v0.7.5'
 
 permissions:
   contents: write
@@ -32,13 +34,13 @@ jobs:
         include:
           - os: ubuntu-latest
             binary_name: tok-cli
-            asset_name: tok-cli-v0.7.3-linux-x64.tar.gz
+            asset_name: tok-cli-v0.7.5-linux-x64.tar.gz
           - os: windows-latest
             binary_name: tok-cli.exe
-            asset_name: tok-cli-v0.7.3-windows-x64.zip
+            asset_name: tok-cli-v0.7.5-windows-x64.zip
           - os: macos-latest
             binary_name: tok-cli
-            asset_name: tok-cli-v0.7.3-macos.tar.gz
+            asset_name: tok-cli-v0.7.5-macos.tar.gz
 
     steps:
       - uses: actions/checkout@v4
@@ -81,28 +83,28 @@ jobs:
           npm install
           npm run build
           node scripts/build-desktop-bundle.mjs
-          Compress-Archive -Path dist/TypesetOK-v0.7.3-windows-x64 -DestinationPath TypesetOK-v0.7.3-windows-desktop-app.zip
+          Compress-Archive -Path dist/TypesetOK-v0.7.5-windows-x64 -DestinationPath TypesetOK-v0.7.5-windows-desktop-app.zip
 
       - name: Compile Official Windows Installer (Inno Setup)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           node scripts/build-installer.mjs
-          Copy-Item dist/TypesetOK-v0.7.3-Setup-x64.exe TypesetOK-v0.7.3-Setup.exe
+          Copy-Item dist/TypesetOK-v0.7.5-Setup-x64.exe TypesetOK-v0.7.5-Setup.exe
 
       - name: Upload Windows Installer artifact
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: TypesetOK-v0.7.3-Setup.exe
-          path: TypesetOK-v0.7.3-Setup.exe
+          name: TypesetOK-v0.7.5-Setup.exe
+          path: TypesetOK-v0.7.5-Setup.exe
 
       - name: Upload Desktop App artifact
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: TypesetOK-v0.7.3-windows-desktop-app.zip
-          path: TypesetOK-v0.7.3-windows-desktop-app.zip
+          name: TypesetOK-v0.7.5-windows-desktop-app.zip
+          path: TypesetOK-v0.7.5-windows-desktop-app.zip
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -136,13 +138,13 @@ jobs:
           cp -r packages/tok-electron/dist dist-package/electron
           cp -r assets dist-package/assets
           cp README.md LICENSE.md dist-package/
-          tar -czvf typesetok-desktop-workbench-v0.7.3.tar.gz dist-package
+          tar -czvf typesetok-desktop-workbench-v0.7.5.tar.gz dist-package
 
       - name: Upload UI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: typesetok-desktop-workbench-v0.7.3.tar.gz
-          path: typesetok-desktop-workbench-v0.7.3.tar.gz
+          name: typesetok-desktop-workbench-v0.7.5.tar.gz
+          path: typesetok-desktop-workbench-v0.7.5.tar.gz
 
   # ──────────────────────────────────────────────
   # 3. Create GitHub Release & Attach Assets
@@ -165,6 +167,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
           else
             echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
@@ -178,10 +182,12 @@ jobs:
           prerelease: false
           files: release-assets/*
           body: |
-            ## TypesetOK (TOK) ${{ steps.tag.outputs.tag }} — מהדורת חוויית משתמש ומתקין רשמי
+            ## TypesetOK (TOK) ${{ steps.tag.outputs.tag }} — תמיכה מלאה במשקלי גופנים, חוויית משתמש ומתקין רשמי
 
-            ### 🚀 מה חדש בגרסה 0.7.3 (Highlights):
-            - **מתקין Windows רשמי (Setup Wizard):** קובץ התקנה מלא `TypesetOK-v0.7.3-Setup.exe` דו-לשוני (עברית ואנגלית), עם שיוך קובצי מסמך `.tok` וקיצור דרך בשולחן העבודה.
+            ### 🚀 מה חדש בגרסה 0.7.5 (Highlights):
+            - **תמיכה מלאה במשקלי גופנים (Font Weight 700 / 400):** תמיכה מלאה בהגדרת סגנונות מודגשים (Bold / 700) ורגילים (Regular / 400), הן בליבת העימוד והן בסרגלי הממשק (StructureBar, Action HUD, Inspector).
+            - **מנוע טיפוגרפיה מתקדם ושילוב גופנים מובנים:** טעינת גופני OFL מודגשים (Frank Ruhl Libre Bold, Taamey Frank CLM Bold, Keter YG Bold) לעימוד כותרות וטקסט ש"ס מהודר.
+            - **מתקין Windows רשמי (Setup Wizard):** קובץ התקנה מלא `TypesetOK-v0.7.5-Setup.exe` דו-לשוני (עברית ואנגלית), עם שיוך קובצי מסמך `.tok` וקיצור דרך בשולחן העבודה.
             - **ממשק משתמש מסודר ומופחת כפתורים:** צמצום עומס כפתורים בממשק, סידור היררכי חכם של תפריטים, וריכוז פקודות בסרגל עליון מינימליסטי ונוח.
             - **גיוון עשיר בצבעים וערכות נושא:** 5 ערכות עיצוב ייחודיות (כחול נייבי עמוק, קלף עברי מהודר, פחם גרפיט וזהב, אינדיגו רויאל ואזמרגד, וסטודיו בהיר קלאסי) + צבעי תזרימים מובחנים.
             - **הגדרות ואודות נגישים ישירות מכל מסך:** כפתורים ישירים בסרגל העליון, במסך הפתיחה (Welcome Dialog), בסרגל הצד ובפלטת הפקודות.
@@ -190,10 +196,10 @@ jobs:
             - **לשונית נגישות מקיפה:** ניגודיות גבוהה, הגדלת טקסט, הפחתת תנועה, הדגשת פוקוס למקלדת וגופן נגיש.
 
             ### 📦 קבצים להורדה (Downloads & Installation):
-            - **מתקין רשמי למחשב (מומלץ):** `TypesetOK-v0.7.3-Setup.exe` (מתקין אשף מלא בעברית ובאנגלית).
-            - **גרסה ניידת ללא התקנה (Portable):** `TypesetOK-v0.7.3-windows-desktop-app.zip` (פריקה והרצה ישירה של `TypesetOK.exe`).
-            - **CLI בלבד (Windows x64):** `tok-cli-v0.7.3-windows-x64.zip`
-            - **CLI בלבד (Linux x64):** `tok-cli-v0.7.3-linux-x64.tar.gz`
-            - **CLI בלבד (macOS):** `tok-cli-v0.7.3-macos.tar.gz`
-            - **Workbench Source Bundle:** `typesetok-desktop-workbench-v0.7.3.tar.gz`
+            - **מתקין רשמי למחשב (מומלץ):** `TypesetOK-v0.7.5-Setup.exe` (מתקין אשף מלא בעברית ובאנגלית).
+            - **גרסה ניידת ללא התקנה (Portable):** `TypesetOK-v0.7.5-windows-desktop-app.zip` (פריקה והרצה ישירה של `TypesetOK.exe`).
+            - **CLI בלבד (Windows x64):** `tok-cli-v0.7.5-windows-x64.zip`
+            - **CLI בלבד (Linux x64):** `tok-cli-v0.7.5-linux-x64.tar.gz`
+            - **CLI בלבד (macOS):** `tok-cli-v0.7.5-macos.tar.gz`
+            - **Workbench Source Bundle:** `typesetok-desktop-workbench-v0.7.5.tar.gz`
 
