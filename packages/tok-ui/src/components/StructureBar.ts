@@ -55,12 +55,12 @@ export class StructureBar {
   ];
 
   private styles: StyleToken[] = [
-    { id: 'style-gemara-heading', name: 'כותרת פרק', fontFamily: 'Frank Ruhl Libre', fontSizePt: 20, fontWeight: 'bold', flowId: 'gemara' },
-    { id: 'style-gemara-main', name: 'גמרא ראשי', fontFamily: 'Frank Ruhl Libre', fontSizePt: 15, fontWeight: 'bold', flowId: 'gemara' },
-    { id: 'style-rashi-body', name: 'רש"י רציף', fontFamily: 'Noto Rashi Hebrew', fontSizePt: 12, fontWeight: 'normal', flowId: 'rashi' },
-    { id: 'style-tosafot-body', name: 'תוספות רציף', fontFamily: 'Noto Rashi Hebrew', fontSizePt: 11.5, fontWeight: 'normal', flowId: 'tosafot' },
-    { id: 'style-dibur-hamatchil', name: 'דיבור המתחיל', fontFamily: 'Frank Ruhl Libre', fontSizePt: 12.5, fontWeight: 'bold', flowId: 'rashi' },
-    { id: 'style-footnotes', name: 'הערות שוליים', fontFamily: 'Frank Ruhl Libre', fontSizePt: 10, fontWeight: 'normal', flowId: 'notes' }
+    { id: 'style-gemara-heading', name: 'כותרת פרק', fontFamily: 'Frank Ruhl Libre', fontSizePt: 20, fontWeight: 'bold', font_weight: 700, flowId: 'gemara' },
+    { id: 'style-gemara-main', name: 'גמרא ראשי', fontFamily: 'Frank Ruhl Libre', fontSizePt: 15, fontWeight: 'bold', font_weight: 700, flowId: 'gemara' },
+    { id: 'style-rashi-body', name: 'רש"י רציף', fontFamily: 'Noto Rashi Hebrew', fontSizePt: 12, fontWeight: 'normal', font_weight: 400, flowId: 'rashi' },
+    { id: 'style-tosafot-body', name: 'תוספות רציף', fontFamily: 'Noto Rashi Hebrew', fontSizePt: 11.5, fontWeight: 'normal', font_weight: 400, flowId: 'tosafot' },
+    { id: 'style-dibur-hamatchil', name: 'דיבור המתחיל', fontFamily: 'Frank Ruhl Libre', fontSizePt: 12.5, fontWeight: 'bold', font_weight: 700, flowId: 'rashi' },
+    { id: 'style-footnotes', name: 'הערות שוליים', fontFamily: 'Frank Ruhl Libre', fontSizePt: 10, fontWeight: 'normal', font_weight: 400, flowId: 'notes' }
   ];
 
   private layers: { id: string; name: string; visible: boolean; locked: boolean }[] = [
@@ -309,12 +309,22 @@ export class StructureBar {
     container.appendChild(el('p', 'tok-panel-note', undefined, t('structureFlowsDesc')));
   }
 
+  public getStyle(id: string): StyleToken | undefined {
+    return this.styles.find((s) => s.id === id);
+  }
+
+  public getStyles(): StyleToken[] {
+    return [...this.styles];
+  }
+
   private renderStylesView(container: HTMLElement): void {
     for (const s of this.styles) {
       const row = el('button', 'tok-list-row', { type: 'button' });
       const main = el('span', 'tok-list-main');
       main.appendChild(el('span', 'tok-list-title', undefined, s.name));
-      main.appendChild(el('span', 'tok-list-sub', { dir: 'ltr', style: 'text-align:start' }, `${s.fontFamily} · ${s.fontSizePt}pt`));
+      const isBold = s.fontWeight === 'bold' || s.fontWeight === '700' || s.font_weight === 700;
+      const weightDesc = isBold ? ` · ${t('hudBold')}` : '';
+      main.appendChild(el('span', 'tok-list-sub', { dir: 'ltr', style: 'text-align:start' }, `${s.fontFamily} · ${s.fontSizePt}pt${weightDesc}`));
       row.appendChild(main);
       const flow = this.flows.find((f) => f.id === s.flowId);
       if (flow) {

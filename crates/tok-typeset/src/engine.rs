@@ -434,8 +434,10 @@ impl TypesettingEngine {
                         .find(|s| s.id == p.style_id)
                         .map(|style| {
                             (
-                                self.font_manager
-                                    .styled_family(&style.font_family, style.bold),
+                                self.font_manager.styled_family_weight(
+                                    &style.font_family,
+                                    style.resolved_font_weight(),
+                                ),
                                 style.font_size_pt,
                                 style.line_height_pt,
                             )
@@ -883,6 +885,47 @@ mod tests {
         );
         let ink = |l: &LineBox| l.glyphs.iter().map(|g| g.width).sum::<f32>();
         assert!(ink(&lines[1]) > ink(&lines[0]), "bold glyphs are wider");
+    }
+
+    #[test]
+    fn styles_with_font_weight_700_are_measured_with_bold_face() {
+        use tok_core::styles::ParagraphStyle;
+
+        let text = "מֵאֵימָתַי קוֹרִין אֶת שְׁמַע";
+        let mut doc = DocumentRoot::new("weight-700");
+        doc.paragraph_styles = vec![
+            ParagraphStyle {
+                id: "regular".to_string(),
+                font_family: "Frank Ruhl Libre".to_string(),
+                font_weight: 400,
+                ..ParagraphStyle::default()
+            },
+            ParagraphStyle {
+                id: "weight-700".to_string(),
+                font_family: "Frank Ruhl Libre".to_string(),
+                font_weight: 700,
+                ..ParagraphStyle::default()
+            },
+        ];
+        let flow = doc.sections[0].main_flow_mut().unwrap();
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("p0".to_string()),
+            "regular",
+            text,
+        ));
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("p1".to_string()),
+            "weight-700",
+            text,
+        ));
+
+        let pages = engine().typeset_document(&doc);
+        let lines = &pages[0].frames[0].lines;
+        assert_eq!(lines[0].fonts[0], "Frank Ruhl Libre");
+        assert_eq!(lines[1].fonts[0], "Frank Ruhl Libre Bold");
+        let ink0: f32 = lines[0].glyphs.iter().map(|g| g.width).sum();
+        let ink1: f32 = lines[1].glyphs.iter().map(|g| g.width).sum();
+        assert!(ink1 > ink0, "font_weight: 700 produces wider bold glyphs");
     }
 
     #[test]

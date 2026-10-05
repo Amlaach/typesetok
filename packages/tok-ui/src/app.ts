@@ -154,8 +154,21 @@ export class TypesetOkApp {
         this.showToast(tf('toastFlowSelected', { name }));
       },
       onSelectStyle: (styleId) => {
-        this.inspector.setMode('text-edit');
-        this.showToast(tf('toastStyleApplied', { name: styleId }));
+        const style = this.structureBar.getStyle(styleId);
+        if (style) {
+          const isBold = style.fontWeight === 'bold' || style.fontWeight === '700' || style.font_weight === 700;
+          this.inspector.setMode('text-edit', undefined, {
+            fontFamily: style.fontFamily,
+            fontSizePt: style.fontSizePt,
+            fontWeight: isBold ? 'bold' : 'normal',
+            font_weight: style.font_weight ?? (isBold ? 700 : 400),
+            styleTokenId: style.id,
+            styleTokenName: style.name
+          });
+        } else {
+          this.inspector.setMode('text-edit');
+        }
+        this.showToast(tf('toastStyleApplied', { name: style ? style.name : styleId }));
       },
       onToggleLayer: (layerId, visible) => {
         this.showToast(tf('toastLayerToggled', { name: layerId, state: t(visible ? 'appLayerShown' : 'appLayerHidden') }));
@@ -244,7 +257,10 @@ export class TypesetOkApp {
     this.actionHud = new ActionHud({
       onFontChange: (f) => this.inspector.setMode('text-edit', undefined, { fontFamily: f }),
       onSizeChange: (s) => this.inspector.setMode('text-edit', undefined, { fontSizePt: s }),
-      onWeightChange: (b) => this.inspector.setMode('text-edit', undefined, { fontWeight: b ? 'bold' : 'normal' }),
+      onWeightChange: (b, w) => this.inspector.setMode('text-edit', undefined, {
+        fontWeight: b ? 'bold' : 'normal',
+        font_weight: w ?? (b ? 700 : 400)
+      }),
       onAlignChange: (a) => this.inspector.setMode('text-edit', undefined, { alignment: a }),
       onStyleChange: (st) => this.showToast(tf('toastQuickStyle', { name: st })),
       onDismiss: () => this.inspector.setMode('zero')

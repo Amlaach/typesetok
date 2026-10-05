@@ -59,6 +59,7 @@ export interface TypographySettings {
   fontFamily: string;
   fontSizePt: number;
   fontWeight: 'normal' | 'bold' | '600' | '700';
+  font_weight?: number;
   lineHeightPt: number;
   paragraphSpacingPt: number;
   firstLineIndentMm: number;
@@ -88,6 +89,7 @@ export interface StyleToken {
   fontFamily: string;
   fontSizePt: number;
   fontWeight: string;
+  font_weight?: number;
   flowId: string;
 }
 

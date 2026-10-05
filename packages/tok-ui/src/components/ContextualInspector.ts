@@ -379,6 +379,14 @@ export class ContextualInspector {
         this.callbacks.onTypographyChange({ lineHeightPt: v, isOverride: true });
       })
     ));
+    const isBold = this.typographySettings.fontWeight === 'bold' || this.typographySettings.fontWeight === '700' || (this.typographySettings.font_weight !== undefined && this.typographySettings.font_weight >= 700);
+    fontCard.appendChild(switchRow(t('hudBold'), isBold, (v) => {
+      this.typographySettings.fontWeight = v ? 'bold' : 'normal';
+      this.typographySettings.font_weight = v ? 700 : 400;
+      this.typographySettings.isOverride = true;
+      this.callbacks.onTypographyChange({ fontWeight: this.typographySettings.fontWeight, isOverride: true });
+      this.render();
+    }));
     this.element.appendChild(fontCard);
 
     // 3. Alignment

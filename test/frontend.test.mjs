@@ -314,13 +314,43 @@ class FakeElement {
     this.clientHeight = 0;
     this.attributes = {};
   }
+  set className(v) {
+    this._className = v;
+    this.classList = new FakeClassList();
+    if (v) v.split(/\s+/).forEach((c) => this.classList.add(c));
+  }
+  get className() { return this._className || ''; }
   set innerHTML(v) { this._html = v; this.children = []; }
   get innerHTML() { return this._html; }
   appendChild(c) { this.children.push(c); c.parentElement = this; return c; }
   setAttribute(k, v) { this.attributes[k] = String(v); }
+  getAttribute(k) { return this.attributes[k]; }
+  click() { (this.listeners['click'] || []).forEach((fn) => fn({})); }
+  replaceChildren(...kids) { this.children = kids.filter(Boolean); }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
   removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn); }
   scrollIntoView() {}
+  querySelector(sel) {
+    for (const c of this.children) {
+      if (c && typeof c === 'object') {
+        const matchesClass = !sel.includes('.tok-hud-btn') || c.className?.includes('tok-hud-btn') || c.classList?.contains('tok-hud-btn');
+        const matchesPressed = !sel.includes('aria-pressed') || (c.attributes && 'aria-pressed' in c.attributes);
+        if (matchesClass && matchesPressed) return c;
+        const found = c.querySelector?.(sel);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  querySelectorAll(sel) {
+    const list = [];
+    for (const c of this.children) {
+      if (c && typeof c === 'object' && c.querySelectorAll) {
+        list.push(...c.querySelectorAll(sel));
+      }
+    }
+    return list;
+  }
 }
 
 function installFakeDom() {
@@ -337,11 +367,14 @@ function installFakeDom() {
     body: new FakeElement('body'),
     activeElement: null,
     createElement: (tag) => new FakeElement(tag),
+    createElementNS: (_ns, tag) => new FakeElement(tag),
   };
   globalThis.getComputedStyle = () => ({ position: 'static', direction: 'rtl' });
   globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
   globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
   if (!globalThis.window) globalThis.window = globalThis;
+  globalThis.window.addEventListener ||= (type, fn) => {};
+  globalThis.window.removeEventListener ||= (type, fn) => {};
   return { storage, documentElement };
 }
 
@@ -708,6 +741,69 @@ describe('Regression: document fonts are the ones the engine embeds', () => {
     };
     walk(srcDir);
     assert.deepEqual(offenders, []);
+  });
+});
+
+describe('Feature: Font weight (700 / 400) support across UI components', () => {
+  test('StructureBar styles define explicit font_weight matching their bold setting', async () => {
+    const { StructureBar } = await loadTs('packages/tok-ui/src/components/StructureBar.ts');
+    let selectedStyle = null;
+    const bar = new StructureBar({
+      onSelectPage: () => {},
+      onSelectFlow: () => {},
+      onSelectStyle: (id) => { selectedStyle = id; },
+      onToggleLayer: () => {},
+      onOpenSettings: () => {},
+      onOpenAbout: () => {}
+    });
+
+    const styles = bar.getStyles();
+    assert.ok(styles.length >= 6, 'expected shipped styles in structure bar');
+
+    for (const style of styles) {
+      if (style.fontWeight === 'bold') {
+        assert.equal(style.font_weight, 700, `${style.name} (bold) must have font_weight 700`);
+      } else {
+        assert.equal(style.font_weight, 400, `${style.name} (normal) must have font_weight 400`);
+      }
+    }
+
+    const gemaraMain = bar.getStyle('style-gemara-main');
+    assert.ok(gemaraMain);
+    assert.equal(gemaraMain.font_weight, 700);
+    assert.equal(gemaraMain.fontWeight, 'bold');
+  });
+
+  test('ActionHud notifies onWeightChange with both boolean and numeric weight (700/400)', async () => {
+    const { ActionHud } = await loadTs('packages/tok-ui/src/components/ActionHud.ts');
+    let weightState = null;
+    let weightNum = null;
+    const hud = new ActionHud({
+      onFontChange: () => {},
+      onSizeChange: () => {},
+      onWeightChange: (isBold, weight) => {
+        weightState = isBold;
+        weightNum = weight;
+      },
+      onAlignChange: () => {},
+      onStyleChange: () => {},
+      onDismiss: () => {}
+    });
+
+    hud.showAt(100, 100, { font_weight: 700 });
+    const boldBtn = hud.element.querySelector('.tok-hud-btn[aria-pressed]');
+    assert.ok(boldBtn, 'bold button must exist');
+    assert.equal(boldBtn.getAttribute('aria-pressed'), 'true');
+
+    // Clicking bold button toggles it off -> 400
+    boldBtn.click();
+    assert.equal(weightState, false);
+    assert.equal(weightNum, 400);
+
+    // Clicking bold button toggles it on -> 700
+    boldBtn.click();
+    assert.equal(weightState, true);
+    assert.equal(weightNum, 700);
   });
 });
 
