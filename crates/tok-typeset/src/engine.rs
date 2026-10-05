@@ -426,7 +426,7 @@ impl TypesettingEngine {
             .par_iter()
             .map_init(
                 // Fonts are parsed once per family and worker, not per paragraph.
-                HashMap::<&str, ShapingSession<'_>>::new,
+                HashMap::<String, ShapingSession<'_>>::new,
                 |sessions, &(_, _, p)| {
                     let (font_family, font_size, line_height) = doc
                         .paragraph_styles
@@ -434,19 +434,20 @@ impl TypesettingEngine {
                         .find(|s| s.id == p.style_id)
                         .map(|style| {
                             (
-                                style.font_family.as_str(),
+                                self.font_manager
+                                    .styled_family(&style.font_family, style.bold),
                                 style.font_size_pt,
                                 style.line_height_pt,
                             )
                         })
                         .unwrap_or((
-                            DEFAULT_FONT_FAMILY,
+                            DEFAULT_FONT_FAMILY.to_string(),
                             DEFAULT_FONT_SIZE_PT,
                             DEFAULT_LINE_HEIGHT_PT,
                         ));
                     let session = sessions
                         .entry(font_family)
-                        .or_insert_with(|| self.font_manager.session(font_family));
+                        .or_insert_with_key(|family| self.font_manager.session(family));
                     Self::typeset_with_session(session, p, content_width, font_size, line_height)
                 },
             )
@@ -833,6 +834,55 @@ mod tests {
         // Collapsed margin between s2.after (4.0) and s3.before (15.0) is 4.0.max(15.0) = 15.0
         // baseline = 38.0 + 15.0 + 14.0 = 67.0
         assert_eq!(lines[2].baseline_y, 67.0);
+    }
+
+    #[test]
+    fn bold_styles_are_measured_with_the_bold_face() {
+        use tok_core::styles::ParagraphStyle;
+
+        let text = "מֵאֵימָתַי קוֹרִין אֶת שְׁמַע";
+        let mut doc = DocumentRoot::new("bold");
+        doc.paragraph_styles = [
+            ("regular", "Frank Ruhl Libre", false),
+            ("bold", "Frank Ruhl Libre", true),
+            ("rashi-bold", "Rashi", true),
+            ("david-bold", "David CLM", true),
+        ]
+        .into_iter()
+        .map(|(id, family, bold)| ParagraphStyle {
+            id: id.to_string(),
+            font_family: family.to_string(),
+            bold,
+            ..ParagraphStyle::default()
+        })
+        .collect();
+        let flow = doc.sections[0].main_flow_mut().unwrap();
+        for (i, id) in ["regular", "bold", "rashi-bold", "david-bold"]
+            .into_iter()
+            .enumerate()
+        {
+            flow.add_paragraph(ParagraphNode::new(
+                FractionalIndex::new(format!("p{i}")),
+                id,
+                text,
+            ));
+        }
+
+        let pages = engine().typeset_document(&doc);
+        let lines = &pages[0].frames[0].lines;
+        let fonts: Vec<&str> = lines.iter().map(|l| l.fonts[0].as_str()).collect();
+        assert_eq!(
+            fonts,
+            [
+                "Frank Ruhl Libre",
+                "Frank Ruhl Libre Bold",
+                "Noto Rashi Hebrew Bold",
+                // No bold David Libre is shipped: the regular face is used.
+                "David Libre",
+            ]
+        );
+        let ink = |l: &LineBox| l.glyphs.iter().map(|g| g.width).sum::<f32>();
+        assert!(ink(&lines[1]) > ink(&lines[0]), "bold glyphs are wider");
     }
 
     #[test]

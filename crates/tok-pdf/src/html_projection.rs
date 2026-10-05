@@ -6,6 +6,7 @@
 //! - RTL spread progression.
 
 use std::fmt::Write;
+use tok_typeset::font::BOLD_SUFFIX;
 use tok_typeset::geometry::PageLayoutBox;
 
 /// The engine's embedded families, in fallback order (see tok-typeset's FontManager).
@@ -130,11 +131,7 @@ div.tok-line {{
                     // reorders and right-aligns them.
                     let dir = if line.is_rtl { "" } else { " dir=\"ltr\"" };
                     // Draw the line in the font the engine measured it with.
-                    let font = line
-                        .fonts
-                        .first()
-                        .map(|f| format!(" font-family: '{}', {};", html_escape(f), FONT_STACK))
-                        .unwrap_or_default();
+                    let font = line.fonts.first().map(|f| css_font(f)).unwrap_or_default();
                     writeln!(html,
                         "    <div class=\"tok-line\"{} style=\"height: {:.2}pt; line-height: {:.2}pt;{}\">{}</div>",
                         dir, line.height, line.height, font, html_escape(&line.text)
@@ -155,6 +152,18 @@ div.tok-line {{
 
         html.push_str("</body>\n</html>\n");
         html
+    }
+}
+
+/// CSS declarations for an engine family: "X Bold" is family X at weight 700.
+fn css_font(family: &str) -> String {
+    match family.strip_suffix(BOLD_SUFFIX) {
+        Some(base) => format!(
+            " font-family: '{}', {}; font-weight: 700;",
+            html_escape(base),
+            FONT_STACK
+        ),
+        None => format!(" font-family: '{}', {};", html_escape(family), FONT_STACK),
     }
 }
 
@@ -282,6 +291,18 @@ mod tests {
             "line-height: 14.50pt; font-family: 'Noto Rashi Hebrew', 'Frank Ruhl Libre'"
         ));
         assert_eq!(html.matches("font-family: 'Noto Rashi Hebrew'").count(), 1);
+    }
+
+    #[test]
+    fn bold_faces_become_a_css_weight() {
+        assert_eq!(
+            css_font("Frank Ruhl Libre Bold"),
+            format!(" font-family: 'Frank Ruhl Libre', {FONT_STACK}; font-weight: 700;")
+        );
+        assert_eq!(
+            css_font("Noto Rashi Hebrew"),
+            format!(" font-family: 'Noto Rashi Hebrew', {FONT_STACK};")
+        );
     }
 
     #[test]

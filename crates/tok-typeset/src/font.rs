@@ -17,8 +17,12 @@ use std::sync::Arc;
 
 pub static EMBEDDED_FRANK_RUHL_LIBRE: &[u8] =
     include_bytes!("../../../assets/fonts/FrankRuhlLibre-Regular.ttf");
+pub static EMBEDDED_FRANK_RUHL_LIBRE_BOLD: &[u8] =
+    include_bytes!("../../../assets/fonts/FrankRuhlLibre-Bold.ttf");
 pub static EMBEDDED_NOTO_RASHI_HEBREW: &[u8] =
     include_bytes!("../../../assets/fonts/NotoRashiHebrew-Regular.ttf");
+pub static EMBEDDED_NOTO_RASHI_HEBREW_BOLD: &[u8] =
+    include_bytes!("../../../assets/fonts/NotoRashiHebrew-Bold.ttf");
 pub static EMBEDDED_NOTO_SERIF_HEBREW: &[u8] =
     include_bytes!("../../../assets/fonts/NotoSerifHebrew-Regular.ttf");
 pub static EMBEDDED_DAVID_LIBRE: &[u8] =
@@ -26,6 +30,9 @@ pub static EMBEDDED_DAVID_LIBRE: &[u8] =
 
 /// Family used when a style names no font, or one that is not registered.
 pub const DEFAULT_FAMILY: &str = "Frank Ruhl Libre";
+
+/// Suffix of the registered bold (700) face of a family: "Frank Ruhl Libre Bold".
+pub const BOLD_SUFFIX: &str = " Bold";
 
 #[derive(Debug, Clone)]
 pub struct FontMetrics {
@@ -219,7 +226,9 @@ impl Default for FontManager {
         let mut mgr = Self::new();
         for (family, bytes) in [
             ("Frank Ruhl Libre", EMBEDDED_FRANK_RUHL_LIBRE),
+            ("Frank Ruhl Libre Bold", EMBEDDED_FRANK_RUHL_LIBRE_BOLD),
             ("Noto Rashi Hebrew", EMBEDDED_NOTO_RASHI_HEBREW),
+            ("Noto Rashi Hebrew Bold", EMBEDDED_NOTO_RASHI_HEBREW_BOLD),
             ("Noto Serif Hebrew", EMBEDDED_NOTO_SERIF_HEBREW),
             ("David Libre", EMBEDDED_DAVID_LIBRE),
         ] {
@@ -290,6 +299,23 @@ impl FontManager {
                 self.fonts.get(&self.default_hebrew_family)
             }
         })
+    }
+
+    /// The family to shape a style with: `family` resolved through aliases and
+    /// the default, switched to its bold face when `bold` is set and one is
+    /// registered (otherwise the regular face is used).
+    pub fn styled_family(&self, family: &str, bold: bool) -> String {
+        let Some(font) = self.font_ref(family) else {
+            return family.to_string();
+        };
+        let resolved = font.family_name.as_str();
+        if bold {
+            let bold_family = format!("{resolved}{BOLD_SUFFIX}");
+            if self.fonts.contains_key(&bold_family) {
+                return bold_family;
+            }
+        }
+        resolved.to_string()
     }
 
     /// Exact lookup of a registered family or alias, without default fallback.
@@ -458,6 +484,26 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    #[test]
+    fn styled_family_picks_the_bold_face_when_shipped() {
+        let mgr = FontManager::default();
+        assert_eq!(
+            mgr.styled_family("Frank Ruhl Libre", false),
+            "Frank Ruhl Libre"
+        );
+        assert_eq!(
+            mgr.styled_family("Frank Ruhl Libre", true),
+            "Frank Ruhl Libre Bold"
+        );
+        assert_eq!(mgr.styled_family("Vilna", true), "Frank Ruhl Libre Bold");
+        assert_eq!(mgr.styled_family("Rashi", true), "Noto Rashi Hebrew Bold");
+        assert_eq!(mgr.styled_family("David CLM", true), "David Libre");
+        assert_eq!(mgr.styled_family("unknown", true), "Frank Ruhl Libre Bold");
+        let bold = mgr.get_font("Frank Ruhl Libre Bold").unwrap();
+        let face = ttf_parser::Face::parse(&bold.raw_bytes, 0).unwrap();
+        assert_eq!(face.weight().to_number(), 700);
     }
 
     #[test]

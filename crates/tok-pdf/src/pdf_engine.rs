@@ -914,6 +914,19 @@ mod tests {
     }
 
     #[test]
+    fn bold_face_is_embedded_as_its_own_font() {
+        let mut lines = typeset("מֵאֵימָתַי קוֹרִין", "Frank Ruhl Libre");
+        lines.extend(typeset("מֵאֵימָתַי קוֹרִין", "Frank Ruhl Libre Bold"));
+        let bytes =
+            PdfPrePressEngine::export_pdf(&[page_with(lines)], &PdfExportOptions::default())
+                .unwrap();
+        let s = String::from_utf8_lossy(&bytes);
+        assert!(s.contains("+FrankRuhlLibre-Regular"));
+        assert!(s.contains("+FrankRuhlLibre-Bold"));
+        assert_eq!(count(&bytes, b"/Subtype /Type0"), 2);
+    }
+
+    #[test]
     fn unknown_layout_font_is_an_error() {
         let mut lines = typeset("שלום", "Noto Serif Hebrew");
         lines[0].fonts = vec!["No Such Font".to_string()];

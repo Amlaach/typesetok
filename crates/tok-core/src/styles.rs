@@ -61,6 +61,9 @@ pub struct ParagraphStyle {
     pub id: String,
     pub name: String,
     pub font_family: String,
+    /// Bold (700) weight; absent in documents written before it existed.
+    #[serde(default)]
+    pub bold: bool,
     pub font_size_pt: f32,
     pub line_height_pt: f32,
     pub space_before_pt: f32,
@@ -80,6 +83,7 @@ impl Default for ParagraphStyle {
             id: "default-body".to_string(),
             name: "גוף הטקסט".to_string(),
             font_family: "Frank Ruhl Libre".to_string(),
+            bold: false,
             font_size_pt: 11.0,
             line_height_pt: 14.5,
             space_before_pt: 0.0,
@@ -115,4 +119,17 @@ pub struct StylePatch {
     pub alignment: Option<TextAlignment>,
     pub tracking_em: Option<f32>,
     pub color: Option<Color>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paragraph_style_without_bold_field_loads_as_regular() {
+        let mut json = serde_json::to_value(ParagraphStyle::default()).unwrap();
+        json.as_object_mut().unwrap().remove("bold");
+        let style: ParagraphStyle = serde_json::from_value(json).unwrap();
+        assert!(!style.bold);
+    }
 }

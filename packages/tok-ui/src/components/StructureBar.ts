@@ -59,7 +59,7 @@ export class StructureBar {
     { id: 'style-gemara-main', name: 'גמרא ראשי', fontFamily: 'Frank Ruhl Libre', fontSizePt: 15, fontWeight: 'bold', flowId: 'gemara' },
     { id: 'style-rashi-body', name: 'רש"י רציף', fontFamily: 'Noto Rashi Hebrew', fontSizePt: 12, fontWeight: 'normal', flowId: 'rashi' },
     { id: 'style-tosafot-body', name: 'תוספות רציף', fontFamily: 'Noto Rashi Hebrew', fontSizePt: 11.5, fontWeight: 'normal', flowId: 'tosafot' },
-    { id: 'style-dibur-hamatchil', name: 'דיבור המתחיל', fontFamily: 'David Libre', fontSizePt: 12.5, fontWeight: 'bold', flowId: 'rashi' },
+    { id: 'style-dibur-hamatchil', name: 'דיבור המתחיל', fontFamily: 'Frank Ruhl Libre', fontSizePt: 12.5, fontWeight: 'bold', flowId: 'rashi' },
     { id: 'style-footnotes', name: 'הערות שוליים', fontFamily: 'Frank Ruhl Libre', fontSizePt: 10, fontWeight: 'normal', flowId: 'notes' }
   ];
 

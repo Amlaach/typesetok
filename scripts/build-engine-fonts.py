@@ -17,7 +17,9 @@ OUT = os.path.join("assets", "fonts")
 
 FONTS = {
     "FrankRuhlLibre-Regular.ttf": ("frank-ruhl-libre-hebrew-400-normal", "frank-ruhl-libre-latin-400-normal"),
+    "FrankRuhlLibre-Bold.ttf": ("frank-ruhl-libre-hebrew-700-normal", "frank-ruhl-libre-latin-700-normal"),
     "NotoRashiHebrew-Regular.ttf": ("noto-rashi-hebrew-hebrew-400-normal", "noto-rashi-hebrew-latin-400-normal"),
+    "NotoRashiHebrew-Bold.ttf": ("noto-rashi-hebrew-hebrew-700-normal", "noto-rashi-hebrew-latin-700-normal"),
 }
 
 
