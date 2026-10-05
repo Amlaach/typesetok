@@ -314,13 +314,43 @@ class FakeElement {
     this.clientHeight = 0;
     this.attributes = {};
   }
+  set className(v) {
+    this._className = v;
+    this.classList = new FakeClassList();
+    if (v) v.split(/\s+/).forEach((c) => this.classList.add(c));
+  }
+  get className() { return this._className || ''; }
   set innerHTML(v) { this._html = v; this.children = []; }
   get innerHTML() { return this._html; }
   appendChild(c) { this.children.push(c); c.parentElement = this; return c; }
   setAttribute(k, v) { this.attributes[k] = String(v); }
+  getAttribute(k) { return this.attributes[k]; }
+  click() { (this.listeners['click'] || []).forEach((fn) => fn({})); }
+  replaceChildren(...kids) { this.children = kids.filter(Boolean); }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
   removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn); }
   scrollIntoView() {}
+  querySelector(sel) {
+    for (const c of this.children) {
+      if (c && typeof c === 'object') {
+        const matchesClass = !sel.includes('.tok-hud-btn') || c.className?.includes('tok-hud-btn') || c.classList?.contains('tok-hud-btn');
+        const matchesPressed = !sel.includes('aria-pressed') || (c.attributes && 'aria-pressed' in c.attributes);
+        if (matchesClass && matchesPressed) return c;
+        const found = c.querySelector?.(sel);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  querySelectorAll(sel) {
+    const list = [];
+    for (const c of this.children) {
+      if (c && typeof c === 'object' && c.querySelectorAll) {
+        list.push(...c.querySelectorAll(sel));
+      }
+    }
+    return list;
+  }
 }
 
 function installFakeDom() {
@@ -337,11 +367,14 @@ function installFakeDom() {
     body: new FakeElement('body'),
     activeElement: null,
     createElement: (tag) => new FakeElement(tag),
+    createElementNS: (_ns, tag) => new FakeElement(tag),
   };
   globalThis.getComputedStyle = () => ({ position: 'static', direction: 'rtl' });
   globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
   globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
   if (!globalThis.window) globalThis.window = globalThis;
+  globalThis.window.addEventListener ||= (type, fn) => {};
+  globalThis.window.removeEventListener ||= (type, fn) => {};
   return { storage, documentElement };
 }
 

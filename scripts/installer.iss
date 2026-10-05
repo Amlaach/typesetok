@@ -5,7 +5,7 @@
 #define MyAppName "TypesetOK"
 ; build-installer.mjs passes /DMyAppVersion=<package.json version>
 #ifndef MyAppVersion
-  #define MyAppVersion "0.7.3"
+  #define MyAppVersion "0.7.5"
 #endif
 #define MyAppPublisher "TypesetOK Team"
 #define MyAppURL "https://github.com/TypesetOK/typesetok"
