@@ -432,6 +432,8 @@ export const strings: Translations = {
   exportCheckErrors: { he: 'יש שגיאות', en: 'Has errors' },
   exportPreview: { he: 'תצוגה מקדימה', en: 'Preview' },
   exportCheckAria: { he: 'בדיקה לפני ייצוא', en: 'Pre-export check' },
+  exportBrowse: { he: 'עיון...', en: 'Browse...' },
+  exportChooseLocation: { he: 'בחר מיקום שמירה', en: 'Choose export location' },
 };
 
 export function directionOf(lang: Language): 'rtl' | 'ltr' {

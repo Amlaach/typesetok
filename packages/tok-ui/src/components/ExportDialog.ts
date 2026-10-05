@@ -180,8 +180,16 @@ export class ExportDialog {
         wrap.appendChild(input);
         return wrap;
       };
-      rangeRow.appendChild(num('exportRangeFrom', o.fromPage, (v) => (o.fromPage = v), 'range-from'));
-      rangeRow.appendChild(num('exportRangeTo', o.toPage, (v) => (o.toPage = v), 'range-to'));
+      rangeRow.appendChild(num('exportRangeFrom', o.fromPage, (v) => {
+        o.fromPage = v;
+        if (o.fromPage > o.toPage) o.toPage = o.fromPage;
+        this.render();
+      }, 'range-from'));
+      rangeRow.appendChild(num('exportRangeTo', o.toPage, (v) => {
+        o.toPage = v;
+        if (o.toPage < o.fromPage) o.fromPage = o.toPage;
+        this.render();
+      }, 'range-to'));
     } else {
       const summary = o.range === 'all'
         ? tf('welcomePagesCount', { n: this.context.pageCount })
@@ -245,12 +253,31 @@ export class ExportDialog {
     // ---- Footer ----
     const foot = el('div', 'tok-dialog-foot');
     const nameLabel = el('label', undefined, { for: 'tok-export-name', style: 'font-size:12px;color:var(--tok-text-secondary)' }, t('exportFileName'));
-    foot.appendChild(nameLabel);
+    const nameWrap = el('div', undefined, { style: 'display:flex;align-items:center;gap:6px' });
     const nameInput = el('input', 'tok-input', { id: 'tok-export-name', type: 'text', 'data-focus-key': 'file-name', spellcheck: 'false' });
     nameInput.value = o.fileName;
-    nameInput.style.width = '260px';
+    nameInput.style.width = '240px';
     nameInput.addEventListener('input', () => (o.fileName = nameInput.value));
-    foot.appendChild(nameInput);
+    nameWrap.appendChild(nameInput);
+    nameWrap.appendChild(button(t('exportBrowse'), {
+      className: 'tok-btn tok-btn-sm',
+      icon: 'folder',
+      attrs: { 'data-focus-key': 'browse-export-file', title: t('exportChooseLocation') },
+      onClick: async () => {
+        const win = window as any;
+        if (win.tokIpc?.showSaveDialog) {
+          const path = await win.tokIpc.showSaveDialog({
+            defaultPath: o.fileName || defaultExportFileName(this.context.documentTitle),
+            filters: [{ name: 'PDF Document', extensions: ['pdf'] }]
+          });
+          if (path) {
+            o.fileName = path;
+            nameInput.value = path;
+          }
+        }
+      }
+    }));
+    foot.appendChild(nameWrap);
     foot.appendChild(el('span', 'tok-grow'));
     foot.appendChild(button(t('exportCancel'), { attrs: { 'data-focus-key': 'cancel' }, onClick: () => this.hide() }));
     foot.appendChild(button(t('exportGo'), {
@@ -261,6 +288,8 @@ export class ExportDialog {
         let name = o.fileName.trim() || defaultExportFileName(this.context.documentTitle);
         if (!/\.pdf$/i.test(name)) name += '.pdf';
         o.fileName = name;
+        o.fromPage = Math.min(o.fromPage, o.toPage);
+        o.toPage = Math.max(o.fromPage, o.toPage);
         this.hide();
         this.callbacks.onExport({ ...o });
       }
