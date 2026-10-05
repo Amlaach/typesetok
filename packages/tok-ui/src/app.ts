@@ -6,7 +6,7 @@ import { CommandPalette, PaletteItem } from './components/CommandPalette';
 import { StatusBar } from './components/StatusBar';
 import { SpreadCanvas, isRightHandPage, isRectoPage, groupIntoSpreads } from './components/SpreadCanvas';
 import { ExportDialog, ExportOptions } from './components/ExportDialog';
-import { WelcomeModal } from './components/WelcomeModal';
+import { WelcomeModal, addRecentProject } from './components/WelcomeModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
 import { PluginEngine } from './plugins/PluginEngine';
@@ -680,12 +680,22 @@ export class TypesetOkApp {
     const name = TEMPLATE_TITLES[templateId] || BLANK_TEMPLATE_TITLE;
     this.documentTitle = name;
     this.topBar.setDocumentTitle(name);
+    addRecentProject({ name, pages: 1 });
     this.showToast(tf('toastProjectCreated', { name }));
+  }
+
+  private openProjectFile(filePath: string): void {
+    const baseName = filePath.split(/[\\/]/).pop() || filePath;
+    this.documentTitle = baseName;
+    this.topBar.setDocumentTitle(baseName);
+    addRecentProject({ name: baseName, path: filePath, pages: this.pages.length || 1 });
+    this.showToast(tf('toastOpenFile', { path: baseName }));
   }
 
   private loadDemoProject(): void {
     this.documentTitle = DEMO_PROJECT_TITLE;
     this.topBar.setDocumentTitle(DEMO_PROJECT_TITLE);
+    addRecentProject({ name: DEMO_PROJECT_TITLE, pages: this.pages.length || 1 });
     this.showToast(t('toastDemoLoaded'));
   }
 
@@ -761,13 +771,46 @@ export class TypesetOkApp {
       case 'toggle-lang':
         i18n.toggleLanguage();
         break;
-      case 'open-document':
-        this.showToast(tf('toastOpenFile', { path: typeof data === 'string' ? data : '' }));
+      case 'open-document': {
+        const win = window as any;
+        if (typeof data === 'string' && data) {
+          this.openProjectFile(data);
+        } else if (win.tokIpc?.showOpenDialog) {
+          win.tokIpc.showOpenDialog({ filters: [{ name: 'TypesetOK Document', extensions: ['tok'] }] })
+            .then((filePath: string | null) => {
+              if (filePath) this.openProjectFile(filePath);
+            });
+        } else {
+          this.showToast(tf('toastOpenFile', { path: '' }));
+        }
         break;
-      case 'save-document':
-      case 'save-as':
+      }
+      case 'save-document': {
+        addRecentProject({ name: this.documentTitle, pages: this.pages.length || 1 });
         this.showToast(t('toastSaved'));
         break;
+      }
+      case 'save-as': {
+        const win = window as any;
+        if (win.tokIpc?.showSaveDialog) {
+          win.tokIpc.showSaveDialog({
+            defaultPath: this.documentTitle,
+            filters: [{ name: 'TypesetOK Document', extensions: ['tok'] }]
+          }).then((filePath: string | null) => {
+            if (filePath) {
+              const baseName = filePath.split(/[\\/]/).pop() || filePath;
+              this.documentTitle = baseName;
+              this.topBar.setDocumentTitle(baseName);
+              addRecentProject({ name: baseName, path: filePath, pages: this.pages.length || 1 });
+              this.showToast(t('toastSaved'));
+            }
+          });
+        } else {
+          addRecentProject({ name: this.documentTitle, pages: this.pages.length || 1 });
+          this.showToast(t('toastSaved'));
+        }
+        break;
+      }
       case 'export-pdf':
         this.openExportDialog();
         break;
