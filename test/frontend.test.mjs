@@ -644,3 +644,32 @@ describe('Regression: UI page numbering matches the Rust gematria engine', () =>
   });
 });
 
+describe('Regression: the UI shows the real app version', () => {
+  test('getAppVersion asks the main process once', async () => {
+    let calls = 0;
+    globalThis.window.tokIpc = { getAppInfo: async () => { calls++; return { version: '1.2.3' }; } };
+    try {
+      const { getAppVersion } = await loadTs('packages/tok-ui/src/appInfo.ts');
+      assert.equal(await getAppVersion(), '1.2.3');
+      assert.equal(await getAppVersion(), '1.2.3');
+      assert.equal(calls, 1);
+    } finally {
+      delete globalThis.window.tokIpc;
+    }
+  });
+
+  test('no version number is hard-coded in the UI sources', () => {
+    const srcDir = path.join(rootDir, 'packages/tok-ui/src');
+    const offenders = [];
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.(ts|html)$/.test(p) && /\bv\d+\.\d+\.\d+\b/.test(fs.readFileSync(p, 'utf-8'))) offenders.push(path.relative(rootDir, p));
+      }
+    };
+    walk(srcDir);
+    assert.deepEqual(offenders, []);
+  });
+});
+

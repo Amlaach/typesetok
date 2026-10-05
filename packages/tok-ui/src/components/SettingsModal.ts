@@ -7,7 +7,7 @@ import { PluginEngine } from '../plugins/PluginEngine';
 import { IconName } from '../icons';
 import { el, icon, iconButton, button, kbd, switchRow, segmented, group, selectField } from '../ui';
 import { ModalController } from './ModalController';
-import { APP_VERSION } from './WelcomeModal';
+import { fillAppVersion, getAppVersion } from '../appInfo';
 
 export interface SettingsModalCallbacks {
   onLanguageChange: (lang: Language) => void;
@@ -166,7 +166,9 @@ export class SettingsModal {
       const next = tabButtons[(idx + (e.key === 'ArrowDown' ? 1 : -1) + tabButtons.length) % tabButtons.length];
       next.click();
     });
-    nav.appendChild(el('span', 'tok-settings-version', undefined, `TypesetOK · ${tf('welcomeVersion', { v: APP_VERSION })}`));
+    const versionSpan = el('span', 'tok-settings-version', undefined, 'TypesetOK');
+    fillAppVersion(versionSpan, (v) => `TypesetOK · ${tf('welcomeVersion', { v })}`);
+    nav.appendChild(versionSpan);
     body.appendChild(nav);
 
     // Content
@@ -440,7 +442,9 @@ export class SettingsModal {
 
     const current = el('div', 'tok-card tok-card-row');
     const info = el('div', undefined, { style: 'display:flex;flex-direction:column;gap:2px' });
-    info.appendChild(el('span', undefined, { style: 'font-size:13px;font-weight:600' }, `TypesetOK v${APP_VERSION}`));
+    const versionTitle = el('span', undefined, { style: 'font-size:13px;font-weight:600' }, 'TypesetOK');
+    fillAppVersion(versionTitle, (v) => `TypesetOK v${v}`);
+    info.appendChild(versionTitle);
     info.appendChild(el('span', undefined, { style: 'font-size:12px;color:var(--tok-text-secondary)' }, t('updatesCurrentChannel')));
     current.appendChild(info);
     const checkBtn = button(t('updatesCheckNow'), { className: 'tok-btn tok-btn-primary', icon: 'refresh', attrs: { 'data-focus-key': 'check-updates' } });
@@ -450,11 +454,11 @@ export class SettingsModal {
     const resultBox = el('div', 'tok-card', { 'aria-live': 'polite', style: 'font-size:13px;color:var(--tok-text-secondary)' }, t('updatesHint'));
     container.appendChild(resultBox);
 
-    const showLatest = () => {
+    const showLatest = (version?: string) => {
       resultBox.innerHTML = '';
       const line = el('span', undefined, { style: 'display:inline-flex;align-items:center;gap:6px;color:var(--tok-status-success)' });
       line.appendChild(icon('check', 15));
-      line.appendChild(el('span', undefined, undefined, t('updatesStatusLatest')));
+      line.appendChild(el('span', undefined, undefined, version ? `${t('updatesStatusLatest')} (v${version})` : t('updatesStatusLatest')));
       resultBox.appendChild(line);
     };
     const setChecking = (on: boolean) => {
@@ -491,14 +495,14 @@ export class SettingsModal {
               }
             }));
           } else {
-            showLatest();
+            showLatest(typeof res?.currentVersion === 'string' && res.currentVersion ? res.currentVersion : await getAppVersion());
           }
         } catch (err: any) {
           resultBox.textContent = `${t('updatesCheckFailed')}: ${err?.message ?? err}`;
         }
       } else {
         await new Promise((r) => setTimeout(r, 300));
-        showLatest();
+        showLatest(await getAppVersion());
       }
       setChecking(false);
     });

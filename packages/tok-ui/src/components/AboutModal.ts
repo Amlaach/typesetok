@@ -1,7 +1,7 @@
 import { t, i18n } from '../i18n';
 import { el, iconButton, button } from '../ui';
 import { ModalController } from './ModalController';
-import { APP_VERSION } from './WelcomeModal';
+import { fillAppVersion } from '../appInfo';
 
 export interface AboutModalCallbacks {
   onClose: () => void;
@@ -67,13 +67,18 @@ export class AboutModal {
     body.appendChild(el('p', undefined, undefined, t('appTagline')));
 
     const meta = el('div', 'tok-about-meta tok-card');
-    const line = (label: string, value: string, ltr = false) => {
+    const line = (label: string, value: string, ltr = false, isVersion = false) => {
       const row = el('div', 'tok-status-line');
       row.appendChild(el('span', undefined, undefined, label));
-      row.appendChild(el('span', undefined, ltr ? { dir: 'ltr' } : undefined, value));
+      const valEl = el('span', undefined, ltr ? { dir: 'ltr' } : undefined, value);
+      if (isVersion) {
+        valEl.setAttribute('data-app-version', '');
+        fillAppVersion(valEl, (v) => `v${v} Stable`);
+      }
+      row.appendChild(valEl);
       meta.appendChild(row);
     };
-    line(t('aboutVersionLabel'), `v${APP_VERSION}`, true);
+    line(t('aboutVersionLabel'), '—', true, true);
     line(t('aboutCoreLabel'), t('aboutRustVersion'));
     line(t('aboutShellLabel'), t('aboutShellValue'));
     body.appendChild(meta);

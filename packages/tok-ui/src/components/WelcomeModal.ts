@@ -1,6 +1,7 @@
 import { t, tf, i18n } from '../i18n';
 import { el, icon, iconButton, button } from '../ui';
 import { ModalController } from './ModalController';
+import { fillAppVersion } from '../appInfo';
 
 export interface WelcomeModalCallbacks {
   onSelectTemplate: (templateId: string) => void;
@@ -85,7 +86,6 @@ export function addRecentProject(entry: { name: string; path?: string; pages?: n
   } catch {}
 }
 
-export const APP_VERSION = '0.7.3';
 
 function pageArt(blocks: ArtBlock[], w: number, h: number): HTMLElement {
   const page = el('div', 'tok-page-art', { 'aria-hidden': 'true' });
@@ -331,7 +331,9 @@ export class WelcomeModal {
       else window.open(url, '_blank', 'noopener,noreferrer');
     });
     foot.appendChild(guide);
-    foot.appendChild(el('span', undefined, undefined, tf('welcomeVersion', { v: APP_VERSION })));
+    const verSpan = el('span');
+    fillAppVersion(verSpan, (v) => tf('welcomeVersion', { v }));
+    foot.appendChild(verSpan);
     foot.appendChild(button(t('continueToWorkspace'), {
       className: 'tok-btn tok-btn-sm',
       attrs: { 'data-focus-key': 'continue' },
