@@ -1,5 +1,5 @@
-import { renderIcon } from '../icons';
 import { t, i18n } from '../i18n';
+import { el, icon } from '../ui';
 
 export interface StatusBarCallbacks {
   onZoomChange: (zoomPercent: number) => void;
@@ -18,12 +18,11 @@ export class StatusBar {
   private activeFlow = 'גמרא (ראשי)';
   private preflightStatus: 'clean' | 'warning' | 'error' = 'clean';
 
-  // Live nodes updated in place by updateStats() (the bar used to be rebuilt on every
-  // page change while scrolling).
+  // Live nodes updated in place by updateStats().
   private pageText!: HTMLElement;
   private countText!: HTMLElement;
   private flowText!: HTMLElement;
-  private pfDot!: HTMLElement;
+  private pfItem!: HTMLElement;
   private pfText!: HTMLElement;
   private zoomSelect!: HTMLSelectElement;
 
@@ -33,17 +32,6 @@ export class StatusBar {
     this.element.className = 'tok-status-bar';
     this.element.setAttribute('role', 'status');
     this.element.dir = i18n.getDirection();
-    this.element.style.height = 'var(--tok-status-height)';
-    this.element.style.minHeight = 'var(--tok-status-height)';
-    this.element.style.background = 'var(--tok-bg-app)';
-    this.element.style.borderTop = '1px solid var(--tok-border-subtle)';
-    this.element.style.display = 'flex';
-    this.element.style.alignItems = 'center';
-    this.element.style.justifyContent = 'space-between';
-    this.element.style.padding = '0 12px';
-    this.element.style.fontSize = '11px';
-    this.element.style.color = 'var(--tok-text-secondary)';
-    this.element.style.userSelect = 'none';
 
     i18n.onChange(() => {
       this.element.dir = i18n.getDirection();
@@ -68,150 +56,82 @@ export class StatusBar {
     this.refresh();
   }
 
+  public getPreflightStatus(): 'clean' | 'warning' | 'error' {
+    return this.preflightStatus;
+  }
+
   /** Writes the current state into the existing nodes. All values go in as text, never HTML. */
   private refresh(): void {
     this.pageText.textContent = this.pageLabel;
-    this.countText.textContent = `${t('statusTextLength')}: ${this.wordCount.toLocaleString()} ${t('statusWords')}`;
+    this.countText.textContent = `${this.wordCount.toLocaleString()} ${t('statusWords')}`;
+    this.countText.title = t('statusTextLength');
     this.flowText.textContent = this.activeFlow;
 
-    const colors = { clean: '#10B981', warning: '#F59E0B', error: '#EF4444' };
-    this.pfDot.style.background = colors[this.preflightStatus];
-    this.pfText.style.color = colors[this.preflightStatus];
+    const cls = { clean: 'tok-status-ok', warning: 'tok-status-warn', error: 'tok-status-err' }[this.preflightStatus];
+    this.pfItem.className = `tok-status-btn ${cls}`;
     this.pfText.textContent =
       this.preflightStatus === 'clean' ? t('statusPreflightClean')
         : this.preflightStatus === 'warning' ? t('statusPreflightWarnings')
           : t('statusPreflightErrors');
 
-    // A zoom value that is not a preset (e.g. set programmatically) still needs an option to show.
+    // A zoom value that is not a preset (e.g. "fit to window") still needs an option to show.
+    this.zoomSelect.querySelectorAll('option[data-custom]').forEach((o) => {
+      if ((o as HTMLOptionElement).value !== String(this.zoom)) o.remove();
+    });
     if (!ZOOM_PRESETS.includes(this.zoom) && !this.zoomSelect.querySelector(`option[value="${this.zoom}"]`)) {
-      this.zoomSelect.appendChild(this.createZoomOption(this.zoom));
+      const opt = this.createZoomOption(this.zoom);
+      opt.dataset.custom = '';
+      const after = Array.from(this.zoomSelect.options).find((o) => parseInt(o.value, 10) > this.zoom);
+      this.zoomSelect.insertBefore(opt, after ?? null);
     }
     this.zoomSelect.value = String(this.zoom);
   }
 
   private createZoomOption(z: number): HTMLOptionElement {
-    const opt = document.createElement('option');
-    opt.value = z.toString();
-    opt.textContent = `${t('statusZoom')}: ${z}%`;
-    return opt;
+    return el('option', undefined, { value: String(z) }, `${z}%`);
   }
 
   private build(): void {
     this.element.innerHTML = '';
 
-    // Leading side
-    const right = document.createElement('div');
-    right.style.display = 'flex';
-    right.style.alignItems = 'center';
-    right.style.gap = '14px';
-
     // Page indicator (opens the command palette)
-    const pageItem = document.createElement('button');
-    pageItem.type = 'button';
-    pageItem.style.cursor = 'pointer';
-    pageItem.style.display = 'flex';
-    pageItem.style.alignItems = 'center';
-    pageItem.style.gap = '6px';
-    pageItem.style.background = 'transparent';
-    pageItem.style.border = 'none';
-    pageItem.style.color = 'inherit';
-    pageItem.style.font = 'inherit';
-    pageItem.style.padding = '0';
-    pageItem.title = t('statusGoToPage');
-    pageItem.innerHTML = renderIcon('pages', 13);
-    this.pageText = document.createElement('span');
+    const pageItem = el('button', 'tok-status-btn', { type: 'button', title: t('statusGoToPage') });
+    pageItem.appendChild(icon('pages', 14));
+    this.pageText = el('span');
     pageItem.appendChild(this.pageText);
     pageItem.addEventListener('click', () => this.callbacks.onPageClick());
-    right.appendChild(pageItem);
+    this.element.appendChild(pageItem);
 
-    right.appendChild(this.createSeparator());
+    this.countText = el('span');
+    this.element.appendChild(this.countText);
 
-    this.countText = document.createElement('span');
-    right.appendChild(this.countText);
-
-    right.appendChild(this.createSeparator());
-
-    const flowItem = document.createElement('span');
-    const flowLabel = document.createElement('span');
-    flowLabel.textContent = `${t('statusActiveFlow')}: `;
-    flowItem.appendChild(flowLabel);
-    this.flowText = document.createElement('strong');
-    this.flowText.style.color = '#60A5FA';
+    const flowItem = el('span');
+    flowItem.appendChild(el('span', undefined, undefined, `${t('statusActiveFlow')}: `));
+    this.flowText = el('strong', undefined, { style: 'font-weight:600;color:var(--tok-text-primary)' });
     flowItem.appendChild(this.flowText);
-    right.appendChild(flowItem);
+    this.element.appendChild(flowItem);
 
-    this.element.appendChild(right);
+    this.element.appendChild(el('span', 'tok-grow'));
 
-    // Trailing side
-    const left = document.createElement('div');
-    left.style.display = 'flex';
-    left.style.alignItems = 'center';
-    left.style.gap = '14px';
+    this.element.appendChild(el('span', undefined, undefined, t('statusJustificationRules')));
 
-    const engineItem = document.createElement('span');
-    engineItem.textContent = t('statusJustificationRules');
-    left.appendChild(engineItem);
+    this.pfItem = el('button', 'tok-status-btn', { type: 'button' });
+    this.pfItem.appendChild(el('span', 'tok-dot', { 'aria-hidden': 'true' }));
+    this.pfText = el('span', undefined, { style: 'font-weight:500' });
+    this.pfItem.appendChild(this.pfText);
+    this.pfItem.addEventListener('click', () => this.callbacks.onPreflightClick());
+    this.element.appendChild(this.pfItem);
 
-    left.appendChild(this.createSeparator());
-
-    const pfItem = document.createElement('button');
-    pfItem.type = 'button';
-    pfItem.style.cursor = 'pointer';
-    pfItem.style.display = 'flex';
-    pfItem.style.alignItems = 'center';
-    pfItem.style.gap = '6px';
-    pfItem.style.background = 'transparent';
-    pfItem.style.border = 'none';
-    pfItem.style.font = 'inherit';
-    pfItem.style.padding = '0';
-
-    this.pfDot = document.createElement('span');
-    this.pfDot.style.width = '8px';
-    this.pfDot.style.height = '8px';
-    this.pfDot.style.borderRadius = '50%';
-    this.pfDot.setAttribute('aria-hidden', 'true');
-    pfItem.appendChild(this.pfDot);
-
-    this.pfText = document.createElement('span');
-    this.pfText.style.fontWeight = '600';
-    pfItem.appendChild(this.pfText);
-
-    pfItem.addEventListener('click', () => this.callbacks.onPreflightClick());
-    left.appendChild(pfItem);
-
-    left.appendChild(this.createSeparator());
-
-    this.zoomSelect = document.createElement('select');
-    this.zoomSelect.className = 'tok-select';
-    this.zoomSelect.setAttribute('aria-label', t('statusZoom'));
-    this.zoomSelect.style.height = '20px';
-    this.zoomSelect.style.fontSize = '10px';
-    this.zoomSelect.style.padding = '0 4px';
-    this.zoomSelect.style.background = 'transparent';
-    this.zoomSelect.style.border = 'none';
-    this.zoomSelect.style.color = 'var(--tok-text-secondary)';
-    this.zoomSelect.style.cursor = 'pointer';
-    for (const z of ZOOM_PRESETS) {
-      this.zoomSelect.appendChild(this.createZoomOption(z));
-    }
+    this.zoomSelect = el('select', 'tok-status-btn', { 'aria-label': t('statusZoom'), title: t('statusZoom'), style: 'cursor:pointer' });
+    for (const z of ZOOM_PRESETS) this.zoomSelect.appendChild(this.createZoomOption(z));
     this.zoomSelect.addEventListener('change', () => {
       const z = parseInt(this.zoomSelect.value, 10);
       if (!Number.isFinite(z)) return;
       this.zoom = z;
       this.callbacks.onZoomChange(z);
     });
-    left.appendChild(this.zoomSelect);
+    this.element.appendChild(this.zoomSelect);
 
-    this.element.appendChild(left);
     this.refresh();
-  }
-
-  private createSeparator(): HTMLElement {
-    const sep = document.createElement('div');
-    sep.style.width = '1px';
-    sep.style.height = '12px';
-    sep.style.background = 'var(--tok-border-subtle)';
-    sep.setAttribute('aria-hidden', 'true');
-    return sep;
   }
 }

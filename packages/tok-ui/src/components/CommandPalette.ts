@@ -1,5 +1,6 @@
-import { renderIcon } from '../icons';
-import { t, i18n } from '../i18n';
+import { IconName } from '../icons';
+import { t, tf, i18n } from '../i18n';
+import { el, icon, kbd } from '../ui';
 
 export interface PaletteItem {
   id: string;
@@ -7,6 +8,8 @@ export interface PaletteItem {
   title: string;
   subtitle?: string;
   shortcut?: string;
+  /** Optional icon shown before the title. */
+  icon?: IconName;
   action: () => void;
 }
 
@@ -59,12 +62,40 @@ export function matchesPaletteQuery(item: Pick<PaletteItem, 'title' | 'category'
   return q.split(' ').every((term) => hay.includes(term));
 }
 
+/**
+ * Splits `text` into plain and matched parts for every query term (niqqud-insensitive
+ * matching is approximated on the visible text; unmatched text stays plain).
+ */
+export function highlightParts(text: string, query: string): { text: string; match: boolean }[] {
+  const terms = normalizeSearchText(query).split(' ').filter(Boolean);
+  if (!terms.length) return [{ text, match: false }];
+  const lower = text.toLowerCase();
+  const marks = new Array(text.length).fill(false);
+  for (const term of terms) {
+    let from = 0;
+    for (;;) {
+      const idx = lower.indexOf(term, from);
+      if (idx < 0) break;
+      for (let k = idx; k < idx + term.length; k++) marks[k] = true;
+      from = idx + term.length;
+    }
+  }
+  const parts: { text: string; match: boolean }[] = [];
+  for (let k = 0; k < text.length; k++) {
+    const last = parts[parts.length - 1];
+    if (last && last.match === marks[k]) last.text += text[k];
+    else parts.push({ text: text[k], match: marks[k] });
+  }
+  return parts;
+}
+
 export class CommandPalette {
   public element: HTMLElement;
   private isVisible = false;
   private inputEl!: HTMLInputElement;
   private listEl!: HTMLElement;
   private footerEl!: HTMLElement;
+  private countEl!: HTMLElement;
   private emptyText = '';
   private items: PaletteItem[] = [];
   private filteredItems: PaletteItem[] = [];
@@ -143,13 +174,25 @@ export class CommandPalette {
     this.inputEl.placeholder = t('paletteSearchPlaceholder');
     this.inputEl.setAttribute('aria-label', t('paletteSearchPlaceholder'));
     this.footerEl.innerHTML = '';
-    for (const key of ['paletteHintNavigate', 'paletteHintRun', 'paletteHintClose']) {
-      const span = document.createElement('span');
-      span.textContent = t(key);
-      this.footerEl.appendChild(span);
-    }
+    const hint = (keys: string, labelKey: string) => {
+      const span = el('span');
+      span.appendChild(kbd(keys));
+      span.appendChild(el('span', undefined, undefined, t(labelKey)));
+      return span;
+    };
+    this.footerEl.appendChild(hint('↑ ↓', 'paletteNavigateShort'));
+    this.footerEl.appendChild(hint('Enter', 'paletteRunShort'));
+    this.footerEl.appendChild(hint('Esc', 'aboutClose'));
+    this.footerEl.appendChild(el('span', 'tok-grow'));
+    this.countEl = el('span');
+    this.footerEl.appendChild(this.countEl);
+    this.updateCount();
     this.emptyText = t('paletteNoResults');
     if (this.isVisible && this.filteredItems.length === 0) this.renderList();
+  }
+
+  private updateCount(): void {
+    if (this.countEl) this.countEl.textContent = tf('paletteResultsCount', { n: this.filteredItems.length });
   }
 
   private render(): void {
@@ -157,66 +200,33 @@ export class CommandPalette {
     this.element.setAttribute('role', 'dialog');
     this.element.setAttribute('aria-modal', 'true');
 
-    const modal = document.createElement('div');
-    modal.className = 'tok-palette-modal';
-    // The stylesheet hard-codes `direction: rtl` on the modal; follow the UI language instead.
-    modal.style.direction = 'inherit';
+    const modal = el('div', 'tok-palette-modal');
     modal.addEventListener('click', (e) => e.stopPropagation());
 
-    // Search Input Bar
-    const inputWrap = document.createElement('div');
-    inputWrap.className = 'tok-palette-input-wrap';
-
-    const searchIcon = document.createElement('span');
-    searchIcon.style.display = 'inline-flex';
-    searchIcon.style.alignItems = 'center';
-    searchIcon.style.marginInlineEnd = '10px';
-    searchIcon.style.color = '#94A3B8';
-    searchIcon.setAttribute('aria-hidden', 'true');
-    searchIcon.innerHTML = renderIcon('search', 16);
-    inputWrap.appendChild(searchIcon);
-
-    this.inputEl = document.createElement('input');
-    this.inputEl.type = 'text';
-    this.inputEl.className = 'tok-palette-input';
-    this.inputEl.setAttribute('role', 'combobox');
-    this.inputEl.setAttribute('aria-expanded', 'true');
-    this.inputEl.setAttribute('aria-controls', 'tok-palette-list');
-    this.inputEl.setAttribute('aria-autocomplete', 'list');
-    this.inputEl.autocomplete = 'off';
-    this.inputEl.spellcheck = false;
+    // Search field
+    const inputWrap = el('div', 'tok-palette-input-wrap');
+    inputWrap.appendChild(icon('search', 19));
+    this.inputEl = el('input', 'tok-palette-input', {
+      type: 'text',
+      role: 'combobox',
+      'aria-expanded': 'true',
+      'aria-controls': 'tok-palette-list',
+      'aria-autocomplete': 'list',
+      autocomplete: 'off',
+      spellcheck: 'false'
+    });
     inputWrap.appendChild(this.inputEl);
-
-    const escBadge = document.createElement('span');
-    escBadge.style.fontSize = '11px';
-    escBadge.style.color = 'var(--tok-text-muted)';
-    escBadge.style.background = '#333';
-    escBadge.style.padding = '2px 6px';
-    escBadge.style.borderRadius = '4px';
-    escBadge.setAttribute('aria-hidden', 'true');
-    escBadge.textContent = 'Esc';
-    inputWrap.appendChild(escBadge);
-
+    const esc = kbd('Esc');
+    esc.setAttribute('aria-hidden', 'true');
+    inputWrap.appendChild(esc);
     modal.appendChild(inputWrap);
 
-    // Filtered List
-    this.listEl = document.createElement('div');
-    this.listEl.className = 'tok-palette-list';
-    this.listEl.id = 'tok-palette-list';
-    this.listEl.setAttribute('role', 'listbox');
+    // Results
+    this.listEl = el('div', 'tok-palette-list', { id: 'tok-palette-list', role: 'listbox' });
     modal.appendChild(this.listEl);
 
-    // Footer Hint Bar
-    this.footerEl = document.createElement('div');
-    this.footerEl.style.padding = '8px 16px';
-    this.footerEl.style.borderTop = '1px solid var(--tok-border-subtle)';
-    this.footerEl.style.background = '#222222';
-    this.footerEl.style.display = 'flex';
-    this.footerEl.style.alignItems = 'center';
-    this.footerEl.style.justifyContent = 'space-between';
-    this.footerEl.style.fontSize = '11px';
-    this.footerEl.style.color = 'var(--tok-text-muted)';
-    this.footerEl.setAttribute('aria-hidden', 'true');
+    // Footer hints
+    this.footerEl = el('div', 'tok-palette-foot', { 'aria-hidden': 'true' });
     modal.appendChild(this.footerEl);
 
     this.element.appendChild(modal);
@@ -278,7 +288,8 @@ export class CommandPalette {
 
   private isOtherModalOpen(): boolean {
     return Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"]')).some(
-      (el) => el !== this.element && el.style.display !== 'none'
+      // Overlays open via a CSS class, so check the computed display, not the inline style.
+      (node) => node !== this.element && node.isConnected && getComputedStyle(node).display !== 'none'
     );
   }
 
@@ -307,18 +318,14 @@ export class CommandPalette {
     if (prev) {
       prev.classList.remove('active');
       prev.setAttribute('aria-selected', 'false');
-      const arrow = prev.firstElementChild?.firstElementChild as HTMLElement | null;
-      if (arrow) arrow.style.opacity = '0.4';
     }
     this.selectedIndex = index;
-    const el = this.itemEls[index];
-    if (el) {
-      el.classList.add('active');
-      el.setAttribute('aria-selected', 'true');
-      const arrow = el.firstElementChild?.firstElementChild as HTMLElement | null;
-      if (arrow) arrow.style.opacity = '1';
-      this.inputEl.setAttribute('aria-activedescendant', el.id);
-      el.scrollIntoView({ block: 'nearest' });
+    const item = this.itemEls[index];
+    if (item) {
+      item.classList.add('active');
+      item.setAttribute('aria-selected', 'true');
+      this.inputEl.setAttribute('aria-activedescendant', item.id);
+      item.scrollIntoView({ block: 'nearest' });
     } else {
       this.inputEl.removeAttribute('aria-activedescendant');
     }
@@ -327,84 +334,50 @@ export class CommandPalette {
   private renderList(): void {
     this.listEl.innerHTML = '';
     this.itemEls = [];
+    this.updateCount();
 
     if (this.filteredItems.length === 0) {
-      const empty = document.createElement('div');
-      empty.style.padding = '24px';
-      empty.style.textAlign = 'center';
-      empty.style.color = 'var(--tok-text-muted)';
-      empty.textContent = this.emptyText;
-      this.listEl.appendChild(empty);
+      this.listEl.appendChild(el('div', 'tok-palette-empty', undefined, this.emptyText));
       this.inputEl.removeAttribute('aria-activedescendant');
       return;
     }
 
+    const query = this.inputEl.value;
     const fragment = document.createDocumentFragment();
     let currentCat = '';
     this.filteredItems.forEach((item, index) => {
       if (item.category !== currentCat) {
         currentCat = item.category;
-        const catEl = document.createElement('div');
-        catEl.className = 'tok-palette-category';
-        catEl.setAttribute('role', 'presentation');
-        catEl.textContent = currentCat;
-        fragment.appendChild(catEl);
+        fragment.appendChild(el('div', 'tok-palette-category', { role: 'presentation' }, currentCat));
       }
 
-      const itemEl = document.createElement('div');
-      itemEl.className = 'tok-palette-item';
-      itemEl.id = `tok-palette-item-${index}`;
-      itemEl.setAttribute('role', 'option');
-      itemEl.setAttribute('aria-selected', 'false');
+      const row = el('div', 'tok-palette-item', { id: `tok-palette-item-${index}`, role: 'option', 'aria-selected': 'false' });
+      const ic = el('span', 'tok-palette-icon', { 'aria-hidden': 'true' });
+      ic.appendChild(icon(item.icon ?? 'zap', 17));
+      row.appendChild(ic);
 
-      const left = document.createElement('div');
-      left.style.display = 'flex';
-      left.style.alignItems = 'center';
-      left.style.gap = '8px';
-
-      const arrow = document.createElement('span');
-      // Points toward the reading direction's start of the text.
-      arrow.textContent = i18n.getDirection() === 'rtl' ? '‹' : '›';
-      arrow.setAttribute('aria-hidden', 'true');
-      arrow.style.opacity = '0.4';
-      left.appendChild(arrow);
-
-      const title = document.createElement('span');
-      title.textContent = item.title;
-      left.appendChild(title);
-
-      if (item.subtitle) {
-        const sub = document.createElement('span');
-        sub.style.fontSize = '11px';
-        sub.style.opacity = '0.7';
-        sub.textContent = `— ${item.subtitle}`;
-        left.appendChild(sub);
+      const title = el('span', 'tok-palette-title');
+      for (const part of highlightParts(item.title, query)) {
+        title.appendChild(part.match ? el('mark', undefined, undefined, part.text) : document.createTextNode(part.text));
       }
-      itemEl.appendChild(left);
+      row.appendChild(title);
+      if (item.subtitle) row.appendChild(el('span', 'tok-palette-sub', undefined, item.subtitle));
+      row.appendChild(el('span', 'tok-grow'));
+      if (item.shortcut) row.appendChild(kbd(item.shortcut));
+      const enter = el('span', 'tok-palette-enter tok-flip-rtl', { 'aria-hidden': 'true' });
+      enter.appendChild(icon('arrowForward', 16));
+      row.appendChild(enter);
 
-      if (item.shortcut) {
-        const sc = document.createElement('kbd');
-        sc.style.fontSize = '10px';
-        sc.style.background = 'rgba(0,0,0,0.3)';
-        sc.style.padding = '1px 5px';
-        sc.style.borderRadius = '3px';
-        sc.style.fontFamily = 'inherit';
-        sc.dir = 'ltr';
-        sc.textContent = item.shortcut;
-        itemEl.appendChild(sc);
-      }
-
-      itemEl.addEventListener('mousemove', () => {
+      row.addEventListener('mousemove', () => {
         if (this.selectedIndex !== index) this.setSelected(index);
       });
-      itemEl.addEventListener('click', () => this.runItem(item));
+      row.addEventListener('click', () => this.runItem(item));
 
-      this.itemEls.push(itemEl);
-      fragment.appendChild(itemEl);
+      this.itemEls.push(row);
+      fragment.appendChild(row);
     });
     this.listEl.appendChild(fragment);
 
     this.setSelected(Math.min(this.selectedIndex, this.itemEls.length - 1));
   }
 }
-

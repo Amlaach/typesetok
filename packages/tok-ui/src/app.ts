@@ -4,8 +4,9 @@ import { ContextualInspector } from './components/ContextualInspector';
 import { ActionHud } from './components/ActionHud';
 import { CommandPalette, PaletteItem } from './components/CommandPalette';
 import { StatusBar } from './components/StatusBar';
-import { SpreadCanvas, isRightHandPage } from './components/SpreadCanvas';
-import { WelcomeModal } from './components/WelcomeModal';
+import { SpreadCanvas, isRightHandPage, isRectoPage, groupIntoSpreads } from './components/SpreadCanvas';
+import { ExportDialog, ExportOptions } from './components/ExportDialog';
+import { WelcomeModal, addRecentProject } from './components/WelcomeModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
 import { PluginEngine } from './plugins/PluginEngine';
@@ -14,7 +15,7 @@ import { PageDescriptor } from 'tok-viewer';
 import { ViewMode } from './types';
 import { i18n, t, tf } from './i18n';
 import { themeManager } from './theme';
-import { renderIcon } from './icons';
+import { el, icon, iconButton, button } from './ui';
 
 import { toHebrewGematria } from './gematria';
 export { toHebrewGematria };
@@ -39,7 +40,9 @@ const FLOW_NAME_KEYS: Record<string, string> = {
 /** Template id → document title shown in the top bar (document names, not UI text). */
 const TEMPLATE_TITLES: Record<string, string> = {
   gemara: 'מסכת ברכות — צורת הדף.tok',
+  mikraot: 'מקראות גדולות — בראשית.tok',
   prose: 'ספר קריאה — מהדורה ראשונה.tok',
+  notes: 'ספר עם הערות — חלק א׳.tok',
   bulletin: 'עלון שבת קודש.tok'
 };
 const BLANK_TEMPLATE_TITLE = 'מסמך ריק.tok';
@@ -59,12 +62,19 @@ export class TypesetOkApp {
   private storyEditor!: StoryEditor;
   private storyContainer!: HTMLElement;
   private storyHeader!: HTMLElement;
+  private storyFlowChip!: HTMLButtonElement;
+  private storyWordCount!: HTMLElement;
+  private storyFontPx = 19;
+  private splitDivider!: HTMLElement;
+  private panelOpenBeforeSplit: boolean | null = null;
+  private documentTitle = DEMO_PROJECT_TITLE;
   private workbench!: HTMLElement;
 
   // Feature modals are built on first use (they are hidden at startup).
   private welcomeModalInstance?: WelcomeModal;
   private settingsModalInstance?: SettingsModal;
   private aboutModalInstance?: AboutModal;
+  private exportDialogInstance?: ExportDialog;
   private pluginEngine!: PluginEngine;
 
   private currentViewMode: ViewMode = 'canvas';
@@ -113,7 +123,9 @@ export class TypesetOkApp {
       onOpenAbout: () => this.aboutModal.show(),
       onToggleLanguage: () => {
         this.showToast(tf('toastLangSwitched', { lang: t(i18n.getLanguage() === 'he' ? 'appLangHebrewRtl' : 'appLangEnglishLtr') }));
-      }
+      },
+      onUndo: () => this.runEditCommand('undo'),
+      onRedo: () => this.runEditCommand('redo')
     });
     this.root.appendChild(this.topBar.element);
 
@@ -138,6 +150,7 @@ export class TypesetOkApp {
         this.activeFlowId = flowId;
         const name = this.flowDisplayName(flowId);
         this.statusBar.updateStats({ activeFlow: name });
+        this.updateStoryToolbar();
         this.showToast(tf('toastFlowSelected', { name }));
       },
       onSelectStyle: (styleId) => {
@@ -165,32 +178,30 @@ export class TypesetOkApp {
       },
       onPageChange: (idx) => {
         this.updatePageStats(idx);
-      }
+      },
+      onZoomChange: (z) => this.statusBar?.updateStats({ zoom: z })
     });
-    this.workbench.appendChild(this.canvas.element);
 
-    // 3c. Continuous Story Editor Panel (Hidden in pure canvas mode)
-    this.storyContainer = document.createElement('div');
-    this.storyContainer.className = 'tok-story-panel';
-    this.storyContainer.style.width = '360px';
-    this.storyContainer.style.background = 'var(--tok-bg-surface-1)';
-    this.storyContainer.style.borderRight = '1px solid var(--tok-border-subtle)';
+    // 3c. Continuous story editor (hidden in page view). In RTL the editor sits on the
+    // right and the pages on the left in split view, with a draggable divider between.
+    this.storyContainer = el('section', 'tok-story-panel', { 'aria-labelledby': 'tok-story-title' });
     this.storyContainer.style.display = 'none';
-    this.storyContainer.style.flexDirection = 'column';
 
-    this.storyHeader = document.createElement('div');
-    this.storyHeader.style.padding = '8px 14px';
-    this.storyHeader.style.background = 'var(--tok-bg-surface-2)';
-    this.storyHeader.style.borderBottom = '1px solid var(--tok-border-subtle)';
-    this.storyHeader.style.fontWeight = 'bold';
-    this.storyHeader.style.fontSize = '12px';
-    this.storyHeader.style.color = 'var(--tok-text-secondary)';
-    this.storyHeader.textContent = t('appStoryEditorTitle');
+    this.storyHeader = el('h2', 'tok-visually-hidden', { id: 'tok-story-title' }, t('appStoryEditorTitle'));
     this.storyContainer.appendChild(this.storyHeader);
+    this.storyContainer.appendChild(this.buildStoryToolbar());
 
-    this.storyEditor = new StoryEditor(this.storyContainer);
+    const storyScroll = el('div', 'tok-story-scroll');
+    this.storyContainer.appendChild(storyScroll);
+    this.storyEditor = new StoryEditor(storyScroll);
     this.storyEditor.onTextChange(() => this.scheduleWordCountUpdate());
+
+    this.splitDivider = this.buildSplitDivider();
+    this.splitDivider.style.display = 'none';
+
     this.workbench.appendChild(this.storyContainer);
+    this.workbench.appendChild(this.splitDivider);
+    this.workbench.appendChild(this.canvas.element);
 
     // 3d. Left Side (Trailing in RTL): Contextual Inspector
     this.inspector = new ContextualInspector({
@@ -268,6 +279,7 @@ export class TypesetOkApp {
     this.root.dir = dir;
     this.workbench.dir = dir;
     this.storyHeader.textContent = t('appStoryEditorTitle');
+    this.updateStoryToolbar();
     // registerItem replaces by id, so plugin-registered commands are kept.
     for (const cmd of this.buildCommands()) this.commandPalette.registerItem(cmd);
     this.refreshThumbnails();
@@ -286,7 +298,7 @@ export class TypesetOkApp {
     if (!this.welcomeModalInstance) {
       this.welcomeModalInstance = new WelcomeModal({
         onSelectTemplate: (tmpl) => this.handleTemplateSelect(tmpl),
-        onOpenProject: () => this.handleSystemAction('open-document'),
+        onOpenProject: (path) => this.handleSystemAction('open-document', path),
         onLoadDemo: () => this.loadDemoProject(),
         onClose: () => {},
         onOpenSettings: () => this.settingsModal.show(),
@@ -305,7 +317,13 @@ export class TypesetOkApp {
         },
         onClose: () => {},
         pluginEngine: this.pluginEngine,
-        showToast: (msg) => this.showToast(msg)
+        showToast: (msg) => this.showToast(msg),
+        getGuides: () => this.canvas.getGuides(),
+        setGuide: (guide, visible) => {
+          const current = this.canvas.getGuides();
+          if (guide === 'margins' && current.margins !== visible) this.canvas.toggleMarginsGuide();
+          if (guide === 'baseline' && current.baseline !== visible) this.canvas.toggleBaselineGuide();
+        }
       });
       this.root.appendChild(this.settingsModalInstance.element);
     }
@@ -320,6 +338,135 @@ export class TypesetOkApp {
       this.root.appendChild(this.aboutModalInstance.element);
     }
     return this.aboutModalInstance;
+  }
+
+  private get exportDialog(): ExportDialog {
+    if (!this.exportDialogInstance) {
+      this.exportDialogInstance = new ExportDialog({ onExport: (options) => this.runExport(options) });
+      this.root.appendChild(this.exportDialogInstance.element);
+    }
+    return this.exportDialogInstance;
+  }
+
+  /** Opens the export dialog for the current document. */
+  public openExportDialog(): void {
+    const spread = groupIntoSpreads(this.pages.length).find((sp) => sp.includes(this.activePageIndex)) ?? [];
+    this.exportDialog.show({
+      documentTitle: this.documentTitle,
+      pageCount: this.pages.length,
+      spreadLabels: spread.map((pos) => {
+        const p = this.pages[pos];
+        return `${p ? p.gematriaNumber : toHebrewGematria(pos + 1)} ${isRectoPage(pos) ? 'ע״א' : 'ע״ב'}`;
+      }),
+      preflightStatus: this.statusBar.getPreflightStatus()
+    });
+  }
+
+  /** Runs the export with the options chosen in the dialog (same tok-cli path as before). */
+  private runExport(options: ExportOptions): void {
+    const win = window as any;
+    if (win.tokIpc) {
+      this.showToast(t('toastExporting'));
+      // The CLI currently renders its built-in sample document and takes only an
+      // output path; the other options are recorded for when the engine accepts them.
+      console.log('[TOK] Export options:', options);
+      win.tokIpc.renderPdf('--demo', options.fileName)
+        .then(() => {
+          this.showToast(t('toastExportDone'));
+        })
+        .catch((err: any) => {
+          this.showToast(tf('toastExportError', { error: err?.message ?? String(err) }), true);
+        });
+    } else {
+      this.showToast(t('toastExportSimulated'));
+    }
+  }
+
+  /** Undo/redo in the story editor (the only editable text surface for now). */
+  private runEditCommand(command: 'undo' | 'redo'): void {
+    const editor = this.storyEditor.getElement();
+    if (!editor.contains(document.activeElement)) editor.focus();
+    document.execCommand(command);
+    this.scheduleWordCountUpdate();
+  }
+
+  private buildStoryToolbar(): HTMLElement {
+    const bar = el('div', 'tok-story-toolbar', { role: 'toolbar', 'aria-label': t('storyToolbar') });
+    this.storyFlowChip = el('button', 'tok-chip-select', { type: 'button' });
+    this.storyFlowChip.addEventListener('click', () => this.structureBar.showTab('flows'));
+    bar.appendChild(this.storyFlowChip);
+    bar.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:18px' }));
+    bar.appendChild(iconButton('minus', t('storyFontSmaller'), () => this.setStoryFont(this.storyFontPx - 1), { size: 15, attrs: { style: 'width:30px;height:30px' } }));
+    bar.appendChild(iconButton('plus', t('storyFontLarger'), () => this.setStoryFont(this.storyFontPx + 1), { size: 15, attrs: { style: 'width:30px;height:30px' } }));
+    bar.appendChild(el('span', 'tok-grow'));
+    this.storyWordCount = el('span', undefined, { style: 'font-size:12px;color:var(--tok-text-muted)' });
+    bar.appendChild(this.storyWordCount);
+    bar.appendChild(button(t('storyShowOnPage'), {
+      className: 'tok-btn tok-btn-ghost tok-btn-sm tok-flip-rtl',
+      onClick: () => {
+        this.setViewMode('canvas');
+        this.topBar.setViewMode('canvas');
+        this.canvas.scrollToPage(this.activePageIndex);
+      }
+    }));
+    this.updateStoryToolbar();
+    return bar;
+  }
+
+  private updateStoryToolbar(): void {
+    if (!this.storyFlowChip) return;
+    const flow = this.structureBar?.getFlows().find((f) => f.id === this.activeFlowId);
+    const name = this.flowDisplayName(this.activeFlowId || 'gemara');
+    this.storyFlowChip.replaceChildren();
+    const sw = el('span', 'tok-swatch', { 'aria-hidden': 'true', style: 'width:8px;height:8px;border-radius:2px' });
+    sw.style.background = flow?.color ?? 'var(--tok-accent-text)';
+    this.storyFlowChip.appendChild(sw);
+    this.storyFlowChip.appendChild(el('span', undefined, undefined, name));
+    this.storyFlowChip.appendChild(icon('chevronDown', 12));
+    this.storyFlowChip.setAttribute('aria-label', tf('storyFlowChip', { name }));
+    this.storyFlowChip.title = t('structureFlowsTitle');
+    const words = this.storyEditor ? this.storyEditor.getStory().reduce((sum: number, p: StoryParagraph) => sum + countWords(p.text), 0) : 0;
+    this.storyWordCount.textContent = tf('storyWordsCount', { n: words.toLocaleString() });
+  }
+
+  private setStoryFont(px: number): void {
+    this.storyFontPx = Math.max(13, Math.min(32, px));
+    this.storyEditor.setFontSize(this.storyFontPx);
+  }
+
+  /** Vertical divider between editor and pages in split view (drag or arrow keys). */
+  private buildSplitDivider(): HTMLElement {
+    const divider = el('div', 'tok-split-divider', { role: 'separator', 'aria-orientation': 'vertical', tabindex: '0', 'aria-label': t('splitResize') });
+    const grip = el('span', undefined, { 'aria-hidden': 'true' });
+    grip.appendChild(icon('grip', 14));
+    divider.appendChild(grip);
+    const setWidth = (px: number) => {
+      const total = this.workbench.clientWidth;
+      const w = Math.max(320, Math.min(total - 520, px));
+      this.storyContainer.style.flex = `0 0 ${w}px`;
+    };
+    divider.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      divider.setPointerCapture(e.pointerId);
+      const startX = e.clientX;
+      const startW = this.storyContainer.getBoundingClientRect().width;
+      const rtl = i18n.getDirection() === 'rtl';
+      const move = (ev: PointerEvent) => setWidth(startW + (rtl ? startX - ev.clientX : ev.clientX - startX));
+      const up = () => {
+        divider.removeEventListener('pointermove', move);
+        divider.removeEventListener('pointerup', up);
+      };
+      divider.addEventListener('pointermove', move);
+      divider.addEventListener('pointerup', up);
+    });
+    divider.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const rtl = i18n.getDirection() === 'rtl';
+      const grow = (e.key === 'ArrowLeft') === rtl;
+      setWidth(this.storyContainer.getBoundingClientRect().width + (grow ? 24 : -24));
+    });
+    return divider;
   }
 
   public openWelcome(): void {
@@ -339,6 +486,7 @@ export class TypesetOkApp {
     return [
       {
         id: 'cmd-open-welcome',
+        icon: 'folder',
         category: t('cmdCatProjects'),
         title: t('cmdWelcomeTitle'),
         subtitle: t('cmdWelcomeSub'),
@@ -347,6 +495,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-open-settings',
+        icon: 'settings',
         category: t('cmdCatSystem'),
         title: t('cmdSettingsTitle'),
         subtitle: t('cmdSettingsSub'),
@@ -355,6 +504,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-open-about',
+        icon: 'info',
         category: t('cmdCatSystem'),
         title: t('cmdAboutTitle'),
         subtitle: t('cmdAboutSub'),
@@ -362,6 +512,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-toggle-lang',
+        icon: 'globe',
         category: t('cmdCatSystem'),
         title: t('cmdToggleLangTitle'),
         shortcut: 'Alt+Shift+L',
@@ -369,6 +520,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-full-justify',
+        icon: 'alignJustify',
         category: t('cmdCatTypography'),
         title: t('cmdJustifyTitle'),
         subtitle: t('cmdJustifySub'),
@@ -377,6 +529,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-norm-niqqud',
+        icon: 'sparkle',
         category: t('cmdCatTypography'),
         title: t('cmdNormalizeTitle'),
         subtitle: t('cmdNormalizeSub'),
@@ -385,6 +538,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-shield-divine',
+        icon: 'lock',
         category: t('cmdCatTypography'),
         title: t('cmdShieldTitle'),
         subtitle: t('cmdShieldSub'),
@@ -392,6 +546,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-recalc-gematria',
+        icon: 'refresh',
         category: t('cmdCatTypography'),
         title: t('cmdGematriaTitle'),
         subtitle: t('cmdGematriaSub'),
@@ -399,6 +554,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-export-pdf',
+        icon: 'upload',
         category: t('cmdCatPrint'),
         title: t('cmdExportTitle'),
         subtitle: t('cmdExportSub'),
@@ -407,6 +563,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-new-page',
+        icon: 'pages',
         category: t('cmdCatPages'),
         title: t('cmdNewPageTitle'),
         shortcut: 'Ctrl+Enter',
@@ -414,6 +571,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-toggle-margins',
+        icon: 'frame',
         category: t('cmdCatView'),
         title: t('cmdMarginsTitle'),
         action: () => {
@@ -423,6 +581,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-toggle-baseline',
+        icon: 'ruler',
         category: t('cmdCatView'),
         title: t('cmdBaselineTitle'),
         action: () => {
@@ -432,12 +591,50 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-zoom-100',
+        icon: 'search',
         category: t('cmdCatView'),
         title: t('cmdZoom100Title'),
         shortcut: 'Ctrl+0',
         action: () => {
           this.canvas.setZoom(100);
           this.statusBar.updateStats({ zoom: 100 });
+        }
+      },
+      {
+        id: 'cmd-zoom-fit',
+        category: t('cmdCatView'),
+        title: t('canvasFit'),
+        icon: 'fit',
+        action: () => this.canvas.fitToWindow()
+      },
+      {
+        id: 'cmd-view-canvas',
+        category: t('cmdCatView'),
+        title: t('topBarViewCanvas'),
+        icon: 'canvas',
+        action: () => {
+          this.setViewMode('canvas');
+          this.topBar.setViewMode('canvas');
+        }
+      },
+      {
+        id: 'cmd-view-split',
+        category: t('cmdCatView'),
+        title: t('topBarViewSplit'),
+        icon: 'split',
+        action: () => {
+          this.setViewMode('split');
+          this.topBar.setViewMode('split');
+        }
+      },
+      {
+        id: 'cmd-view-story',
+        category: t('cmdCatView'),
+        title: t('topBarViewStory'),
+        icon: 'story',
+        action: () => {
+          this.setViewMode('story');
+          this.topBar.setViewMode('story');
         }
       }
     ];
@@ -453,6 +650,7 @@ export class TypesetOkApp {
   /** Loads paragraphs into the continuous Story Editor panel. */
   public loadStory(paragraphs: StoryParagraph[]): void {
     this.storyEditor.loadStory(paragraphs);
+    this.updateStoryToolbar();
   }
 
   private refreshThumbnails(): void {
@@ -474,38 +672,52 @@ export class TypesetOkApp {
       this.wordCountTimer = null;
       const words = this.storyEditor.getStory().reduce((sum, p) => sum + countWords(p.text), 0);
       this.statusBar.updateStats({ wordCount: words });
+      this.updateStoryToolbar();
     }, 250);
   }
 
   private handleTemplateSelect(templateId: string): void {
     const name = TEMPLATE_TITLES[templateId] || BLANK_TEMPLATE_TITLE;
+    this.documentTitle = name;
     this.topBar.setDocumentTitle(name);
+    addRecentProject({ name, pages: 1 });
     this.showToast(tf('toastProjectCreated', { name }));
   }
 
+  private openProjectFile(filePath: string): void {
+    const baseName = filePath.split(/[\\/]/).pop() || filePath;
+    this.documentTitle = baseName;
+    this.topBar.setDocumentTitle(baseName);
+    addRecentProject({ name: baseName, path: filePath, pages: this.pages.length || 1 });
+    this.showToast(tf('toastOpenFile', { path: baseName }));
+  }
+
   private loadDemoProject(): void {
+    this.documentTitle = DEMO_PROJECT_TITLE;
     this.topBar.setDocumentTitle(DEMO_PROJECT_TITLE);
+    addRecentProject({ name: DEMO_PROJECT_TITLE, pages: this.pages.length || 1 });
     this.showToast(t('toastDemoLoaded'));
   }
 
   public setViewMode(mode: ViewMode): void {
+    const wasSplit = this.currentViewMode === 'split';
     this.currentViewMode = mode;
-    if (mode === 'canvas') {
-      this.canvas.element.style.display = 'flex';
-      this.storyContainer.style.display = 'none';
-      this.storyContainer.style.flex = '';
-    } else if (mode === 'story') {
-      this.canvas.element.style.display = 'none';
-      this.storyContainer.style.display = 'flex';
-      this.storyContainer.style.flex = '1';
-    } else if (mode === 'split') {
-      this.canvas.element.style.display = 'flex';
-      this.canvas.element.style.flex = '1';
-      this.storyContainer.style.display = 'flex';
-      // Back to a fixed-width side panel (story mode stretches it with flex: 1).
-      this.storyContainer.style.flex = '';
-      this.storyContainer.style.width = '380px';
+    this.workbench.classList.toggle('tok-split', mode === 'split');
+    this.canvas.element.style.display = mode === 'story' ? 'none' : 'flex';
+    this.storyContainer.style.display = mode === 'canvas' ? 'none' : 'flex';
+    this.splitDivider.style.display = mode === 'split' ? 'flex' : 'none';
+    // Story view fills the space; split starts at half and can be dragged.
+    this.storyContainer.style.flex = mode === 'split' ? '1 1 0' : '1';
+
+    // Split view needs the room: fold the side panel away, and bring it back after.
+    if (mode === 'split' && !wasSplit) {
+      this.panelOpenBeforeSplit = this.structureBar.isPanelOpen();
+      this.structureBar.setPanelOpen(false);
+    } else if (mode !== 'split' && wasSplit && this.panelOpenBeforeSplit !== null) {
+      this.structureBar.setPanelOpen(this.panelOpenBeforeSplit);
+      this.panelOpenBeforeSplit = null;
     }
+    if (mode !== 'canvas') this.updateStoryToolbar();
   }
 
   public getViewMode(): ViewMode {
@@ -535,6 +747,7 @@ export class TypesetOkApp {
     this.statusBar.updateStats({
       pageLabel: tf('appPageStatus', { page: gematria, index: idx + 1, total: this.pages.length })
     });
+    this.topBar.setPageLabel(`${tf('structurePageLabel', { g: gematria })} ${isRectoPage(idx) ? 'ע״א' : 'ע״ב'}`);
     this.structureBar.setActivePage(idx);
   }
 
@@ -543,8 +756,6 @@ export class TypesetOkApp {
    * native menu (via IPC) and `tok-action` DOM events all route through here.
    */
   public handleSystemAction(action: string, data?: unknown): void {
-    const win = window as any;
-
     switch (action) {
       case 'new-document':
       case 'open-projects':
@@ -560,26 +771,48 @@ export class TypesetOkApp {
       case 'toggle-lang':
         i18n.toggleLanguage();
         break;
-      case 'open-document':
-        this.showToast(tf('toastOpenFile', { path: typeof data === 'string' ? data : '' }));
-        break;
-      case 'save-document':
-      case 'save-as':
-        this.showToast(t('toastSaved'));
-        break;
-      case 'export-pdf':
-        if (win.tokIpc) {
-          this.showToast(t('toastExporting'));
-          win.tokIpc.renderPdf('--demo', 'TypesetOK_Export.pdf')
-            .then(() => {
-              this.showToast(t('toastExportDone'));
-            })
-            .catch((err: any) => {
-              this.showToast(tf('toastExportError', { error: err?.message ?? String(err) }), true);
+      case 'open-document': {
+        const win = window as any;
+        if (typeof data === 'string' && data) {
+          this.openProjectFile(data);
+        } else if (win.tokIpc?.showOpenDialog) {
+          win.tokIpc.showOpenDialog({ filters: [{ name: 'TypesetOK Document', extensions: ['tok'] }] })
+            .then((filePath: string | null) => {
+              if (filePath) this.openProjectFile(filePath);
             });
         } else {
-          this.showToast(t('toastExportSimulated'));
+          this.showToast(tf('toastOpenFile', { path: '' }));
         }
+        break;
+      }
+      case 'save-document': {
+        addRecentProject({ name: this.documentTitle, pages: this.pages.length || 1 });
+        this.showToast(t('toastSaved'));
+        break;
+      }
+      case 'save-as': {
+        const win = window as any;
+        if (win.tokIpc?.showSaveDialog) {
+          win.tokIpc.showSaveDialog({
+            defaultPath: this.documentTitle,
+            filters: [{ name: 'TypesetOK Document', extensions: ['tok'] }]
+          }).then((filePath: string | null) => {
+            if (filePath) {
+              const baseName = filePath.split(/[\\/]/).pop() || filePath;
+              this.documentTitle = baseName;
+              this.topBar.setDocumentTitle(baseName);
+              addRecentProject({ name: baseName, path: filePath, pages: this.pages.length || 1 });
+              this.showToast(t('toastSaved'));
+            }
+          });
+        } else {
+          addRecentProject({ name: this.documentTitle, pages: this.pages.length || 1 });
+          this.showToast(t('toastSaved'));
+        }
+        break;
+      }
+      case 'export-pdf':
+        this.openExportDialog();
         break;
       case 'normalize-hebrew':
         this.showToast(t('toastNormalized'));
@@ -599,20 +832,17 @@ export class TypesetOkApp {
   }
 
   public showToast(msg: string, isError = false): void {
-    const toast = document.createElement('div');
-    toast.className = 'tok-toast';
-    toast.style.background = isError ? '#EF4444' : '#1E293B';
-    toast.style.borderColor = isError ? '#B91C1C' : '#334155';
+    // One toast at a time; a new message replaces the previous one.
+    document.querySelectorAll('.tok-toast').forEach((n) => n.remove());
+    const toast = el('div', isError ? 'tok-toast tok-toast-error' : 'tok-toast', { role: isError ? 'alert' : 'status' });
+    toast.dir = i18n.getDirection();
+    toast.appendChild(icon(isError ? 'warning' : 'check', 15));
     // Messages can carry file paths, CLI stderr or plugin text: never parse them as HTML.
-    toast.innerHTML = renderIcon(isError ? 'warning' : 'zap', 14);
-    const text = document.createElement('span');
-    text.textContent = msg;
-    toast.appendChild(text);
-
+    toast.appendChild(el('span', undefined, undefined, msg));
     document.body.appendChild(toast);
     setTimeout(() => {
-      toast.style.opacity = '0';
       toast.style.transition = 'opacity 0.25s ease';
+      toast.style.opacity = '0';
       setTimeout(() => toast.remove(), 250);
     }, 3200);
   }

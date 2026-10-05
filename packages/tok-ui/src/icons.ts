@@ -44,9 +44,69 @@ export type IconName =
   | 'image'
   | 'frame'
   | 'zap'
-  | 'ruler';
+  | 'ruler'
+  | 'undo'
+  | 'redo'
+  | 'plus'
+  | 'minus'
+  | 'fit'
+  | 'arrowForward'
+  | 'link'
+  | 'grip'
+  | 'appearance'
+  | 'alignRight'
+  | 'alignCenter'
+  | 'alignLeft'
+  | 'help'
+  | 'upload'
+  | 'chevronUp';
 
 const ICONS_SVG: Record<IconName, string> = {
+  undo: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 11.5 3.5 7.5l4-4"/><path d="M3.5 7.5h9a4 4 0 0 1 0 8H10"/></svg>
+  `,
+  redo: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12.5 11.5 4-4-4-4"/><path d="M16.5 7.5h-9a4 4 0 0 0 0 8H10"/></svg>
+  `,
+  plus: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg>
+  `,
+  minus: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="10" x2="16" y2="10"/></svg>
+  `,
+  fit: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5V3h4.5M17 7.5V3h-4.5M3 12.5V17h4.5M17 12.5V17h-4.5"/></svg>
+  `,
+  arrowForward: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="10" x2="16" y2="10"/><path d="m11 5 5 5-5 5"/></svg>
+  `,
+  link: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5l-.8.8"/><path d="M11.5 8.5a3.5 3.5 0 0 0-5 0L4 11a3.5 3.5 0 0 0 5 5l.8-.8"/></svg>
+  `,
+  grip: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r=".6"/><circle cx="12" cy="5" r=".6"/><circle cx="8" cy="10" r=".6"/><circle cx="12" cy="10" r=".6"/><circle cx="8" cy="15" r=".6"/><circle cx="12" cy="15" r=".6"/></svg>
+  `,
+  appearance: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.5"/><path d="M10 3.5a6.5 6.5 0 0 0 0 13z" fill="currentColor"/></svg>
+  `,
+  alignRight: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3.5" y1="5" x2="16.5" y2="5"/><line x1="8.5" y1="8.5" x2="16.5" y2="8.5"/><line x1="3.5" y1="12" x2="16.5" y2="12"/><line x1="8.5" y1="15.5" x2="16.5" y2="15.5"/></svg>
+  `,
+  alignCenter: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3.5" y1="5" x2="16.5" y2="5"/><line x1="6" y1="8.5" x2="14" y2="8.5"/><line x1="3.5" y1="12" x2="16.5" y2="12"/><line x1="6" y1="15.5" x2="14" y2="15.5"/></svg>
+  `,
+  alignLeft: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3.5" y1="5" x2="16.5" y2="5"/><line x1="3.5" y1="8.5" x2="11.5" y2="8.5"/><line x1="3.5" y1="12" x2="16.5" y2="12"/><line x1="3.5" y1="15.5" x2="11.5" y2="15.5"/></svg>
+  `,
+  help: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M8 8a2 2 0 1 1 2.8 1.8c-.5.2-.8.7-.8 1.3v.4"/><line x1="10" y1="14" x2="10.01" y2="14"/></svg>
+  `,
+  upload: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13V3M6 7l4-4 4 4"/><path d="M3.5 13v2.5A1.5 1.5 0 0 0 5 17h10a1.5 1.5 0 0 0 1.5-1.5V13"/></svg>
+  `,
+  chevronUp: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 5-5 5 5"/></svg>
+  `,
   brand: `
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4 16.5A2.5 2.5 0 0 1 6.5 14H16V3.5A1.5 1.5 0 0 0 14.5 2H6.5A2.5 2.5 0 0 0 4 4.5v12z"/>
@@ -73,17 +133,10 @@ const ICONS_SVG: Record<IconName, string> = {
     </svg>
   `,
   settings: `
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="10" cy="10" r="3"/>
-      <path d="M16.2 12.4a1.2 1.2 0 0 0 .25 1.35l.06.06a1.4 1.4 0 1 1-1.98 1.98l-.06-.06a1.2 1.2 0 0 0-1.35-.25 1.2 1.2 0 0 0-.75 1.12v.16a1.4 1.4 0 0 1-2.8 0v-.16a1.2 1.2 0 0 0-.75-1.12 1.2 1.2 0 0 0-1.35.25l-.06.06a1.4 1.4 0 1 1-1.98-1.98l.06-.06a1.2 1.2 0 0 0 .25-1.35 1.2 1.2 0 0 0-1.12-.75H4.4a1.4 1.4 0 0 1 0-2.8h.16a1.2 1.2 0 0 0 1.12-.75 1.2 1.2 0 0 0-.25-1.35l-.06-.06a1.4 1.4 0 1 1 1.98-1.98l.06.06a1.2 1.2 0 0 0 1.35.25h.06a1.2 1.2 0 0 0 .75-1.12V3.4a1.4 1.4 0 0 1 2.8 0v.16a1.2 1.2 0 0 0 .75 1.12 1.2 1.2 0 0 0 1.35-.25l.06-.06a1.4 1.4 0 1 1 1.98 1.98l-.06.06a1.2 1.2 0 0 0-.25 1.35v.06a1.2 1.2 0 0 0 1.12.75h.16a1.4 1.4 0 0 1 0 2.8h-.16a1.2 1.2 0 0 0-1.12.75z"/>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   `,
   info: `
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="10" cy="10" r="8"/>
-      <line x1="10" y1="9" x2="10" y2="14"/>
-      <circle cx="10" cy="6" r="0.75" fill="currentColor"/>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01" stroke-width="2.2"/></svg>
   `,
   pages: `
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -92,17 +145,10 @@ const ICONS_SVG: Record<IconName, string> = {
     </svg>
   `,
   flows: `
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 5c2.5 0 2.5 4 5 4s2.5-4 5-4 2.5 4 5 4"/>
-      <path d="M3 11c2.5 0 2.5 4 5 4s2.5-4 5-4 2.5 4 5 4"/>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>
   `,
   typography: `
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="4 6 10 3 16 6"/>
-      <line x1="10" y1="3" x2="10" y2="17"/>
-      <line x1="7" y1="17" x2="13" y2="17"/>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7V5h14v2M9 19h6M12 5v14"/></svg>
   `,
   layers: `
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">

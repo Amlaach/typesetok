@@ -96,7 +96,19 @@ export class ModalController {
 
   private focusFirst(): void {
     const preferred = this.overlay.querySelector<HTMLElement>('[data-autofocus]');
-    (preferred ?? this.focusables()[0])?.focus();
+    if (preferred) {
+      preferred.focus();
+      return;
+    }
+    // Start on the dialog title: screen readers announce it and Tab moves to the
+    // first control, without drawing a focus ring on a button the user didn't pick.
+    const title = this.overlay.querySelector<HTMLElement>('[data-modal-title]');
+    if (title) {
+      title.tabIndex = -1;
+      title.focus();
+      return;
+    }
+    this.focusables()[0]?.focus();
   }
 
   private cycleFocus(e: KeyboardEvent): void {

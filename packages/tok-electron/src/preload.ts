@@ -25,6 +25,8 @@ export interface TokIpcBridge {
   // System & Utilities
   openExternal: (url: string) => Promise<void>;
   getAppInfo: () => Promise<{ version: string; name: string }>;
+  showSaveDialog: (options?: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
+  showOpenDialog: (options?: { filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
 }
 
 const tokIpc: TokIpcBridge = {
@@ -94,6 +96,12 @@ const tokIpc: TokIpcBridge = {
   },
   getAppInfo: async () => {
     return await ipcRenderer.invoke('tok:get-app-info');
+  },
+  showSaveDialog: async (options?: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) => {
+    return await ipcRenderer.invoke('tok:show-save-dialog', options);
+  },
+  showOpenDialog: async (options?: { filters?: { name: string; extensions: string[] }[] }) => {
+    return await ipcRenderer.invoke('tok:show-open-dialog', options);
   }
 };
 

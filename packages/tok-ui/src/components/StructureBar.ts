@@ -1,7 +1,8 @@
 import { MultiFlowItem, StyleToken, PageThumbnailItem } from '../types';
 import { t, tf, i18n } from '../i18n';
-import { renderIcon, IconName } from '../icons';
-import { isRectoPage, isRightHandPage } from './SpreadCanvas';
+import { IconName } from '../icons';
+import { el, icon, iconButton } from '../ui';
+import { groupIntoSpreads, isRectoPage, isRightHandPage } from './SpreadCanvas';
 
 export interface StructureBarCallbacks {
   onSelectPage: (pageIndex: number) => void;
@@ -11,34 +12,46 @@ export interface StructureBarCallbacks {
   onToggleLayer: (layerId: string, visible: boolean) => void;
   onOpenSettings?: () => void;
   onOpenAbout?: () => void;
+  /** The side panel was opened or closed from the rail. */
+  onPanelToggle?: (open: boolean) => void;
 }
 
-/** Lets a clickable non-button element be focused with Tab and activated with Enter/Space. */
-function makeKeyboardActivatable(el: HTMLElement): void {
-  el.tabIndex = 0;
-  el.setAttribute('role', 'button');
-  el.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      el.click();
-    }
-  });
+type TabId = 'pages' | 'flows' | 'styles' | 'layers';
+
+/** Mini drawing of a Talmud page (Gemara block, commentary columns, L-shape below). */
+function pageThumbDrawing(rightHandPage: boolean): string {
+  // Commentary sits on the spine (inner) and outer sides; the inner side of a
+  // right-hand page is its left edge.
+  const outer = rightHandPage ? 'right' : 'left';
+  const inner = rightHandPage ? 'left' : 'right';
+  return `
+    <i class="tr" style="top:5px;left:5px;right:5px"></i>
+    <i class="tl" style="top:9px;bottom:6px;${outer}:5px;width:10px"></i>
+    <i class="tl" style="top:9px;bottom:6px;${inner}:5px;width:10px"></i>
+    <i class="tg" style="top:9px;height:30px;left:17px;right:17px"></i>
+    <i class="tl" style="top:42px;bottom:6px;${outer}:17px;${inner}:5px"></i>`;
 }
 
+/**
+ * Leading side of the workbench: an icon rail (pages, flows, styles, layers, settings,
+ * about) and the panel it controls. Clicking the active rail item hides the panel.
+ */
 export class StructureBar {
   public element: HTMLElement;
   private callbacks: StructureBarCallbacks;
-  private activeTab: 'pages' | 'flows' | 'styles' | 'layers' = 'pages';
+  private activeTab: TabId = 'pages';
+  private panelOpen = true;
   private activePageIndex = 0;
   private activeFlowId = 'gemara';
   private pages: PageThumbnailItem[] = [];
-  private contentContainer!: HTMLElement;
+  private rail!: HTMLElement;
+  private panel!: HTMLElement;
 
   private flows: MultiFlowItem[] = [
-    { id: 'gemara', name: 'גמרא (ראשי)', color: '#3B82F6', role: 'מרכז העמוד', wordCount: 2450, isActive: true },
-    { id: 'rashi', name: 'רש"י', color: '#10B981', role: 'פירוש פנימי', wordCount: 1180, isActive: false },
-    { id: 'tosafot', name: 'תוספות', color: '#F59E0B', role: 'פירוש חיצוני', wordCount: 860, isActive: false },
-    { id: 'notes', name: 'הערות שוליים', color: '#8B5CF6', role: 'תחתית העמוד', wordCount: 340, isActive: false }
+    { id: 'gemara', name: 'גמרא (ראשי)', color: '#1E4A9E', role: 'מרכז העמוד', wordCount: 2450, isActive: true },
+    { id: 'rashi', name: 'רש"י', color: '#B45309', role: 'פירוש פנימי', wordCount: 1180, isActive: false },
+    { id: 'tosafot', name: 'תוספות', color: '#15803D', role: 'פירוש חיצוני', wordCount: 860, isActive: false },
+    { id: 'notes', name: 'הערות שוליים', color: '#7C3AED', role: 'תחתית העמוד', wordCount: 340, isActive: false }
   ];
 
   private styles: StyleToken[] = [
@@ -59,20 +72,14 @@ export class StructureBar {
 
   constructor(callbacks: StructureBarCallbacks) {
     this.callbacks = callbacks;
-    this.element = document.createElement('aside');
-    this.element.className = 'tok-structure-bar';
-    this.element.dir = i18n.getLanguage() === 'he' ? 'rtl' : 'ltr';
-    this.element.style.width = 'var(--tok-structure-width)';
-    this.element.style.minWidth = 'var(--tok-structure-width)';
-    this.element.style.background = 'var(--tok-bg-surface-1)';
-    this.element.style.borderInlineEnd = '1px solid var(--tok-border-subtle)';
+    this.element = el('div', 'tok-structure');
     this.element.style.display = 'flex';
-    this.element.style.flexDirection = 'column';
-    this.element.style.overflow = 'hidden';
-    this.element.style.userSelect = 'none';
+    this.element.style.flex = 'none';
+    this.element.style.minHeight = '0';
+    this.element.dir = i18n.getDirection();
 
-    i18n.onChange((lang) => {
-      this.element.dir = lang === 'he' ? 'rtl' : 'ltr';
+    i18n.onChange(() => {
+      this.element.dir = i18n.getDirection();
       this.render();
     });
 
@@ -82,491 +89,283 @@ export class StructureBar {
   public setPages(pages: PageThumbnailItem[], activeIndex = 0): void {
     this.pages = pages;
     this.activePageIndex = activeIndex;
-    if (this.activeTab === 'pages') {
-      this.renderTabContent();
-    }
+    if (this.activeTab === 'pages') this.renderPanel();
   }
 
   public setActivePage(pageIndex: number): void {
     this.activePageIndex = pageIndex;
-    if (this.activeTab === 'pages') {
-      this.highlightActivePageCard();
-    }
+    if (this.activeTab === 'pages') this.highlightActivePage();
+  }
+
+  /** Mirrors the flow chosen elsewhere (e.g. the story editor's flow chip). */
+  public setActiveFlow(flowId: string): void {
+    this.activeFlowId = flowId;
+    this.flows.forEach((f) => (f.isActive = f.id === flowId));
+    if (this.activeTab === 'flows') this.renderPanel();
+  }
+
+  public getFlows(): MultiFlowItem[] {
+    return this.flows.map((f) => ({ ...f }));
+  }
+
+  /** Opens/closes the side panel (the rail always stays). */
+  public setPanelOpen(open: boolean): void {
+    this.panelOpen = open;
+    this.panel.hidden = !open;
+    this.updateRail();
+  }
+
+  public isPanelOpen(): boolean {
+    return this.panelOpen;
+  }
+
+  /** Opens the panel on a given tab. */
+  public showTab(tab: TabId): void {
+    this.activeTab = tab;
+    this.setPanelOpen(true);
+    this.renderPanel();
   }
 
   private render(): void {
     this.element.innerHTML = '';
 
-    // 1. Tab Bar Header
-    const tabHeader = document.createElement('div');
-    tabHeader.style.display = 'flex';
-    tabHeader.style.borderBottom = '1px solid var(--tok-border-subtle)';
-    tabHeader.style.background = 'var(--tok-bg-app)';
-    tabHeader.style.flexShrink = '0';
-    tabHeader.setAttribute('role', 'tablist');
-
-    const tabs: { id: 'pages' | 'flows' | 'styles' | 'layers'; label: string; icon: IconName }[] = [
+    // ---- Rail ----
+    this.rail = el('nav', 'tok-rail', { 'aria-label': t('railLabel') });
+    const tabs: { id: TabId; label: string; icon: IconName }[] = [
       { id: 'pages', label: t('sidebarPages'), icon: 'pages' },
       { id: 'flows', label: t('sidebarFlows'), icon: 'flows' },
       { id: 'styles', label: t('sidebarStyles'), icon: 'typography' },
       { id: 'layers', label: t('sidebarLayers'), icon: 'layers' }
     ];
-
-    for (const tItem of tabs) {
-      const tabBtn = document.createElement('button');
-      tabBtn.style.flex = '1';
-      tabBtn.style.padding = '8px 4px';
-      tabBtn.style.background = this.activeTab === tItem.id ? 'var(--tok-bg-surface-1)' : 'transparent';
-      tabBtn.style.color = this.activeTab === tItem.id ? '#FFFFFF' : 'var(--tok-text-secondary)';
-      tabBtn.style.border = 'none';
-      tabBtn.style.borderBottom = this.activeTab === tItem.id ? '2px solid var(--tok-accent-primary)' : '2px solid transparent';
-      tabBtn.style.cursor = 'pointer';
-      tabBtn.style.fontSize = '11px';
-      tabBtn.style.fontWeight = this.activeTab === tItem.id ? '600' : 'normal';
-      tabBtn.style.display = 'inline-flex';
-      tabBtn.style.alignItems = 'center';
-      tabBtn.style.justifyContent = 'center';
-      tabBtn.style.gap = '5px';
-      tabBtn.innerHTML = `${renderIcon(tItem.icon, 13)} <span>${tItem.label}</span>`;
-      tabBtn.setAttribute('role', 'tab');
-      tabBtn.setAttribute('aria-selected', String(this.activeTab === tItem.id));
-
-      tabBtn.addEventListener('click', () => {
-        if (this.activeTab === tItem.id) return;
-        this.activeTab = tItem.id;
-        this.render();
-        (this.element.querySelector('[role="tab"][aria-selected="true"]') as HTMLElement | null)?.focus();
+    for (const tab of tabs) {
+      const b = el('button', 'tok-rail-btn', { type: 'button', 'data-tab': tab.id, 'aria-controls': 'tok-side-panel' });
+      b.appendChild(icon(tab.icon, 20));
+      b.appendChild(el('span', undefined, undefined, tab.label));
+      b.addEventListener('click', () => {
+        if (this.activeTab === tab.id && this.panelOpen) {
+          this.setPanelOpen(false);
+          this.callbacks.onPanelToggle?.(false);
+          return;
+        }
+        const wasOpen = this.panelOpen;
+        this.activeTab = tab.id;
+        this.setPanelOpen(true);
+        this.renderPanel();
+        if (!wasOpen) this.callbacks.onPanelToggle?.(true);
       });
-
-      tabHeader.appendChild(tabBtn);
+      this.rail.appendChild(b);
     }
-    this.element.appendChild(tabHeader);
+    this.rail.appendChild(el('div', 'tok-rail-spacer'));
 
-    // 2. Tab Content Area (fills available space)
-    const bodyWrapper = document.createElement('div');
-    bodyWrapper.className = 'tok-structure-body';
-    bodyWrapper.style.flex = '1';
-    bodyWrapper.style.overflowY = 'auto';
-    bodyWrapper.style.padding = '10px';
-    bodyWrapper.setAttribute('role', 'tabpanel');
-    this.element.appendChild(bodyWrapper);
+    const bottom = el('div', 'tok-structure-bottom');
+    const settings = el('button', 'tok-rail-btn', { type: 'button' });
+    settings.appendChild(icon('settings', 20));
+    settings.appendChild(el('span', undefined, undefined, t('sidebarSettings')));
+    settings.addEventListener('click', () => this.callbacks.onOpenSettings?.());
+    bottom.appendChild(settings);
+    const about = el('button', 'tok-rail-btn', { type: 'button' });
+    about.appendChild(icon('info', 20));
+    about.appendChild(el('span', undefined, undefined, t('sidebarAbout')));
+    about.addEventListener('click', () => this.callbacks.onOpenAbout?.());
+    bottom.appendChild(about);
+    this.rail.appendChild(bottom);
 
-    // 3. Bottom Spacer & Bottom Section (Settings & About)
-    const bottomSection = document.createElement('div');
-    bottomSection.className = 'tok-structure-bottom';
-    bottomSection.style.flexShrink = '0';
-    bottomSection.style.borderTop = '1px solid var(--tok-border-subtle)';
-    bottomSection.style.background = 'var(--tok-bg-app)';
-    bottomSection.style.padding = '8px 10px';
-    bottomSection.style.display = 'flex';
-    bottomSection.style.flexDirection = 'column';
-    bottomSection.style.gap = '4px';
+    this.element.appendChild(this.rail);
 
-    // Settings Button
-    const settingsBtn = document.createElement('button');
-    settingsBtn.className = 'tok-btn';
-    settingsBtn.style.width = '100%';
-    settingsBtn.style.height = '30px';
-    settingsBtn.style.display = 'flex';
-    settingsBtn.style.alignItems = 'center';
-    settingsBtn.style.justifyContent = 'flex-start';
-    settingsBtn.style.gap = '8px';
-    settingsBtn.style.fontSize = '12px';
-    settingsBtn.style.background = 'transparent';
-    settingsBtn.style.border = '1px solid transparent';
-    settingsBtn.style.color = 'var(--tok-text-secondary)';
-    settingsBtn.style.cursor = 'pointer';
-    settingsBtn.style.padding = '0 10px';
-    settingsBtn.style.borderRadius = '6px';
-    settingsBtn.style.transition = 'all 0.15s';
-    settingsBtn.innerHTML = `${renderIcon('settings', 14)} <span>${t('sidebarSettings')}</span>`;
+    // ---- Panel ----
+    this.panel = el('aside', 'tok-structure-bar', { id: 'tok-side-panel' });
+    this.panel.hidden = !this.panelOpen;
+    this.element.appendChild(this.panel);
 
-    settingsBtn.addEventListener('mouseenter', () => {
-      settingsBtn.style.background = 'var(--tok-bg-surface-2)';
-      settingsBtn.style.color = '#FFFFFF';
-      settingsBtn.style.borderColor = 'var(--tok-border-subtle)';
-    });
-    settingsBtn.addEventListener('mouseleave', () => {
-      settingsBtn.style.background = 'transparent';
-      settingsBtn.style.color = 'var(--tok-text-secondary)';
-      settingsBtn.style.borderColor = 'transparent';
-    });
-    settingsBtn.addEventListener('click', () => {
-      if (this.callbacks.onOpenSettings) this.callbacks.onOpenSettings();
-    });
-    bottomSection.appendChild(settingsBtn);
-
-    // About Button
-    const aboutBtn = document.createElement('button');
-    aboutBtn.className = 'tok-btn';
-    aboutBtn.style.width = '100%';
-    aboutBtn.style.height = '30px';
-    aboutBtn.style.display = 'flex';
-    aboutBtn.style.alignItems = 'center';
-    aboutBtn.style.justifyContent = 'flex-start';
-    aboutBtn.style.gap = '8px';
-    aboutBtn.style.fontSize = '12px';
-    aboutBtn.style.background = 'transparent';
-    aboutBtn.style.border = '1px solid transparent';
-    aboutBtn.style.color = 'var(--tok-text-secondary)';
-    aboutBtn.style.cursor = 'pointer';
-    aboutBtn.style.padding = '0 10px';
-    aboutBtn.style.borderRadius = '6px';
-    aboutBtn.style.transition = 'all 0.15s';
-    aboutBtn.innerHTML = `${renderIcon('info', 14)} <span>${t('sidebarAbout')}</span>`;
-
-    aboutBtn.addEventListener('mouseenter', () => {
-      aboutBtn.style.background = 'var(--tok-bg-surface-2)';
-      aboutBtn.style.color = '#FFFFFF';
-      aboutBtn.style.borderColor = 'var(--tok-border-subtle)';
-    });
-    aboutBtn.addEventListener('mouseleave', () => {
-      aboutBtn.style.background = 'transparent';
-      aboutBtn.style.color = 'var(--tok-text-secondary)';
-      aboutBtn.style.borderColor = 'transparent';
-    });
-    aboutBtn.addEventListener('click', () => {
-      if (this.callbacks.onOpenAbout) this.callbacks.onOpenAbout();
-    });
-    bottomSection.appendChild(aboutBtn);
-
-    this.element.appendChild(bottomSection);
-
-    this.renderTabContent();
+    this.updateRail();
+    this.renderPanel();
   }
 
-  private renderTabContent(): void {
-    const body = this.element.querySelector('.tok-structure-body') as HTMLElement;
-    if (!body) return;
-    body.innerHTML = '';
+  private updateRail(): void {
+    this.rail?.querySelectorAll<HTMLElement>('.tok-rail-btn[data-tab]').forEach((b) => {
+      const on = this.panelOpen && b.dataset.tab === this.activeTab;
+      b.setAttribute('aria-pressed', String(on));
+      b.setAttribute('aria-expanded', String(on));
+    });
+  }
 
-    switch (this.activeTab) {
-      case 'pages':
-        this.renderPagesView(body);
-        break;
-      case 'flows':
-        this.renderFlowsView(body);
-        break;
-      case 'styles':
-        this.renderStylesView(body);
-        break;
-      case 'layers':
-        this.renderLayersView(body);
-        break;
+  private panelHeader(title: string, count?: number, action?: HTMLElement): HTMLElement {
+    const head = el('div', 'tok-panel-head');
+    head.appendChild(el('h2', undefined, undefined, title));
+    if (count !== undefined) head.appendChild(el('span', 'tok-badge-count', undefined, String(count)));
+    head.appendChild(el('span', 'tok-grow'));
+    if (action) head.appendChild(action);
+    head.appendChild(iconButton('close', t('railHidePanel'), () => {
+      this.setPanelOpen(false);
+      this.callbacks.onPanelToggle?.(false);
+    }, { size: 15, attrs: { style: 'width:28px;height:28px' } }));
+    return head;
+  }
+
+  private renderPanel(): void {
+    if (!this.panel) return;
+    this.panel.innerHTML = '';
+    const titles: Record<TabId, string> = {
+      pages: t('sidebarPages'),
+      flows: t('structureFlowsTitle'),
+      styles: t('structureStylesTitle'),
+      layers: t('structureLayersTitle')
+    };
+    this.panel.setAttribute('aria-label', titles[this.activeTab]);
+
+    const body = el('div', 'tok-structure-body');
+    if (this.activeTab === 'pages') {
+      const add = iconButton('plus', t('sidebarAddPage'), () => this.callbacks.onAddPage(), { size: 17, attrs: { 'aria-keyshortcuts': 'Control+Enter', style: 'width:30px;height:30px' } });
+      this.panel.appendChild(this.panelHeader(titles.pages, this.pages.length, add));
+      this.renderPagesView(body);
+    } else if (this.activeTab === 'flows') {
+      this.panel.appendChild(this.panelHeader(titles.flows, this.flows.length));
+      this.renderFlowsView(body);
+    } else if (this.activeTab === 'styles') {
+      this.panel.appendChild(this.panelHeader(titles.styles, this.styles.length));
+      this.renderStylesView(body);
+    } else {
+      this.panel.appendChild(this.panelHeader(titles.layers, this.layers.length));
+      this.renderLayersView(body);
     }
+    this.panel.appendChild(body);
+  }
+
+  /** Thumbnail label: "דף א׳" + position and amud (same helpers as the canvas). */
+  private pageDescription(p: PageThumbnailItem): string {
+    const side = t(isRightHandPage(p.pageIndex) ? 'structureSpreadRight' : 'structureSpreadLeft');
+    const amud = isRectoPage(p.pageIndex) ? 'ע"א' : 'ע"ב';
+    return `${p.label || tf('structurePageLabel', { g: p.gematria })} · ${tf('structurePageNumber', { n: p.pageIndex + 1 })} · ${side} (${amud})`;
   }
 
   private renderPagesView(container: HTMLElement): void {
-    // Action bar: Header + Add Page
-    const headerRow = document.createElement('div');
-    headerRow.style.display = 'flex';
-    headerRow.style.alignItems = 'center';
-    headerRow.style.justifyContent = 'space-between';
-    headerRow.style.marginBottom = '10px';
-
-    const countLabel = document.createElement('span');
-    countLabel.style.fontSize = '12px';
-    countLabel.style.fontWeight = 'bold';
-    countLabel.style.color = 'var(--tok-text-primary)';
-    countLabel.textContent = tf('structurePagesCount', { n: this.pages.length });
-    headerRow.appendChild(countLabel);
-
-    const addBtn = document.createElement('button');
-    addBtn.className = 'tok-btn tok-btn-primary';
-    addBtn.style.height = '24px';
-    addBtn.style.fontSize = '11px';
-    addBtn.style.padding = '0 8px';
-    addBtn.textContent = `+ ${t('sidebarAddPage')}`;
-    addBtn.title = t('sidebarAddPage');
-    addBtn.addEventListener('click', () => this.callbacks.onAddPage());
-    headerRow.appendChild(addBtn);
-
-    container.appendChild(headerRow);
-
-    // Grid of Thumbnail Cards
-    const list = document.createElement('div');
-    list.className = 'tok-pages-list';
+    const list = el('div', 'tok-pages-list', { role: 'list' });
     list.style.display = 'flex';
     list.style.flexDirection = 'column';
-    list.style.gap = '8px';
+    list.style.gap = '4px';
 
-    this.pages.forEach((p) => {
-      const card = document.createElement('div');
-      card.className = 'tok-page-card';
-      card.dataset.pageIndex = p.pageIndex.toString();
-      card.style.background = p.pageIndex === this.activePageIndex ? 'var(--tok-bg-surface-hover)' : 'var(--tok-bg-surface-2)';
-      card.style.border = p.pageIndex === this.activePageIndex ? '1px solid var(--tok-selection-frame)' : '1px solid var(--tok-border-strong)';
-      card.style.borderRadius = '6px';
-      card.style.padding = '8px 10px';
-      card.style.cursor = 'pointer';
-      card.style.display = 'flex';
-      card.style.alignItems = 'center';
-      card.style.justifyContent = 'space-between';
-      card.style.transition = 'all 0.15s ease';
-      // Keyboard reachable (was a plain div): Tab to it, Enter/Space selects.
-      makeKeyboardActivatable(card);
-      card.setAttribute('aria-current', String(p.pageIndex === this.activePageIndex));
-
-      card.addEventListener('mouseenter', () => {
-        if (p.pageIndex !== this.activePageIndex) card.style.borderColor = '#60A5FA';
-      });
-      card.addEventListener('mouseleave', () => {
-        if (p.pageIndex !== this.activePageIndex) card.style.borderColor = 'var(--tok-border-strong)';
-      });
-
-      card.addEventListener('click', () => {
-        this.activePageIndex = p.pageIndex;
-        this.highlightActivePageCard();
-        this.callbacks.onSelectPage(p.pageIndex);
-      });
-
-      const infoWrap = document.createElement('div');
-      infoWrap.style.display = 'flex';
-      infoWrap.style.flexDirection = 'column';
-      infoWrap.style.gap = '2px';
-
-      const title = document.createElement('span');
-      title.style.fontSize = '13px';
-      title.style.fontWeight = 'bold';
-      title.style.color = p.pageIndex === this.activePageIndex ? '#60A5FA' : '#FFFFFF';
-      title.textContent = p.label || tf('structurePageLabel', { g: p.gematria });
-      infoWrap.appendChild(title);
-
-      const subtitle = document.createElement('span');
-      subtitle.style.fontSize = '11px';
-      subtitle.style.color = 'var(--tok-text-muted)';
-      // Derived from the page position with the same helpers SpreadCanvas uses, so the
-      // list can never disagree with the canvas about which side/amud a page is.
-      subtitle.textContent = `${tf('structurePageNumber', { n: p.pageIndex + 1 })} • ${t(isRightHandPage(p.pageIndex) ? 'structureSpreadRight' : 'structureSpreadLeft')} (${isRectoPage(p.pageIndex) ? 'ע"א' : 'ע"ב'})`;
-      infoWrap.appendChild(subtitle);
-
-      card.appendChild(infoWrap);
-
-      const badge = document.createElement('span');
-      badge.style.fontSize = '11px';
-      badge.style.background = '#1E293B';
-      badge.style.color = '#94A3B8';
-      badge.style.padding = '2px 6px';
-      badge.style.borderRadius = '4px';
-      badge.textContent = p.gematria;
-      card.appendChild(badge);
-
+    for (const spread of groupIntoSpreads(this.pages.length)) {
+      const items = spread.map((pos) => this.pages[pos]).filter(Boolean);
+      const card = el('div', 'tok-spread-card', { role: 'listitem' });
+      const sheets = el('div', 'tok-spread-pages');
+      // A lone first page is a recto and sits on the left: keep an empty slot on the right.
+      if (spread.length === 1 && isRectoPage(spread[0])) {
+        sheets.appendChild(el('span', 'tok-thumb tok-thumb-empty', { 'aria-hidden': 'true' }));
+      }
+      for (const p of items) {
+        const thumb = el('button', 'tok-thumb tok-page-card', {
+          type: 'button',
+          'data-page-index': p.pageIndex,
+          'aria-label': this.pageDescription(p),
+          title: this.pageDescription(p)
+        });
+        thumb.innerHTML = pageThumbDrawing(isRightHandPage(p.pageIndex));
+        thumb.addEventListener('click', () => {
+          this.activePageIndex = p.pageIndex;
+          this.highlightActivePage();
+          this.callbacks.onSelectPage(p.pageIndex);
+        });
+        sheets.appendChild(thumb);
+      }
+      card.appendChild(sheets);
+      card.appendChild(el('span', 'tok-spread-label', undefined, items.map((p) => p.gematria).join(' – ')));
       list.appendChild(card);
-    });
-
+    }
     container.appendChild(list);
+    this.highlightActivePage();
   }
 
-  private highlightActivePageCard(): void {
-    const cards = this.element.querySelectorAll<HTMLElement>('.tok-page-card');
-    cards.forEach((card) => {
-      const idx = parseInt(card.dataset.pageIndex || '-1', 10);
-      const isActive = idx === this.activePageIndex;
-      card.style.background = isActive ? 'var(--tok-bg-surface-hover)' : 'var(--tok-bg-surface-2)';
-      card.style.borderColor = isActive ? 'var(--tok-selection-frame)' : 'var(--tok-border-strong)';
-      card.setAttribute('aria-current', String(isActive));
-      const title = card.querySelector('span');
-      if (title) {
-        title.style.color = isActive ? '#60A5FA' : '#FFFFFF';
-      }
+  private highlightActivePage(): void {
+    this.panel.querySelectorAll<HTMLElement>('.tok-thumb[data-page-index]').forEach((thumb) => {
+      const on = parseInt(thumb.dataset.pageIndex || '-1', 10) === this.activePageIndex;
+      if (on) thumb.setAttribute('aria-current', 'page');
+      else thumb.removeAttribute('aria-current');
+    });
+    this.panel.querySelectorAll<HTMLElement>('.tok-spread-card').forEach((card) => {
+      const on = !!card.querySelector('[aria-current="page"]');
+      card.classList.toggle('tok-active', on);
+      if (on) card.scrollIntoView?.({ block: 'nearest' });
     });
   }
 
   private renderFlowsView(container: HTMLElement): void {
-    const title = document.createElement('div');
-    title.style.fontSize = '12px';
-    title.style.fontWeight = 'bold';
-    title.style.marginBottom = '8px';
-    title.textContent = t('structureFlowsTitle');
-    container.appendChild(title);
-
-    const desc = document.createElement('p');
-    desc.style.fontSize = '11px';
-    desc.style.color = 'var(--tok-text-muted)';
-    desc.style.marginBottom = '12px';
-    desc.textContent = t('structureFlowsDesc');
-    container.appendChild(desc);
-
     for (const f of this.flows) {
-      const item = document.createElement('div');
-      item.style.background = f.id === this.activeFlowId ? 'var(--tok-bg-surface-hover)' : 'var(--tok-bg-surface-2)';
-      item.style.border = f.id === this.activeFlowId ? `1px solid ${f.color}` : '1px solid var(--tok-border-strong)';
-      item.style.borderRadius = '6px';
-      item.style.padding = '10px';
-      item.style.marginBottom = '8px';
-      item.style.cursor = 'pointer';
-
-      makeKeyboardActivatable(item);
-      item.setAttribute('aria-pressed', String(f.id === this.activeFlowId));
-      item.addEventListener('click', () => {
-        this.activeFlowId = f.id;
-        this.flows.forEach((flow) => (flow.isActive = flow.id === f.id));
-        this.renderTabContent();
+      const on = f.id === this.activeFlowId;
+      const row = el('button', 'tok-list-row', { type: 'button', 'aria-pressed': String(on) });
+      const sw = el('span', 'tok-swatch', { 'aria-hidden': 'true' });
+      sw.style.background = f.color;
+      row.appendChild(sw);
+      const main = el('span', 'tok-list-main');
+      main.appendChild(el('span', 'tok-list-title', undefined, f.name));
+      main.appendChild(el('span', 'tok-list-sub', undefined, `${t('structureFlowPosition')}: ${f.role}`));
+      row.appendChild(main);
+      row.appendChild(el('span', 'tok-list-meta', undefined, `${f.wordCount.toLocaleString()} ${t('statusWords')}`));
+      row.addEventListener('click', () => {
+        this.setActiveFlow(f.id);
         this.callbacks.onSelectFlow(f.id);
       });
-
-      const topRow = document.createElement('div');
-      topRow.style.display = 'flex';
-      topRow.style.alignItems = 'center';
-      topRow.style.justifyContent = 'space-between';
-      topRow.style.marginBottom = '4px';
-
-      const nameWrap = document.createElement('div');
-      nameWrap.style.display = 'flex';
-      nameWrap.style.alignItems = 'center';
-      nameWrap.style.gap = '8px';
-
-      const dot = document.createElement('span');
-      dot.style.width = '10px';
-      dot.style.height = '10px';
-      dot.style.borderRadius = '50%';
-      dot.style.background = f.color;
-      nameWrap.appendChild(dot);
-
-      const name = document.createElement('span');
-      name.style.fontWeight = 'bold';
-      name.style.fontSize = '12px';
-      name.textContent = f.name;
-      nameWrap.appendChild(name);
-
-      topRow.appendChild(nameWrap);
-
-      const words = document.createElement('span');
-      words.style.fontSize = '11px';
-      words.style.color = 'var(--tok-text-muted)';
-      words.textContent = `${f.wordCount.toLocaleString()} ${t('statusWords')}`;
-      topRow.appendChild(words);
-
-      item.appendChild(topRow);
-
-      const role = document.createElement('div');
-      role.style.fontSize = '11px';
-      role.style.color = 'var(--tok-text-secondary)';
-      role.textContent = `${t('structureFlowPosition')}: ${f.role}`;
-      item.appendChild(role);
-
-      container.appendChild(item);
+      container.appendChild(row);
     }
+    container.appendChild(el('p', 'tok-panel-note', undefined, t('structureFlowsDesc')));
   }
 
   private renderStylesView(container: HTMLElement): void {
-    const title = document.createElement('div');
-    title.style.fontSize = '12px';
-    title.style.fontWeight = 'bold';
-    title.style.marginBottom = '8px';
-    title.textContent = t('structureStylesTitle');
-    container.appendChild(title);
-
     for (const s of this.styles) {
-      const card = document.createElement('div');
-      card.style.background = 'var(--tok-bg-surface-2)';
-      card.style.border = '1px solid var(--tok-border-strong)';
-      card.style.borderRadius = '6px';
-      card.style.padding = '8px 10px';
-      card.style.marginBottom = '6px';
-      card.style.cursor = 'pointer';
-
-      card.addEventListener('mouseenter', () => (card.style.borderColor = 'var(--tok-accent-primary)'));
-      card.addEventListener('mouseleave', () => (card.style.borderColor = 'var(--tok-border-strong)'));
-      makeKeyboardActivatable(card);
-      card.addEventListener('click', () => this.callbacks.onSelectStyle(s.id));
-
-      const row = document.createElement('div');
-      row.style.display = 'flex';
-      row.style.alignItems = 'center';
-      row.style.justifyContent = 'space-between';
-
-      const name = document.createElement('span');
-      name.style.fontWeight = 'bold';
-      name.style.fontSize = '12px';
-      name.textContent = s.name;
-      row.appendChild(name);
-
-      const spec = document.createElement('span');
-      spec.style.fontSize = '11px';
-      spec.style.color = 'var(--tok-text-muted)';
-      spec.textContent = `${s.fontFamily} ${s.fontSizePt}pt`;
-      row.appendChild(spec);
-
-      card.appendChild(row);
-      container.appendChild(card);
+      const row = el('button', 'tok-list-row', { type: 'button' });
+      const main = el('span', 'tok-list-main');
+      main.appendChild(el('span', 'tok-list-title', undefined, s.name));
+      main.appendChild(el('span', 'tok-list-sub', { dir: 'ltr', style: 'text-align:start' }, `${s.fontFamily} · ${s.fontSizePt}pt`));
+      row.appendChild(main);
+      const flow = this.flows.find((f) => f.id === s.flowId);
+      if (flow) {
+        const sw = el('span', 'tok-swatch', { title: flow.name, 'aria-hidden': 'true' });
+        sw.style.background = flow.color;
+        row.appendChild(sw);
+      }
+      row.addEventListener('click', () => this.callbacks.onSelectStyle(s.id));
+      container.appendChild(row);
     }
   }
 
   private renderLayersView(container: HTMLElement): void {
-    const title = document.createElement('div');
-    title.style.fontSize = '12px';
-    title.style.fontWeight = 'bold';
-    title.style.marginBottom = '10px';
-    title.textContent = t('structureLayersTitle');
-    container.appendChild(title);
-
     for (const l of this.layers) {
-      const row = document.createElement('div');
-      row.style.display = 'flex';
-      row.style.alignItems = 'center';
-      row.style.justifyContent = 'space-between';
-      row.style.padding = '8px 10px';
-      row.style.background = 'var(--tok-bg-surface-2)';
-      row.style.border = '1px solid var(--tok-border-strong)';
-      row.style.borderRadius = '6px';
-      row.style.marginBottom = '6px';
+      const row = el('div', 'tok-list-row');
 
-      const nameWrap = document.createElement('div');
-      nameWrap.style.display = 'flex';
-      nameWrap.style.alignItems = 'center';
-      nameWrap.style.gap = '8px';
-
-      const eye = document.createElement('button');
-      eye.style.background = 'transparent';
-      eye.style.border = 'none';
-      eye.style.cursor = 'pointer';
-      eye.style.color = l.visible ? 'var(--tok-text-primary)' : 'var(--tok-text-muted)';
-      eye.style.display = 'inline-flex';
-      eye.style.alignItems = 'center';
-      eye.style.padding = '2px';
-      eye.innerHTML = l.visible ? renderIcon('eye', 14) : renderIcon('eyeOff', 14);
-      eye.title = t(l.visible ? 'structureHideLayer' : 'structureShowLayer');
-      eye.setAttribute('aria-label', `${eye.title}: ${l.name}`);
-      eye.setAttribute('aria-pressed', String(l.visible));
+      const eye = iconButton(l.visible ? 'eye' : 'eyeOff', '', undefined, { size: 16, attrs: { style: 'width:28px;height:28px' } });
+      const syncEye = () => {
+        const label = t(l.visible ? 'structureHideLayer' : 'structureShowLayer');
+        eye.replaceChildren(icon(l.visible ? 'eye' : 'eyeOff', 16));
+        eye.title = label;
+        eye.setAttribute('aria-label', `${label}: ${l.name}`);
+        eye.setAttribute('aria-pressed', String(l.visible));
+        eye.style.color = l.visible ? 'var(--tok-text-primary)' : 'var(--tok-text-muted)';
+      };
       eye.addEventListener('click', () => {
         l.visible = !l.visible;
-        eye.style.color = l.visible ? 'var(--tok-text-primary)' : 'var(--tok-text-muted)';
-        eye.innerHTML = l.visible ? renderIcon('eye', 14) : renderIcon('eyeOff', 14);
-        eye.title = t(l.visible ? 'structureHideLayer' : 'structureShowLayer');
-        eye.setAttribute('aria-label', `${eye.title}: ${l.name}`);
-        eye.setAttribute('aria-pressed', String(l.visible));
+        syncEye();
         this.callbacks.onToggleLayer(l.id, l.visible);
       });
-      nameWrap.appendChild(eye);
+      syncEye();
+      row.appendChild(eye);
 
-      const name = document.createElement('span');
-      name.style.fontSize = '12px';
-      name.textContent = l.name;
-      nameWrap.appendChild(name);
+      const main = el('span', 'tok-list-main');
+      main.appendChild(el('span', 'tok-list-title', undefined, l.name));
+      row.appendChild(main);
 
-      row.appendChild(nameWrap);
-
-      const lock = document.createElement('button');
-      lock.style.background = 'transparent';
-      lock.style.border = 'none';
-      lock.style.cursor = 'pointer';
-      lock.style.color = l.locked ? '#F59E0B' : 'var(--tok-text-muted)';
-      lock.style.display = 'inline-flex';
-      lock.style.alignItems = 'center';
-      lock.style.padding = '2px';
-      lock.innerHTML = l.locked ? renderIcon('lock', 14) : renderIcon('unlock', 14);
-      lock.title = t(l.locked ? 'structureUnlockLayer' : 'structureLockLayer');
-      lock.setAttribute('aria-label', `${lock.title}: ${l.name}`);
-      lock.setAttribute('aria-pressed', String(l.locked));
+      const lock = iconButton(l.locked ? 'lock' : 'unlock', '', undefined, { size: 16, attrs: { style: 'width:28px;height:28px' } });
+      const syncLock = () => {
+        const label = t(l.locked ? 'structureUnlockLayer' : 'structureLockLayer');
+        lock.replaceChildren(icon(l.locked ? 'lock' : 'unlock', 16));
+        lock.title = label;
+        lock.setAttribute('aria-label', `${label}: ${l.name}`);
+        lock.setAttribute('aria-pressed', String(l.locked));
+        lock.style.color = l.locked ? 'var(--tok-status-warning)' : 'var(--tok-text-muted)';
+      };
       lock.addEventListener('click', () => {
         l.locked = !l.locked;
-        lock.style.color = l.locked ? '#F59E0B' : 'var(--tok-text-muted)';
-        lock.innerHTML = l.locked ? renderIcon('lock', 14) : renderIcon('unlock', 14);
-        lock.title = t(l.locked ? 'structureUnlockLayer' : 'structureLockLayer');
-        lock.setAttribute('aria-label', `${lock.title}: ${l.name}`);
-        lock.setAttribute('aria-pressed', String(l.locked));
+        syncLock();
       });
+      syncLock();
       row.appendChild(lock);
 
       container.appendChild(row);
