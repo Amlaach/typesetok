@@ -227,10 +227,10 @@ describe('DTP Modern UX/UI Specification & Design Tokens (Section 11)', () => {
 
   test('Workstation layout dimensions (Section 18) are present', () => {
     // Redesign (2026-10): side panel 236px, inspector 300px, top bar 52px, status bar 28px.
-    assert.equal(html.includes('--tok-structure-width:  236px'), true);
-    assert.equal(html.includes('--tok-inspector-width:  300px'), true);
-    assert.equal(html.includes('--tok-top-bar-height:   52px'), true);
-    assert.equal(html.includes('--tok-status-height:    28px'), true);
+    assert.equal(/--tok-structure-width:\s*236px/.test(html), true);
+    assert.equal(/--tok-inspector-width:\s*300px/.test(html), true);
+    assert.equal(/--tok-top-bar-height:\s*52px/.test(html), true);
+    assert.equal(/--tok-status-height:\s*28px/.test(html), true);
     assert.equal(html.includes('--tok-hud-height: 36px') || html.includes('36px'), true);
   });
 });
