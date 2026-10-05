@@ -673,3 +673,41 @@ describe('Regression: the UI shows the real app version', () => {
   });
 });
 
+describe('Regression: document fonts are the ones the engine embeds', () => {
+  test('every selectable font has an @font-face whose file exists', async () => {
+    const { DOCUMENT_FONTS } = await loadTs('packages/tok-ui/src/fonts.ts');
+    const htmlPath = path.join(rootDir, 'packages/tok-ui/src/index.html');
+    const html = fs.readFileSync(htmlPath, 'utf-8');
+    for (const { family } of DOCUMENT_FONTS) {
+      const faces = [...html.matchAll(/@font-face\s*\{[^}]*\}/g)].map((m) => m[0]).filter((f) => f.includes(`'${family}'`));
+      assert.ok(faces.length > 0, `no @font-face for ${family}`);
+      for (const face of faces) {
+        const url = /url\('([^']+)'\)/.exec(face)[1];
+        // index.html is served from packages/tok-ui/dist, a sibling of src at the same depth.
+        assert.ok(fs.existsSync(path.resolve(path.dirname(htmlPath), url)), `${family}: missing ${url}`);
+      }
+    }
+  });
+
+  test('the engine embeds every selectable font', async () => {
+    const { DOCUMENT_FONTS } = await loadTs('packages/tok-ui/src/fonts.ts');
+    const fontRs = fs.readFileSync(path.join(rootDir, 'crates/tok-typeset/src/font.rs'), 'utf-8');
+    for (const { family } of DOCUMENT_FONTS) assert.ok(fontRs.includes(`("${family}", EMBEDDED_`), `${family} is not registered in font.rs`);
+  });
+
+  test('no legacy font names (not shipped) remain in the UI', () => {
+    const srcDir = path.join(rootDir, 'packages/tok-ui/src');
+    const legacy = /Taamey Frank|David CLM|\bVilna\b|['"]Rashi['"]/;
+    const offenders = [];
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.(ts|html)$/.test(p) && legacy.test(fs.readFileSync(p, 'utf-8'))) offenders.push(path.relative(rootDir, p));
+      }
+    };
+    walk(srcDir);
+    assert.deepEqual(offenders, []);
+  });
+});
+

@@ -890,6 +890,43 @@ mod tests {
     }
 
     #[test]
+    fn ui_fonts_are_embedded_with_cantillation_fallback() {
+        let mut lines = typeset("מֵאֵימָתַי קוֹרִין", "Frank Ruhl Libre");
+        lines.extend(typeset("רַשִׁ״י", "Rashi"));
+        lines.extend(typeset("בְּרֵאשִׁ֖ית", "Frank Ruhl Libre"));
+        let bytes =
+            PdfPrePressEngine::export_pdf(&[page_with(lines)], &PdfExportOptions::default())
+                .unwrap();
+        let s = String::from_utf8_lossy(&bytes);
+        assert!(
+            s.contains("+FrankRuhlLibre"),
+            "Frank Ruhl Libre must be embedded"
+        );
+        assert!(
+            s.contains("+NotoRashiHebrew"),
+            "Noto Rashi Hebrew must be embedded"
+        );
+        assert!(
+            s.contains("+NotoSerifHebrew"),
+            "cantillation must fall back to Noto Serif Hebrew"
+        );
+        assert_eq!(count(&bytes, b"/Subtype /Type0"), 3);
+    }
+
+    #[test]
+    fn bold_face_is_embedded_as_its_own_font() {
+        let mut lines = typeset("מֵאֵימָתַי קוֹרִין", "Frank Ruhl Libre");
+        lines.extend(typeset("מֵאֵימָתַי קוֹרִין", "Frank Ruhl Libre Bold"));
+        let bytes =
+            PdfPrePressEngine::export_pdf(&[page_with(lines)], &PdfExportOptions::default())
+                .unwrap();
+        let s = String::from_utf8_lossy(&bytes);
+        assert!(s.contains("+FrankRuhlLibre-Regular"));
+        assert!(s.contains("+FrankRuhlLibre-Bold"));
+        assert_eq!(count(&bytes, b"/Subtype /Type0"), 2);
+    }
+
+    #[test]
     fn unknown_layout_font_is_an_error() {
         let mut lines = typeset("שלום", "Noto Serif Hebrew");
         lines[0].fonts = vec!["No Such Font".to_string()];

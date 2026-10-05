@@ -27,7 +27,7 @@ function generateDemoPageDescriptors(count: number = 8): PageDescriptor[] {
     const para3 = sampleHebrewParagraphs[(i * 2 + 2) % sampleHebrewParagraphs.length];
 
     const htmlContent = `
-      <div class="tok-page-sheet" style="width: 100%; height: 100%; background: #ffffff; color: #111111; padding: 48px; box-sizing: border-box; box-shadow: 0 4px 16px rgba(0,0,0,0.5); border-radius: 2px; position: relative; font-family: 'Taamey Frank CLM', 'David CLM', 'Times New Roman', serif;">
+      <div class="tok-page-sheet" style="width: 100%; height: 100%; background: #ffffff; color: #111111; padding: 48px; box-sizing: border-box; box-shadow: 0 4px 16px rgba(0,0,0,0.5); border-radius: 2px; position: relative; font-family: var(--tok-font-hebrew-body);">
         <!-- Running Header -->
         <div style="display: flex; justify-content: space-between; border-bottom: 1.5px solid #222; padding-bottom: 8px; margin-bottom: 24px; font-size: 13px; font-weight: bold; color: #333;">
           <span>מַסֶּכֶת בְּרָכוֹת • פֶּרֶק רִאשׁוֹן</span>

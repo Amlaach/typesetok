@@ -1,5 +1,6 @@
 import { t, i18n } from '../i18n';
 import { el, icon, iconButton, selectField } from '../ui';
+import { DOCUMENT_FONTS, DEFAULT_DOCUMENT_FONT } from '../fonts';
 
 export interface ActionHudCallbacks {
   onFontChange: (fontFamily: string) => void;
@@ -83,8 +84,7 @@ export class ActionHud {
     this.element.innerHTML = '';
 
     // 1. Font family
-    const fonts = ['וילנא (Vilna)', 'טעמי פרנק (Taamey Frank)', 'דוד (David CLM)', 'כתב רש"י (Rashi)'];
-    const fontSelect = selectField(t('hudFont'), fonts.map((f) => ({ value: f.split(' ')[0], label: f })), this.currentFont, (value) => {
+    const fontSelect = selectField(t('hudFont'), DOCUMENT_FONTS.map((f) => ({ value: f.family, label: f.label })), this.currentFont || DEFAULT_DOCUMENT_FONT, (value) => {
       this.currentFont = value;
       this.callbacks.onFontChange(value);
     }, { title: t('hudFont') });
