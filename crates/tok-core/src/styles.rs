@@ -79,7 +79,7 @@ impl Default for ParagraphStyle {
         Self {
             id: "default-body".to_string(),
             name: "גוף הטקסט".to_string(),
-            font_family: "David CLM".to_string(),
+            font_family: "Frank Ruhl Libre".to_string(),
             font_size_pt: 11.0,
             line_height_pt: 14.5,
             space_before_pt: 0.0,

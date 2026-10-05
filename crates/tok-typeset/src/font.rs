@@ -1,7 +1,10 @@
 //! OpenType / TrueType Font Management and Shaping Engine for TypesetOK.
 //!
 //! Provides:
-//! - Embedded high-quality OpenType Hebrew fonts (Noto Serif Hebrew & David Libre).
+//! - Embedded OFL Hebrew fonts: Frank Ruhl Libre (default body) and Noto Rashi
+//!   Hebrew, the same glyphs the UI draws (built from assets/fonts/ui by
+//!   scripts/build-engine-fonts.py), plus Noto Serif Hebrew (cantillation and
+//!   meteg) and David Libre (Latin) as fallbacks.
 //! - Dynamic font loading and registration (system fonts or project fonts).
 //! - OpenType text shaping with rustybuzz (HarfBuzz-compatible) supporting GPOS mark/mkmk,
 //!   GSUB ligatures, and font fallback.
@@ -12,10 +15,17 @@ use rustybuzz::Face;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+pub static EMBEDDED_FRANK_RUHL_LIBRE: &[u8] =
+    include_bytes!("../../../assets/fonts/FrankRuhlLibre-Regular.ttf");
+pub static EMBEDDED_NOTO_RASHI_HEBREW: &[u8] =
+    include_bytes!("../../../assets/fonts/NotoRashiHebrew-Regular.ttf");
 pub static EMBEDDED_NOTO_SERIF_HEBREW: &[u8] =
     include_bytes!("../../../assets/fonts/NotoSerifHebrew-Regular.ttf");
 pub static EMBEDDED_DAVID_LIBRE: &[u8] =
     include_bytes!("../../../assets/fonts/DavidLibre-Regular.ttf");
+
+/// Family used when a style names no font, or one that is not registered.
+pub const DEFAULT_FAMILY: &str = "Frank Ruhl Libre";
 
 #[derive(Debug, Clone)]
 pub struct FontMetrics {
@@ -94,8 +104,8 @@ impl FontData {
 pub enum FontChoice {
     /// The requested family (after alias / default resolution).
     Primary,
-    /// The fallback family, used because the primary lacked glyphs.
-    Fallback,
+    /// The n-th fallback family, used because the primary lacked glyphs.
+    Fallback(usize),
     /// No usable font: metric heuristics, glyph ids are code points.
     Heuristic,
 }
@@ -103,7 +113,7 @@ pub enum FontChoice {
 /// Fonts resolved and parsed once, for shaping many runs.
 pub struct ShapingSession<'a> {
     primary: Option<(&'a FontData, Face<'a>)>,
-    fallback: Option<(&'a FontData, Face<'a>)>,
+    fallbacks: Vec<(&'a FontData, Face<'a>)>,
 }
 
 impl<'a> ShapingSession<'a> {
@@ -114,8 +124,8 @@ impl<'a> ShapingSession<'a> {
             .count()
     }
 
-    /// Shapes `text`, switching to the fallback font when it covers more of
-    /// the text than the primary font does.
+    /// Shapes `text` with the primary font, or with the first fallback that
+    /// covers more of it when the primary lacks glyphs.
     pub fn shape(&self, text: &str, font_size_pt: f32, is_rtl: bool) -> (ShapedRun, FontChoice) {
         if text.is_empty() {
             return (
@@ -129,29 +139,35 @@ impl<'a> ShapingSession<'a> {
             );
         }
 
-        match (&self.primary, &self.fallback) {
-            (Some((_, primary)), fallback) => {
-                let missing = Self::missing_glyphs(primary, text);
-                if missing > 0 {
-                    if let Some((_, fallback)) = fallback {
-                        if Self::missing_glyphs(fallback, text) < missing {
-                            return (
-                                TextShaper::shape_with_face(fallback, text, font_size_pt, is_rtl),
-                                FontChoice::Fallback,
-                            );
-                        }
-                    }
+        let primary_missing = self
+            .primary
+            .as_ref()
+            .map(|(_, face)| Self::missing_glyphs(face, text));
+        if primary_missing != Some(0) {
+            // Fewest missing glyphs wins; ties go to the earlier fallback.
+            let best = self
+                .fallbacks
+                .iter()
+                .enumerate()
+                .map(|(i, (_, face))| (Self::missing_glyphs(face, text), i))
+                .min();
+            if let Some((missing, i)) = best {
+                if primary_missing.is_none_or(|p| missing < p) {
+                    let face = &self.fallbacks[i].1;
+                    return (
+                        TextShaper::shape_with_face(face, text, font_size_pt, is_rtl),
+                        FontChoice::Fallback(i),
+                    );
                 }
-                (
-                    TextShaper::shape_with_face(primary, text, font_size_pt, is_rtl),
-                    FontChoice::Primary,
-                )
             }
-            (None, Some((_, fallback))) => (
-                TextShaper::shape_with_face(fallback, text, font_size_pt, is_rtl),
-                FontChoice::Fallback,
+        }
+
+        match &self.primary {
+            Some((_, primary)) => (
+                TextShaper::shape_with_face(primary, text, font_size_pt, is_rtl),
+                FontChoice::Primary,
             ),
-            (None, None) => (
+            None => (
                 TextShaper::shape_fallback(text, font_size_pt, is_rtl),
                 FontChoice::Heuristic,
             ),
@@ -162,17 +178,29 @@ impl<'a> ShapingSession<'a> {
     pub fn family_of(&self, choice: FontChoice) -> Option<&'a str> {
         let font = match choice {
             FontChoice::Primary => self.primary.as_ref().map(|(f, _)| *f),
-            FontChoice::Fallback => self.fallback.as_ref().map(|(f, _)| *f),
+            FontChoice::Fallback(i) => self.fallbacks.get(i).map(|(f, _)| *f),
             FontChoice::Heuristic => None,
         };
         font.map(|f| f.family_name.as_str())
     }
 
-    /// Glyph id of the space character in the primary font.
+    /// The choice spaces between words are drawn with: the primary font, or
+    /// the first fallback when there is no primary.
+    pub fn space_choice(&self) -> FontChoice {
+        if self.primary.is_some() {
+            FontChoice::Primary
+        } else if !self.fallbacks.is_empty() {
+            FontChoice::Fallback(0)
+        } else {
+            FontChoice::Heuristic
+        }
+    }
+
+    /// Glyph id of the space character in the font of [`Self::space_choice`].
     pub fn space_glyph_id(&self) -> Option<u32> {
         self.primary
             .as_ref()
-            .or(self.fallback.as_ref())
+            .or(self.fallbacks.first())
             .and_then(|(_, face)| face.glyph_index(' '))
             .map(|g| u32::from(g.0))
     }
@@ -183,30 +211,39 @@ pub struct FontManager {
     // BTreeMap: lookups that fall back to "any font" must be deterministic.
     fonts: BTreeMap<String, Arc<FontData>>,
     default_hebrew_family: String,
-    fallback_family: String,
+    fallback_families: Vec<String>,
 }
 
 impl Default for FontManager {
     fn default() -> Self {
         let mut mgr = Self::new();
-        // Load embedded default fonts
-        let noto = FontData::from_bytes("Noto Serif Hebrew", EMBEDDED_NOTO_SERIF_HEBREW.to_vec())
-            .expect("Embedded Noto Serif Hebrew must be valid font");
+        for (family, bytes) in [
+            ("Frank Ruhl Libre", EMBEDDED_FRANK_RUHL_LIBRE),
+            ("Noto Rashi Hebrew", EMBEDDED_NOTO_RASHI_HEBREW),
+            ("Noto Serif Hebrew", EMBEDDED_NOTO_SERIF_HEBREW),
+            ("David Libre", EMBEDDED_DAVID_LIBRE),
+        ] {
+            let font = FontData::from_bytes(family, bytes.to_vec())
+                .unwrap_or_else(|e| panic!("embedded {family} must be a valid font: {e}"));
+            mgr.register_font(font);
+        }
 
-        let david = FontData::from_bytes("David Libre", EMBEDDED_DAVID_LIBRE.to_vec())
-            .expect("Embedded David Libre must be valid font");
+        mgr.set_default_hebrew_family(DEFAULT_FAMILY);
+        // Noto Serif Hebrew covers cantillation and meteg, which Frank Ruhl Libre
+        // and David Libre lack; David Libre covers Latin, which Noto Serif lacks.
+        mgr.set_fallback_families(&["Noto Serif Hebrew", "David Libre"]);
 
-        mgr.register_font(noto);
-        mgr.register_font(david);
-
-        mgr.set_default_hebrew_family("Noto Serif Hebrew");
-        mgr.set_fallback_family("David Libre");
-
-        // Common aliases
-        mgr.alias_font("Taamey Frank CLM", "Noto Serif Hebrew");
-        mgr.alias_font("David CLM", "David Libre");
-        mgr.alias_font("David", "David Libre");
-        mgr.alias_font("Frank Ruehl CLM", "Noto Serif Hebrew");
+        // Names used by older documents and styles.
+        for (alias, family) in [
+            ("Taamey Frank CLM", "Frank Ruhl Libre"),
+            ("Frank Ruehl CLM", "Frank Ruhl Libre"),
+            ("Vilna", "Frank Ruhl Libre"),
+            ("Rashi", "Noto Rashi Hebrew"),
+            ("David CLM", "David Libre"),
+            ("David", "David Libre"),
+        ] {
+            mgr.alias_font(alias, family);
+        }
 
         mgr
     }
@@ -217,7 +254,7 @@ impl FontManager {
         Self {
             fonts: BTreeMap::new(),
             default_hebrew_family: String::new(),
-            fallback_family: String::new(),
+            fallback_families: Vec::new(),
         }
     }
 
@@ -236,7 +273,12 @@ impl FontManager {
     }
 
     pub fn set_fallback_family(&mut self, family: &str) {
-        self.fallback_family = family.to_string();
+        self.set_fallback_families(&[family]);
+    }
+
+    /// Fallbacks in priority order, tried when the requested font lacks glyphs.
+    pub fn set_fallback_families(&mut self, families: &[&str]) {
+        self.fallback_families = families.iter().map(|f| f.to_string()).collect();
     }
 
     /// Resolves a family (or alias), falling back to the default Hebrew family.
@@ -270,16 +312,23 @@ impl FontManager {
             font.shaping_face().map(|face| (font, face))
         }
         let primary = self.font_ref(font_family).and_then(parse);
-        let fallback = self
-            .fonts
-            .get(&self.fallback_family)
-            .filter(|f| {
-                primary
-                    .as_ref()
-                    .is_none_or(|(p, _)| !std::ptr::eq(*p, f.as_ref()))
-            })
-            .and_then(parse);
-        ShapingSession { primary, fallback }
+        let mut fallbacks: Vec<(&FontData, Face<'_>)> = Vec::new();
+        for family in &self.fallback_families {
+            let Some(font) = self.fonts.get(family) else {
+                continue;
+            };
+            let font_ptr: &FontData = font;
+            let seen = primary
+                .iter()
+                .chain(fallbacks.iter())
+                .any(|(f, _)| std::ptr::eq(*f, font_ptr));
+            if !seen {
+                if let Some(entry) = parse(font) {
+                    fallbacks.push(entry);
+                }
+            }
+        }
+        ShapingSession { primary, fallbacks }
     }
 
     /// Shapes text with the requested font family, automatically falling back for missing glyphs.
@@ -350,7 +399,7 @@ mod tests {
         assert_eq!(choice, FontChoice::Primary);
         assert_eq!(session.family_of(choice), Some("Noto Serif Hebrew"));
         let (_, choice) = session.shape("Typeset", 12.0, false);
-        assert_eq!(choice, FontChoice::Fallback);
+        assert!(matches!(choice, FontChoice::Fallback(_)));
         assert_eq!(session.family_of(choice), Some("David Libre"));
 
         // Aliases resolve to the real family name.
@@ -383,5 +432,56 @@ mod tests {
     #[test]
     fn invalid_font_bytes_are_rejected() {
         assert!(FontData::from_bytes("bad", vec![0, 1, 2, 3]).is_err());
+    }
+
+    #[test]
+    fn ui_fonts_are_the_defaults_and_old_names_resolve_to_them() {
+        let mgr = FontManager::default();
+        assert_eq!(mgr.default_font().unwrap().family_name, "Frank Ruhl Libre");
+        assert_eq!(
+            mgr.get_font("unknown family").unwrap().family_name,
+            "Frank Ruhl Libre"
+        );
+        for (name, family) in [
+            ("Frank Ruhl Libre", "Frank Ruhl Libre"),
+            ("Noto Rashi Hebrew", "Noto Rashi Hebrew"),
+            ("Vilna", "Frank Ruhl Libre"),
+            ("Taamey Frank CLM", "Frank Ruhl Libre"),
+            ("Frank Ruehl CLM", "Frank Ruhl Libre"),
+            ("Rashi", "Noto Rashi Hebrew"),
+            ("David CLM", "David Libre"),
+        ] {
+            let session = mgr.session(name);
+            assert_eq!(
+                session.family_of(FontChoice::Primary),
+                Some(family),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn fallback_order_covers_cantillation_and_latin() {
+        let mgr = FontManager::default();
+
+        // Pointed text and Latin are in Frank Ruhl Libre itself.
+        let session = mgr.session("Frank Ruhl Libre");
+        for text in ["בְּרֵאשִׁית", "TypesetOK 2026", "תשפ״ד"] {
+            let (_, choice) = session.shape(text, 12.0, true);
+            assert_eq!(choice, FontChoice::Primary, "{text}");
+        }
+        // Cantillation is not, so the word goes to Noto Serif Hebrew.
+        let (run, choice) = session.shape("בְּרֵאשִׁ֖ית", 12.0, true);
+        assert_eq!(session.family_of(choice), Some("Noto Serif Hebrew"));
+        assert!(run.total_width_pt > 0.0);
+
+        // Noto Rashi Hebrew has cantillation itself.
+        let (_, choice) = mgr.session("Rashi").shape("בְּרֵאשִׁ֖ית", 12.0, true);
+        assert_eq!(choice, FontChoice::Primary);
+
+        // Latin in Noto Serif Hebrew skips to David Libre, past the primary.
+        let session = mgr.session("Noto Serif Hebrew");
+        let (_, choice) = session.shape("Typeset", 12.0, false);
+        assert_eq!(session.family_of(choice), Some("David Libre"));
     }
 }

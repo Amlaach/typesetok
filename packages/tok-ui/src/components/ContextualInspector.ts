@@ -7,6 +7,7 @@ import {
 import { IconName } from '../icons';
 import { t, i18n } from '../i18n';
 import { el, icon, button, switchRow, segmented, selectField } from '../ui';
+import { DOCUMENT_FONTS, DEFAULT_DOCUMENT_FONT } from '../fonts';
 
 /**
  * Parses a scrubber field such as "11.5 pt", "-3 מ"מ" or "12,5". Returns null when no
@@ -81,7 +82,7 @@ export class ContextualInspector {
   };
 
   private typographySettings: TypographySettings = {
-    fontFamily: 'וילנא (Vilna)',
+    fontFamily: DEFAULT_DOCUMENT_FONT,
     fontSizePt: 15,
     fontWeight: 'bold',
     lineHeightPt: 19,
@@ -357,9 +358,10 @@ export class ContextualInspector {
 
     // 2. Font
     const fontCard = this.createCard(t('inspFontSpacing'));
-    const fonts = ['וילנא (Vilna)', 'טעמי פרנק (Taamey Frank)', 'דוד (David CLM)', 'כתב רש"י (Rashi)'];
-    const current = fonts.find((f) => f.startsWith(this.typographySettings.fontFamily.slice(0, 4))) ?? fonts[0];
-    fontCard.appendChild(selectField(t('hudFont'), fonts.map((f) => ({ value: f, label: f })), current, (value) => {
+    const current = DOCUMENT_FONTS.some((f) => f.family === this.typographySettings.fontFamily)
+      ? this.typographySettings.fontFamily
+      : DEFAULT_DOCUMENT_FONT;
+    fontCard.appendChild(selectField(t('hudFont'), DOCUMENT_FONTS.map((f) => ({ value: f.family, label: f.label })), current, (value) => {
       this.typographySettings.fontFamily = value;
       this.typographySettings.isOverride = true;
       this.callbacks.onTypographyChange({ fontFamily: value, isOverride: true });

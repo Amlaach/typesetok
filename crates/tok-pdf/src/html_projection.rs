@@ -8,6 +8,10 @@
 use std::fmt::Write;
 use tok_typeset::geometry::PageLayoutBox;
 
+/// The engine's embedded families, in fallback order (see tok-typeset's FontManager).
+const FONT_STACK: &str =
+    "'Frank Ruhl Libre', 'Noto Rashi Hebrew', 'Noto Serif Hebrew', 'David Libre', serif";
+
 pub struct HtmlProjectionCompiler;
 
 impl HtmlProjectionCompiler {
@@ -46,7 +50,7 @@ body {{
   margin: 0;
   padding: 0;
   direction: rtl;
-  font-family: "David CLM", "Times New Roman", serif;
+  font-family: {fonts};
 }}
 
 /* Mandatory Isolation Rule: tok-page */
@@ -75,6 +79,7 @@ div.tok-line {{
 "#,
             width = page_width_mm,
             height = page_height_mm,
+            fonts = FONT_STACK,
         )
     }
 
@@ -124,9 +129,15 @@ div.tok-line {{
                     // The document is RTL; LTR lines must say so or the browser
                     // reorders and right-aligns them.
                     let dir = if line.is_rtl { "" } else { " dir=\"ltr\"" };
+                    // Draw the line in the font the engine measured it with.
+                    let font = line
+                        .fonts
+                        .first()
+                        .map(|f| format!(" font-family: '{}', {};", html_escape(f), FONT_STACK))
+                        .unwrap_or_default();
                     writeln!(html,
-                        "    <div class=\"tok-line\"{} style=\"height: {:.2}pt; line-height: {:.2}pt;\">{}</div>",
-                        dir, line.height, line.height, html_escape(&line.text)
+                        "    <div class=\"tok-line\"{} style=\"height: {:.2}pt; line-height: {:.2}pt;{}\">{}</div>",
+                        dir, line.height, line.height, font, html_escape(&line.text)
                     ).unwrap();
                 }
 
@@ -234,6 +245,43 @@ mod tests {
         assert!(html.contains("<div class=\"tok-line\" dir=\"ltr\""));
         assert!(html.contains("Hello &lt;world&gt;"));
         assert_eq!(html.matches("dir=\"ltr\"").count(), 1);
+    }
+
+    #[test]
+    fn lines_use_the_font_the_engine_measured_them_with() {
+        let line = |fonts: Vec<String>| LineBox {
+            line_index: 0,
+            paragraph_id: None,
+            baseline_y: 14.5,
+            height: 14.5,
+            width: 300.0,
+            glyphs: Vec::new(),
+            text: "שלום".to_string(),
+            is_rtl: true,
+            fonts,
+        };
+        let page = PageLayoutBox {
+            page_index: 0,
+            page_number_gematria: "א׳".to_string(),
+            dimensions: PhysicalRect::a4_portrait(),
+            frames: vec![TextFrameBox {
+                frame_id: "f1".to_string(),
+                flow_id: "rashi".to_string(),
+                rect: PhysicalRect::new(50.0, 50.0, 400.0, 600.0),
+                lines: vec![
+                    line(vec!["Noto Rashi Hebrew".to_string()]),
+                    line(Vec::new()),
+                ],
+            }],
+            break_token: None,
+        };
+        let html = HtmlProjectionCompiler::compile_to_html(&[page], 210.0, 297.0);
+        assert!(html.contains("font-family: 'Frank Ruhl Libre', 'Noto Rashi Hebrew'"));
+        assert!(!html.contains("David CLM"));
+        assert!(html.contains(
+            "line-height: 14.50pt; font-family: 'Noto Rashi Hebrew', 'Frank Ruhl Libre'"
+        ));
+        assert_eq!(html.matches("font-family: 'Noto Rashi Hebrew'").count(), 1);
     }
 
     #[test]

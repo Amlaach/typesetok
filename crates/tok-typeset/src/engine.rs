@@ -3,7 +3,7 @@
 //! Orchestrates text shaping, Bidi decomposition, Knuth-Plass line breaking,
 //! 3-tier Hebrew justification, and multi-page convergence pagination.
 
-use crate::font::{FontChoice, FontManager, ShapingSession};
+use crate::font::{FontManager, ShapingSession};
 use crate::gematria::GematriaEngine;
 use crate::geometry::{
     BreakToken, GlyphBox, LineBox, PageLayoutBox, PhysicalRect, TextFrameBox, UNKNOWN_FONT,
@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use tok_core::model::{DocumentRoot, ParagraphNode};
 use unicode_bidi::BidiInfo;
 
-const DEFAULT_FONT_FAMILY: &str = "Noto Serif Hebrew";
+const DEFAULT_FONT_FAMILY: &str = crate::font::DEFAULT_FAMILY;
 const DEFAULT_FONT_SIZE_PT: f32 = 11.0;
 const DEFAULT_LINE_HEIGHT_PT: f32 = 14.5;
 /// Natural inter-word space, in em.
@@ -196,12 +196,7 @@ impl TypesettingEngine {
         // 2. Build the Knuth-Plass stream: words split into same-level runs,
         //    each shaped in its own direction, separated by glue.
         let mut fonts: Vec<String> = Vec::new();
-        let space_choice = if session.family_of(FontChoice::Primary).is_some() {
-            FontChoice::Primary
-        } else {
-            FontChoice::Fallback
-        };
-        let space_font = font_slot(&mut fonts, session.family_of(space_choice));
+        let space_font = font_slot(&mut fonts, session.family_of(session.space_choice()));
         let space_gid = session.space_glyph_id().unwrap_or(3);
         let base_space = font_size * SPACE_EM;
 
@@ -698,7 +693,12 @@ mod tests {
     fn every_glyph_records_the_font_it_belongs_to() {
         let engine = engine();
         let text = "שלום עולם? Typeset 2026";
-        for family in ["Noto Serif Hebrew", "David CLM"] {
+        for family in [
+            "Noto Serif Hebrew",
+            "David CLM",
+            "Frank Ruhl Libre",
+            "Rashi",
+        ] {
             let lines = engine.typeset_paragraph_with_font(&para(text), family, 400.0, 12.0, 16.0);
             for line in &lines {
                 for g in &line.glyphs {
