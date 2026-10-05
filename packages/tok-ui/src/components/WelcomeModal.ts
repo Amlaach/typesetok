@@ -46,12 +46,44 @@ const TEMPLATES: Template[] = [
   }
 ];
 
-/** Recent projects (same entries as before; opening one loads the sample project). */
-const RECENT = [
+export interface RecentProject {
+  name: string;
+  path?: string;
+  time: string;
+  pages: number;
+  template: number;
+}
+
+const DEFAULT_RECENT: RecentProject[] = [
   { name: 'מסכת ברכות — מהדורת מופת.tok', time: 'היום, 14:32', pages: 12, template: 0 },
   { name: 'ספר תהילים עם פירוש המילות.tok', time: 'אתמול', pages: 48, template: 1 },
   { name: 'עלון שבת קודש — גיליון ק״מ.tok', time: 'לפני 3 ימים', pages: 4, template: 4 }
 ];
+
+export function getRecentProjects(): RecentProject[] {
+  try {
+    const raw = localStorage.getItem('tok_recent_projects');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    }
+  } catch {}
+  return DEFAULT_RECENT;
+}
+
+export function addRecentProject(entry: { name: string; path?: string; pages?: number; template?: number }): void {
+  try {
+    const list = getRecentProjects().filter((p) => p.name !== entry.name);
+    list.unshift({
+      name: entry.name,
+      path: entry.path,
+      time: 'זה עתה',
+      pages: entry.pages ?? 1,
+      template: entry.template ?? 0
+    });
+    localStorage.setItem('tok_recent_projects', JSON.stringify(list.slice(0, 10)));
+  } catch {}
+}
 
 export const APP_VERSION = '0.7.3';
 
@@ -238,21 +270,24 @@ export class WelcomeModal {
     }));
     side.appendChild(sideHead);
 
+    const recent = getRecentProjects();
     const list = el('div', undefined, { role: 'list', style: 'display:flex;flex-direction:column;gap:2px' });
-    if (RECENT.length === 0) {
+    if (recent.length === 0) {
       list.appendChild(el('p', 'tok-recent-empty', undefined, t('noRecentProjects')));
     }
-    for (const rec of RECENT) {
+    for (const rec of recent) {
       const row = el('button', 'tok-recent-row', { type: 'button', role: 'listitem' });
-      row.appendChild(pageArt(TEMPLATES[rec.template].art, 34, 48));
+      const tpl = TEMPLATES[rec.template] || TEMPLATES[0];
+      row.appendChild(pageArt(tpl.art, 34, 48));
       const info = el('span', 'tok-recent-main');
       info.appendChild(el('span', 'tok-recent-name', { title: rec.name }, rec.name.replace(/\.tok$/i, '')));
-      info.appendChild(el('span', 'tok-recent-sub', undefined, `${t(TEMPLATES[rec.template].titleKey)} · ${tf('welcomePagesCount', { n: rec.pages })}`));
+      info.appendChild(el('span', 'tok-recent-sub', undefined, `${t(tpl.titleKey)} · ${tf('welcomePagesCount', { n: rec.pages })}`));
       row.appendChild(info);
       row.appendChild(el('span', 'tok-recent-when', undefined, rec.time));
       row.addEventListener('click', () => {
         this.hide();
-        this.callbacks.onLoadDemo();
+        if (rec.path) this.callbacks.onOpenProject(rec.path);
+        else this.callbacks.onLoadDemo();
       });
       list.appendChild(row);
     }
