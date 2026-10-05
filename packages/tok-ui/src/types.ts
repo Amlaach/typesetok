@@ -58,7 +58,8 @@ export interface HebrewJustificationSettings {
 export interface TypographySettings {
   fontFamily: string;
   fontSizePt: number;
-  fontWeight: 'normal' | 'bold' | '600' | '700';
+  /** CSS weight, as ParagraphStyle.font_weight in the engine (400 regular, 700 bold). */
+  fontWeight: number;
   lineHeightPt: number;
   paragraphSpacingPt: number;
   firstLineIndentMm: number;
@@ -87,7 +88,8 @@ export interface StyleToken {
   name: string;
   fontFamily: string;
   fontSizePt: number;
-  fontWeight: string;
+  /** CSS weight, as ParagraphStyle.font_weight in the engine (400 regular, 700 bold). */
+  fontWeight: number;
   flowId: string;
 }
 

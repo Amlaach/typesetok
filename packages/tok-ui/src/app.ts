@@ -15,6 +15,7 @@ import { PageDescriptor } from 'tok-viewer';
 import { ViewMode } from './types';
 import { i18n, t, tf } from './i18n';
 import { themeManager } from './theme';
+import { FONT_WEIGHT_BOLD, FONT_WEIGHT_REGULAR } from './fonts';
 import { el, icon, iconButton, button } from './ui';
 
 import { toHebrewGematria } from './gematria';
@@ -244,7 +245,7 @@ export class TypesetOkApp {
     this.actionHud = new ActionHud({
       onFontChange: (f) => this.inspector.setMode('text-edit', undefined, { fontFamily: f }),
       onSizeChange: (s) => this.inspector.setMode('text-edit', undefined, { fontSizePt: s }),
-      onWeightChange: (b) => this.inspector.setMode('text-edit', undefined, { fontWeight: b ? 'bold' : 'normal' }),
+      onWeightChange: (b) => this.inspector.setMode('text-edit', undefined, { fontWeight: b ? FONT_WEIGHT_BOLD : FONT_WEIGHT_REGULAR }),
       onAlignChange: (a) => this.inspector.setMode('text-edit', undefined, { alignment: a }),
       onStyleChange: (st) => this.showToast(tf('toastQuickStyle', { name: st })),
       onDismiss: () => this.inspector.setMode('zero')

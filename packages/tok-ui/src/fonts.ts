@@ -11,3 +11,7 @@ export const DOCUMENT_FONTS: { family: string; label: string }[] = [
 ];
 
 export const DEFAULT_DOCUMENT_FONT = DOCUMENT_FONTS[0].family;
+
+/** Same values as ParagraphStyle.font_weight in tok-core. */
+export const FONT_WEIGHT_REGULAR = 400;
+export const FONT_WEIGHT_BOLD = 700;
