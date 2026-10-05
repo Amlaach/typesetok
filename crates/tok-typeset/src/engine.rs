@@ -434,10 +434,8 @@ impl TypesettingEngine {
                         .find(|s| s.id == p.style_id)
                         .map(|style| {
                             (
-                                self.font_manager.styled_family_weight(
-                                    &style.font_family,
-                                    style.resolved_font_weight(),
-                                ),
+                                self.font_manager
+                                    .face_for(&style.font_family, style.font_weight),
                                 style.font_size_pt,
                                 style.line_height_pt,
                             )
@@ -845,16 +843,16 @@ mod tests {
         let text = "מֵאֵימָתַי קוֹרִין אֶת שְׁמַע";
         let mut doc = DocumentRoot::new("bold");
         doc.paragraph_styles = [
-            ("regular", "Frank Ruhl Libre", false),
-            ("bold", "Frank Ruhl Libre", true),
-            ("rashi-bold", "Rashi", true),
-            ("david-bold", "David CLM", true),
+            ("regular", "Frank Ruhl Libre", 400),
+            ("bold", "Frank Ruhl Libre", 700),
+            ("rashi-bold", "Rashi", 700),
+            ("david-bold", "David CLM", 700),
         ]
         .into_iter()
-        .map(|(id, family, bold)| ParagraphStyle {
+        .map(|(id, family, font_weight)| ParagraphStyle {
             id: id.to_string(),
             font_family: family.to_string(),
-            bold,
+            font_weight,
             ..ParagraphStyle::default()
         })
         .collect();

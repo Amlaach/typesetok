@@ -728,6 +728,24 @@ describe('Regression: document fonts are the ones the engine embeds', () => {
     for (const { family } of DOCUMENT_FONTS) assert.ok(fontRs.includes(`("${family}", EMBEDDED_`), `${family} is not registered in font.rs`);
   });
 
+  test('UI font weights are the engine ParagraphStyle.font_weight values', async () => {
+    const { FONT_WEIGHT_REGULAR, FONT_WEIGHT_BOLD } = await loadTs('packages/tok-ui/src/fonts.ts');
+    const styles = fs.readFileSync(path.join(rootDir, 'crates/tok-core/src/styles.rs'), 'utf-8');
+    assert.ok(styles.includes(`FONT_WEIGHT_REGULAR: u16 = ${FONT_WEIGHT_REGULAR};`));
+    assert.ok(styles.includes(`FONT_WEIGHT_BOLD: u16 = ${FONT_WEIGHT_BOLD};`));
+    const srcDir = path.join(rootDir, 'packages/tok-ui/src');
+    const offenders = [];
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (p.endsWith('.ts') && /fontWeight:\s*['"]/.test(fs.readFileSync(p, 'utf-8'))) offenders.push(path.relative(rootDir, p));
+      }
+    };
+    walk(srcDir);
+    assert.deepEqual(offenders, [], 'fontWeight must be numeric (400/700), as in the engine');
+  });
+
   test('no legacy font names (not shipped) remain in the UI', () => {
     const srcDir = path.join(rootDir, 'packages/tok-ui/src');
     const legacy = /Taamey Frank|David CLM|\bVilna\b|['"]Rashi['"]/;
@@ -741,69 +759,6 @@ describe('Regression: document fonts are the ones the engine embeds', () => {
     };
     walk(srcDir);
     assert.deepEqual(offenders, []);
-  });
-});
-
-describe('Feature: Font weight (700 / 400) support across UI components', () => {
-  test('StructureBar styles define explicit font_weight matching their bold setting', async () => {
-    const { StructureBar } = await loadTs('packages/tok-ui/src/components/StructureBar.ts');
-    let selectedStyle = null;
-    const bar = new StructureBar({
-      onSelectPage: () => {},
-      onSelectFlow: () => {},
-      onSelectStyle: (id) => { selectedStyle = id; },
-      onToggleLayer: () => {},
-      onOpenSettings: () => {},
-      onOpenAbout: () => {}
-    });
-
-    const styles = bar.getStyles();
-    assert.ok(styles.length >= 6, 'expected shipped styles in structure bar');
-
-    for (const style of styles) {
-      if (style.fontWeight === 'bold') {
-        assert.equal(style.font_weight, 700, `${style.name} (bold) must have font_weight 700`);
-      } else {
-        assert.equal(style.font_weight, 400, `${style.name} (normal) must have font_weight 400`);
-      }
-    }
-
-    const gemaraMain = bar.getStyle('style-gemara-main');
-    assert.ok(gemaraMain);
-    assert.equal(gemaraMain.font_weight, 700);
-    assert.equal(gemaraMain.fontWeight, 'bold');
-  });
-
-  test('ActionHud notifies onWeightChange with both boolean and numeric weight (700/400)', async () => {
-    const { ActionHud } = await loadTs('packages/tok-ui/src/components/ActionHud.ts');
-    let weightState = null;
-    let weightNum = null;
-    const hud = new ActionHud({
-      onFontChange: () => {},
-      onSizeChange: () => {},
-      onWeightChange: (isBold, weight) => {
-        weightState = isBold;
-        weightNum = weight;
-      },
-      onAlignChange: () => {},
-      onStyleChange: () => {},
-      onDismiss: () => {}
-    });
-
-    hud.showAt(100, 100, { font_weight: 700 });
-    const boldBtn = hud.element.querySelector('.tok-hud-btn[aria-pressed]');
-    assert.ok(boldBtn, 'bold button must exist');
-    assert.equal(boldBtn.getAttribute('aria-pressed'), 'true');
-
-    // Clicking bold button toggles it off -> 400
-    boldBtn.click();
-    assert.equal(weightState, false);
-    assert.equal(weightNum, 400);
-
-    // Clicking bold button toggles it on -> 700
-    boldBtn.click();
-    assert.equal(weightState, true);
-    assert.equal(weightNum, 700);
   });
 });
 

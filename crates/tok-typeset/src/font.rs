@@ -46,13 +46,11 @@ pub struct FontMetrics {
     pub y_min: i16,
     pub x_max: i16,
     pub y_max: i16,
-    pub weight: u16,
 }
 
 #[derive(Clone)]
 pub struct FontData {
     pub family_name: String,
-    pub weight: u16,
     pub raw_bytes: Arc<Vec<u8>>,
     pub metrics: FontMetrics,
 }
@@ -61,7 +59,6 @@ impl std::fmt::Debug for FontData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FontData")
             .field("family_name", &self.family_name)
-            .field("weight", &self.weight)
             .field("bytes_len", &self.raw_bytes.len())
             .field("metrics", &self.metrics)
             .finish()
@@ -77,7 +74,6 @@ impl FontData {
         }
 
         let bbox = face.global_bounding_box();
-        let weight = face.weight().to_number();
         let metrics = FontMetrics {
             units_per_em: face.units_per_em(),
             ascender: face.ascender(),
@@ -89,12 +85,10 @@ impl FontData {
             y_min: bbox.y_min,
             x_max: bbox.x_max,
             y_max: bbox.y_max,
-            weight,
         };
 
         Ok(Self {
             family_name: family_name.into(),
-            weight,
             raw_bytes: Arc::new(bytes),
             metrics,
         })
@@ -223,7 +217,8 @@ impl<'a> ShapingSession<'a> {
 pub struct FontManager {
     // BTreeMap: lookups that fall back to "any font" must be deterministic.
     fonts: BTreeMap<String, Arc<FontData>>,
-    by_weight: BTreeMap<(String, u16), Arc<FontData>>,
+    /// family -> weight -> registered face (see [`FontManager::face_for`]).
+    weights: BTreeMap<String, BTreeMap<u16, String>>,
     default_hebrew_family: String,
     fallback_families: Vec<String>,
 }
@@ -242,6 +237,10 @@ impl Default for FontManager {
             let font = FontData::from_bytes(family, bytes.to_vec())
                 .unwrap_or_else(|e| panic!("embedded {family} must be a valid font: {e}"));
             mgr.register_font(font);
+        }
+        for family in ["Frank Ruhl Libre", "Noto Rashi Hebrew"] {
+            mgr.register_weight(family, 400, family);
+            mgr.register_weight(family, 700, &format!("{family}{BOLD_SUFFIX}"));
         }
 
         mgr.set_default_hebrew_family(DEFAULT_FAMILY);
@@ -269,29 +268,19 @@ impl FontManager {
     pub fn new() -> Self {
         Self {
             fonts: BTreeMap::new(),
-            by_weight: BTreeMap::new(),
+            weights: BTreeMap::new(),
             default_hebrew_family: String::new(),
             fallback_families: Vec::new(),
         }
     }
 
     pub fn register_font(&mut self, font: FontData) {
-        let weight = font.weight;
-        let arc = Arc::new(font);
-        self.fonts.insert(arc.family_name.clone(), arc.clone());
-        self.by_weight
-            .insert((arc.family_name.clone(), weight), arc.clone());
-        if let Some(base) = arc.family_name.strip_suffix(BOLD_SUFFIX) {
-            self.by_weight
-                .insert((base.to_string(), weight), arc.clone());
-        }
+        self.fonts.insert(font.family_name.clone(), Arc::new(font));
     }
 
     pub fn alias_font(&mut self, alias: &str, target_family: &str) {
         if let Some(target) = self.fonts.get(target_family).cloned() {
-            self.fonts.insert(alias.to_string(), target.clone());
-            self.by_weight
-                .insert((alias.to_string(), target.weight), target);
+            self.fonts.insert(alias.to_string(), target);
         }
     }
 
@@ -319,41 +308,34 @@ impl FontManager {
         })
     }
 
-    /// Lookup font by family and weight.
-    pub fn font_by_weight(&self, family: &str, weight: u16) -> Option<Arc<FontData>> {
-        self.by_weight
-            .get(&(family.to_string(), weight))
-            .cloned()
-            .or_else(|| {
-                if weight >= 700 {
-                    let bold_family = format!("{family}{BOLD_SUFFIX}");
-                    self.fonts.get(&bold_family).cloned()
-                } else {
-                    None
-                }
-            })
+    /// Registers `face` (a registered family name) as `family` at `weight`.
+    /// A family's own regular face is weight 400 unless registered otherwise.
+    pub fn register_weight(&mut self, family: &str, weight: u16, face: &str) {
+        self.weights
+            .entry(family.to_string())
+            .or_default()
+            .insert(weight, face.to_string());
     }
 
-    /// Resolves family name accounting for the requested font weight.
-    pub fn styled_family_weight(&self, family: &str, weight: u16) -> String {
-        self.styled_family(family, weight >= 700)
-    }
-
-    /// The family to shape a style with: `family` resolved through aliases and
-    /// the default, switched to its bold face when `bold` is set and one is
-    /// registered (otherwise the regular face is used).
-    pub fn styled_family(&self, family: &str, bold: bool) -> String {
+    /// The registered face to shape `family` at `weight` with: aliases and the
+    /// default are resolved first, then the closest weight is chosen as CSS
+    /// does (up to 500: lighter first, then heavier; above: heavier first).
+    pub fn face_for(&self, family: &str, weight: u16) -> String {
         let Some(font) = self.font_ref(family) else {
             return family.to_string();
         };
-        let resolved = font.family_name.as_str();
-        if bold {
-            let bold_family = format!("{resolved}{BOLD_SUFFIX}");
-            if self.fonts.contains_key(&bold_family) {
-                return bold_family;
-            }
-        }
-        resolved.to_string()
+        let base = font.family_name.as_str();
+        let Some(faces) = self.weights.get(base) else {
+            return base.to_string();
+        };
+        let lighter = || faces.range(..=weight).next_back();
+        let heavier = || faces.range(weight..).next();
+        let chosen = if weight <= 500 {
+            lighter().or_else(heavier)
+        } else {
+            heavier().or_else(lighter)
+        };
+        chosen.map_or_else(|| base.to_string(), |(_, face)| face.clone())
     }
 
     /// Exact lookup of a registered family or alias, without default fallback.
@@ -393,12 +375,6 @@ impl FontManager {
             }
         }
         ShapingSession { primary, fallbacks }
-    }
-
-    /// Resolves and parses the fonts needed to shape text in `font_family` at `weight`.
-    pub fn session_with_weight(&self, font_family: &str, weight: u16) -> ShapingSession<'_> {
-        let styled = self.styled_family_weight(font_family, weight);
-        self.session(&styled)
     }
 
     /// Shapes text with the requested font family, automatically falling back for missing glyphs.
@@ -531,20 +507,25 @@ mod tests {
     }
 
     #[test]
-    fn styled_family_picks_the_bold_face_when_shipped() {
+    fn face_for_picks_the_closest_shipped_weight() {
         let mgr = FontManager::default();
-        assert_eq!(
-            mgr.styled_family("Frank Ruhl Libre", false),
-            "Frank Ruhl Libre"
-        );
-        assert_eq!(
-            mgr.styled_family("Frank Ruhl Libre", true),
-            "Frank Ruhl Libre Bold"
-        );
-        assert_eq!(mgr.styled_family("Vilna", true), "Frank Ruhl Libre Bold");
-        assert_eq!(mgr.styled_family("Rashi", true), "Noto Rashi Hebrew Bold");
-        assert_eq!(mgr.styled_family("David CLM", true), "David Libre");
-        assert_eq!(mgr.styled_family("unknown", true), "Frank Ruhl Libre Bold");
+        for (family, weight, face) in [
+            ("Frank Ruhl Libre", 400, "Frank Ruhl Libre"),
+            ("Frank Ruhl Libre", 700, "Frank Ruhl Libre Bold"),
+            // CSS matching: 500 and below prefer lighter, 600 and above heavier.
+            ("Frank Ruhl Libre", 300, "Frank Ruhl Libre"),
+            ("Frank Ruhl Libre", 500, "Frank Ruhl Libre"),
+            ("Frank Ruhl Libre", 600, "Frank Ruhl Libre Bold"),
+            ("Frank Ruhl Libre", 900, "Frank Ruhl Libre Bold"),
+            ("Vilna", 700, "Frank Ruhl Libre Bold"),
+            ("Rashi", 700, "Noto Rashi Hebrew Bold"),
+            ("Rashi", 400, "Noto Rashi Hebrew"),
+            // No bold David Libre is shipped: the regular face is used.
+            ("David CLM", 700, "David Libre"),
+            ("unknown", 700, "Frank Ruhl Libre Bold"),
+        ] {
+            assert_eq!(mgr.face_for(family, weight), face, "{family} {weight}");
+        }
         let bold = mgr.get_font("Frank Ruhl Libre Bold").unwrap();
         let face = ttf_parser::Face::parse(&bold.raw_bytes, 0).unwrap();
         assert_eq!(face.weight().to_number(), 700);
@@ -573,35 +554,5 @@ mod tests {
         let session = mgr.session("Noto Serif Hebrew");
         let (_, choice) = session.shape("Typeset", 12.0, false);
         assert_eq!(session.family_of(choice), Some("David Libre"));
-    }
-
-    #[test]
-    fn font_manager_by_weight_lookup_and_session() {
-        let mgr = FontManager::default();
-
-        let regular = mgr.font_by_weight("Frank Ruhl Libre", 400).unwrap();
-        assert_eq!(regular.weight, 400);
-
-        let bold = mgr.font_by_weight("Frank Ruhl Libre", 700).unwrap();
-        assert_eq!(bold.weight, 700);
-
-        assert_eq!(
-            mgr.styled_family_weight("Frank Ruhl Libre", 400),
-            "Frank Ruhl Libre"
-        );
-        assert_eq!(
-            mgr.styled_family_weight("Frank Ruhl Libre", 700),
-            "Frank Ruhl Libre Bold"
-        );
-        assert_eq!(
-            mgr.styled_family_weight("Rashi", 700),
-            "Noto Rashi Hebrew Bold"
-        );
-
-        let session_bold = mgr.session_with_weight("Frank Ruhl Libre", 700);
-        assert_eq!(
-            session_bold.family_of(FontChoice::Primary),
-            Some("Frank Ruhl Libre Bold")
-        );
     }
 }

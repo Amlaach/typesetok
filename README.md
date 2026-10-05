@@ -7,7 +7,7 @@
 
 [![CI Build](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml/badge.svg)](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/Version-0.7.5-blue.svg)]()
-[![Tests](https://img.shields.io/badge/Tests-237%2F237%20Passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-235%2F235%20Passing-brightgreen.svg)]()
 [![Electron](https://img.shields.io/badge/Electron-29.4%2B-blue.svg?logo=electron)](https://www.electronjs.org)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
 [![Standard](https://img.shields.io/badge/Standard-ת"י%206100%20(SI%206100)-blue.svg)]()
@@ -143,7 +143,7 @@ cd typesetok
 # Build all workspace crates
 cargo build --workspace
 
-# Run full test suite (176 passing tests)
+# Run full test suite (175 passing tests)
 cargo test --workspace
 ```
 
@@ -162,7 +162,7 @@ npm install
 # Build all TypeScript packages and bundle UI
 npm run build
 
-# Run frontend test suite (61 passing tests across 28 suites)
+# Run frontend test suite (60 passing tests across 27 suites)
 npm test
 
 # Build Standalone Desktop App bundle
@@ -197,9 +197,9 @@ cargo run -p tok-cli -- inspect-package document.tok
 
 | Metric | Architectural Target | Actual Result | Status |
 | :--- | :--- | :--- | :--- |
-| **Rust Engine Tests** | 100% Pass Across All 7 Crates | **176 / 176 Tests Passing** | **PASSED** |
-| **Frontend Shell Tests** | Gematria, Virtualizer, Tokens & Interaction Triad | **61 / 61 Tests Passing** | **PASSED** |
-| **Total Automated Tests** | Rust + TypeScript CI Matrix | **237 / 237 Tests Passing** | **PASSED** |
+| **Rust Engine Tests** | 100% Pass Across All 7 Crates | **175 / 175 Tests Passing** | **PASSED** |
+| **Frontend Shell Tests** | Gematria, Virtualizer, Tokens & Interaction Triad | **60 / 60 Tests Passing** | **PASSED** |
+| **Total Automated Tests** | Rust + TypeScript CI Matrix | **235 / 235 Tests Passing** | **PASSED** |
 | **Font Weight Support** | Bold (700) and Regular (400) Shaping & Styles | **Embedded OFL Bold Fonts & UI Wired** | **PASSED** |
 | **Stream Compression** | zlib FlateDecode for Contents, Fonts & CMaps | **Enabled (Smaller PDF Output)** | **PASSED** |
 | **Deterministic Dates** | Manifest Timestamps in PDF/X Metadata | **Pass 1 Hash == Pass 2 Hash** | **PASSED** |
