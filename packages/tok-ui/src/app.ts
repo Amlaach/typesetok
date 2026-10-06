@@ -472,7 +472,8 @@ export class TypesetOkApp {
   private get aboutModal(): AboutModal {
     if (!this.aboutModalInstance) {
       this.aboutModalInstance = new AboutModal({
-        onClose: () => {}
+        onClose: () => {},
+        onCheckUpdates: () => this.settingsModal.show('updates')
       });
       this.root.appendChild(this.aboutModalInstance.element);
     }

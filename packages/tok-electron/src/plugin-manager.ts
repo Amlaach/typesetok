@@ -108,9 +108,22 @@ export class TokPluginManager {
   private async doInit(): Promise<void> {
     if (!(await pathExists(this.userPluginsDir))) {
       await fsp.mkdir(this.userPluginsDir, { recursive: true });
-      await this.createExamplePlugins();
+    } else {
+      // Clean up legacy starter examples if present so users don't see mock/dummy plugins
+      for (const legacyDir of ['smart-quotes-ts', 'word-counter-js']) {
+        const p = path.join(this.userPluginsDir, legacyDir);
+        if (await pathExists(p)) {
+          try {
+            await fsp.rm(p, { recursive: true, force: true });
+          } catch {}
+        }
+      }
     }
     this.pluginStates = await this.readJson(this.configFile, {});
+    // Clean legacy dummy ids from config
+    delete this.pluginStates['tok-smart-quotes'];
+    delete this.pluginStates['tok-word-counter'];
+
     const cache = await this.readJson<{ version?: number; entries?: Record<string, CompileCacheEntry> }>(this.cacheFile, {});
     this.compileCache = cache.version === COMPILE_CACHE_VERSION && cache.entries ? cache.entries : {};
     logger.info('[PLUGINS] Plugin Manager initialized.', { dir: this.userPluginsDir });
@@ -131,94 +144,6 @@ export class TokPluginManager {
       await writeFileAtomic(this.configFile, JSON.stringify(this.pluginStates, null, 2));
     } catch (err: any) {
       logger.error('[PLUGINS] Failed to save plugins config:', err?.message);
-    }
-  }
-
-  /**
-   * Creates starter sample plugins (both TS and JS) if the plugins folder is empty.
-   */
-  private async createExamplePlugins(): Promise<void> {
-    // 1. Smart Quotes Plugin in TypeScript (.ts)
-    const tsPluginDir = path.join(this.userPluginsDir, 'smart-quotes-ts');
-    if (!(await pathExists(tsPluginDir))) {
-      await fsp.mkdir(tsPluginDir, { recursive: true });
-      await fsp.writeFile(
-        path.join(tsPluginDir, 'plugin.json'),
-        JSON.stringify(
-          {
-            id: 'tok-smart-quotes',
-            name: 'מרכאות עבריות חכמות (Smart Quotes TS)',
-            version: '1.0.0',
-            description: 'תוסף TypeScript הממיר מרכאות פשוטות למרכאות כפולות עבריות תקניות (״) וגרשיים (׳)',
-            author: 'TypesetOK Core',
-            main: 'index.ts',
-            enabled: true
-          },
-          null,
-          2
-        )
-      );
-      await fsp.writeFile(
-        path.join(tsPluginDir, 'index.ts'),
-        `// TypesetOK TypeScript Plugin: Smart Quotes
-interface PluginContext {
-  registerCommand: (cmd: { id: string; title: string; category: string; action: () => void }) => void;
-  showToast: (msg: string) => void;
-}
-
-export function activate(tok: PluginContext) {
-  console.log('[PLUGIN-TS] Smart Quotes Plugin Activated!');
-  tok.registerCommand({
-    id: 'cmd-smart-quotes',
-    title: 'המרת מרכאות למרכאות עבריות תקניות (״)',
-    category: 'תוספים (Plugins)',
-    action: () => {
-      tok.showToast('תוסף מרכאות חכמות הופעל בהצלחה על כל הפסקאות!');
-    }
-  });
-}
-`
-      );
-    }
-
-    // 2. Word Count Statistics Plugin in JavaScript (.js)
-    const jsPluginDir = path.join(this.userPluginsDir, 'word-counter-js');
-    if (!(await pathExists(jsPluginDir))) {
-      await fsp.mkdir(jsPluginDir, { recursive: true });
-      await fsp.writeFile(
-        path.join(jsPluginDir, 'plugin.json'),
-        JSON.stringify(
-          {
-            id: 'tok-word-counter',
-            name: 'מונה מילים ואותיות חי (Live Counter JS)',
-            version: '1.1.0',
-            description: 'תוסף JavaScript לסטטיסטיקה חיה של אותיות, מילים ופסוקים בעמוד',
-            author: 'Community Contributor',
-            main: 'index.js',
-            enabled: true
-          },
-          null,
-          2
-        )
-      );
-      await fsp.writeFile(
-        path.join(jsPluginDir, 'index.js'),
-        `// TypesetOK JavaScript Plugin: Live Word & Glyph Counter
-function activate(tok) {
-  console.log('[PLUGIN-JS] Live Word & Glyph Counter Activated!');
-  tok.registerCommand({
-    id: 'cmd-count-glyphs',
-    title: 'ספירת אותיות וגליפים במסמך',
-    category: 'תוספים (Plugins)',
-    action: function() {
-      tok.showToast('סטטיסטיקת מסמך: 4,820 מילים, 21,340 אותיות עבריות');
-    }
-  });
-}
-
-if (typeof module !== 'undefined') module.exports = { activate };
-`
-      );
     }
   }
 

@@ -1,6 +1,7 @@
 import { app, shell } from 'electron';
 import type { IncomingMessage } from 'http';
 import { logger } from './logger';
+import { fetchWithFilterSslFallback, diagnoseFilterSslError, isFilterSslError } from './filter-ssl';
 
 export interface UpdateCheckResult {
   hasUpdate: boolean;
@@ -148,76 +149,33 @@ export class TokUpdater {
     return this.inFlight;
   }
 
-  private doCheck(): Promise<UpdateCheckResult> {
-    logger.info('[UPDATER] Checking for updates against GitHub Releases...');
+  private async doCheck(): Promise<UpdateCheckResult> {
+    logger.info('[UPDATER] Checking for updates against GitHub Releases (kosher-filter aware)...');
     const url = `https://api.github.com/repos/${this.repoOwner}/${this.repoName}/releases/latest`;
-    // Loaded on demand: the TLS stack is not needed on the startup path.
-    const https: typeof import('https') = require('https');
 
-    return new Promise((resolve) => {
-      let settled = false;
-      const finish = (r: UpdateCheckResult) => {
-        if (!settled) {
-          settled = true;
-          resolve(r);
-        }
-      };
-
-      const req = https.get(
-        url,
-        {
-          headers: {
-            'User-Agent': `TypesetOK-Desktop/${this.getCurrentVersion()}`,
-            'Accept': 'application/vnd.github.v3+json'
-          },
-          timeout: REQUEST_TIMEOUT_MS
-        },
-        (res: IncomingMessage) => {
-          const chunks: Buffer[] = [];
-          let size = 0;
-          res.on('data', (chunk: Buffer) => {
-            size += chunk.length;
-            if (size > MAX_RESPONSE_BYTES) {
-              req.destroy();
-              finish(this.failure('תגובת שרת גדולה מדי'));
-              return;
-            }
-            chunks.push(chunk);
-          });
-          res.on('error', (err) => finish(this.failure(`שגיאת רשת בבדיקת עדכון: ${err.message}`)));
-          res.on('end', () => {
-            if (res.statusCode !== 200) {
-              logger.warn(`[UPDATER] Release API responded with status ${res.statusCode}`);
-              finish(this.failure(`תגובת שרת GitHub: ${res.statusCode}`));
-              return;
-            }
-            try {
-              const result = this.parseRelease(Buffer.concat(chunks).toString('utf-8'));
-              logger.info('[UPDATER] Update check completed', {
-                hasUpdate: result.hasUpdate,
-                latestVersion: result.latestVersion,
-                current: result.currentVersion
-              });
-              finish(result);
-            } catch (parseErr: any) {
-              logger.warn('[UPDATER] Failed to parse release JSON', { error: parseErr?.message });
-              finish(this.failure(`שגיאה בפענוח נתוני שחרור: ${parseErr?.message}`));
-            }
-          });
-        }
-      );
-
-      req.on('error', (err) => {
-        logger.warn('[UPDATER] Network error checking for updates', { error: err.message });
-        finish(this.failure(`שגיאת רשת בבדיקת עדכון: ${err.message}`));
+    try {
+      const data = await fetchWithFilterSslFallback(url, {
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        userAgent: `TypesetOK-Desktop/${this.getCurrentVersion()}`,
       });
 
-      req.on('timeout', () => {
-        req.destroy();
-        logger.warn('[UPDATER] Timeout checking for updates');
-        finish(this.failure('פסק זמן בבדיקת עדכונים מול השרת'));
+      const result = this.parseRelease(data);
+      logger.info('[UPDATER] Update check completed', {
+        hasUpdate: result.hasUpdate,
+        latestVersion: result.latestVersion,
+        current: result.currentVersion,
       });
-    });
+      return result;
+    } catch (err: any) {
+      logger.warn('[UPDATER] Update check failed:', { error: err?.message });
+      const diagnosis = diagnoseFilterSslError(err);
+      if (diagnosis.isFilterError) {
+        return this.failure(
+          `${diagnosis.errorMessageHebrew} ${diagnosis.recommendedActionHebrew}`
+        );
+      }
+      return this.failure(`שגיאה בבדיקת עדכונים: ${err?.message || String(err)}`);
+    }
   }
 
   public openReleaseUrl(url?: string): void {

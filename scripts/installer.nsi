@@ -15,10 +15,15 @@ InstallDir "$PROGRAMFILES64\TypesetOK"
 InstallDirRegKey HKLM "Software\TypesetOK" "Install_Dir"
 RequestExecutionLevel admin
 
-; Interface Settings
+; Modern Interface & Branding Settings
 !define MUI_ABORTWARNING
-; !define MUI_ICON "..\assets\icons\icon.ico"
-; !define MUI_UNICON "..\assets\icons\icon.ico"
+!define MUI_ICON "..\assets\icon.ico"
+!define MUI_UNICON "..\assets\icon.ico"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "..\assets\installer-sidebar.bmp"
+!define MUI_UNWELCOMEFINISHPAGE_BITMAP "..\assets\installer-sidebar.bmp"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP "..\assets\installer-header.bmp"
+!define MUI_HEADERIMAGE_RIGHT
 
 ; Language Selection Dialog
 !define MUI_LANGDLL_REGISTRY_ROOT "HKLM"
@@ -56,10 +61,14 @@ Section "TypesetOK Application (Required)" SecApp
   CreateShortcut "$SMPROGRAMS\TypesetOK\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
   CreateShortcut "$DESKTOP\TypesetOK.lnk" "$INSTDIR\TypesetOK.exe"
 
-  ; File Associations (.tok)
+  ; File Associations (.tok and .tokbook)
   WriteRegStr HKCR ".tok" "" "TypesetOK.Document"
   WriteRegStr HKCR "TypesetOK.Document" "" "TypesetOK Document"
   WriteRegStr HKCR "TypesetOK.Document\shell\open\command" "" '"$INSTDIR\TypesetOK.exe" "%1"'
+  
+  WriteRegStr HKCR ".tokbook" "" "TypesetOK.Book"
+  WriteRegStr HKCR "TypesetOK.Book" "" "TypesetOK Multi-Document Book"
+  WriteRegStr HKCR "TypesetOK.Book\shell\open\command" "" '"$INSTDIR\TypesetOK.exe" "%1"'
 
   ; Write Uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -76,5 +85,7 @@ Section "Uninstall"
   RMDir /r "$SMPROGRAMS\TypesetOK"
   DeleteRegKey HKCR ".tok"
   DeleteRegKey HKCR "TypesetOK.Document"
+  DeleteRegKey HKCR ".tokbook"
+  DeleteRegKey HKCR "TypesetOK.Book"
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TypesetOK"
 SectionEnd

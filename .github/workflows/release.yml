@@ -70,21 +70,7 @@ jobs:
     name: Build Binary (${{ matrix.os }})
     needs: [check-release]
     if: needs.check-release.outputs.should_release == 'true'
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            binary_name: tok-cli
-            asset_name: tok-cli-v0.9.1-linux-x64.tar.gz
-          - os: windows-latest
-            binary_name: tok-cli.exe
-            asset_name: tok-cli-v0.9.1-windows-x64.zip
-          - os: macos-latest
-            binary_name: tok-cli
-            asset_name: tok-cli-v0.9.1-macos.tar.gz
-
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -92,7 +78,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Inno Setup (Windows Installer)
-        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           choco install innosetup --no-progress
@@ -102,25 +87,17 @@ jobs:
       - name: Build tok-cli (Release)
         run: cargo build --release -p tok-cli
 
-      - name: Package binary (Unix)
-        if: matrix.os != 'windows-latest'
-        run: |
-          tar -czvf ${{ matrix.asset_name }} -C target/release ${{ matrix.binary_name }}
-
       - name: Package binary (Windows)
-        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          Compress-Archive -Path target/release/${{ matrix.binary_name }} -DestinationPath ${{ matrix.asset_name }}
+          Compress-Archive -Path target/release/tok-cli.exe -DestinationPath tok-cli-v0.9.1-windows-x64.zip
 
       - name: Setup Node.js (Windows Desktop App)
-        if: matrix.os == 'windows-latest'
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Package Standalone Desktop App (Windows)
-        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           npm install
@@ -129,21 +106,18 @@ jobs:
           Compress-Archive -Path dist/TypesetOK-v0.9.1-windows-x64 -DestinationPath TypesetOK-v0.9.1-windows-desktop-app.zip
 
       - name: Compile Official Windows Installer (Inno Setup)
-        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           node scripts/build-installer.mjs
           Copy-Item dist/TypesetOK-v0.9.1-Setup-x64.exe TypesetOK-v0.9.1-Setup.exe
 
       - name: Upload Windows Installer artifact
-        if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: TypesetOK-v0.9.1-Setup.exe
           path: TypesetOK-v0.9.1-Setup.exe
 
       - name: Upload Desktop App artifact
-        if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: TypesetOK-v0.9.1-windows-desktop-app.zip
@@ -152,8 +126,8 @@ jobs:
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_name }}
-          path: ${{ matrix.asset_name }}
+          name: tok-cli-v0.9.1-windows-x64.zip
+          path: tok-cli-v0.9.1-windows-x64.zip
 
   # ──────────────────────────────────────────────
   # 2. Build Frontend & UI Workbench Distribution
@@ -234,6 +208,4 @@ jobs:
             - **מתקין רשמי למחשב (מומלץ):** `TypesetOK-v0.9.1-Setup.exe` (מתקין אשף מלא בעברית ובאנגלית).
             - **גרסה ניידת ללא התקנה (Portable):** `TypesetOK-v0.9.1-windows-desktop-app.zip` (פריקה והרצה ישירה של `TypesetOK.exe`).
             - **CLI בלבד (Windows x64):** `tok-cli-v0.9.1-windows-x64.zip`
-            - **CLI בלבד (Linux x64):** `tok-cli-v0.9.1-linux-x64.tar.gz`
-            - **CLI בלבד (macOS):** `tok-cli-v0.9.1-macos.tar.gz`
             - **Workbench Source Bundle:** `typesetok-desktop-workbench-v0.9.1.tar.gz`

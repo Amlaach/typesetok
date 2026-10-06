@@ -562,7 +562,26 @@ export class SettingsModal {
 
     const plugins = this.callbacks.pluginEngine.getPlugins();
     if (plugins.length === 0) {
-      container.appendChild(el('div', 'tok-card', { style: 'text-align:center;color:var(--tok-text-secondary)' }, t('pluginsNoPlugins')));
+      const emptyCard = el('div', 'tok-card', {
+        style: 'text-align:center;padding:36px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--tok-text-secondary)'
+      });
+      const iconWrap = el('div', undefined, { style: 'color:var(--tok-text-muted);opacity:0.7' });
+      iconWrap.appendChild(icon('plugin', 32));
+      emptyCard.appendChild(iconWrap);
+      emptyCard.appendChild(el('strong', undefined, { style: 'font-size:14px;color:var(--tok-text-primary)' }, t('pluginsNoPlugins')));
+      emptyCard.appendChild(el('p', undefined, { style: 'font-size:12px;max-width:420px;line-height:1.5;color:var(--tok-text-muted)' },
+        'מערכת התוספים של TypesetOK תומכת בטעינת הרחבות מותאמות אישית ב-TypeScript (.ts) ו-JavaScript (.js). הוסיפו קובצי תוסף לתיקיית התוספים ולחצו על "רענן".'
+      ));
+      emptyCard.appendChild(button(t('pluginsOpenFolder'), {
+        className: 'tok-btn tok-btn-primary tok-btn-sm',
+        icon: 'folder',
+        onClick: () => {
+          this.callbacks.pluginEngine.openPluginsFolder().catch((e: any) => {
+            this.callbacks.showToast(`${t('actionFailed')}: ${e?.message ?? e}`);
+          });
+        }
+      }));
+      container.appendChild(emptyCard);
       return;
     }
 

@@ -85,27 +85,8 @@ export class PluginEngine {
         console.warn('[PLUGIN-ENGINE] Failed to fetch plugins from IPC:', err?.message ?? err);
       }
     } else {
-      // Default built-in mock plugins for preview
-      this.plugins = [
-        {
-          id: 'tok-smart-quotes',
-          name: 'מרכאות עבריות חכמות (Smart Quotes TS)',
-          version: '1.0.0',
-          description: 'תוסף TypeScript הממיר מרכאות פשוטות למרכאות כפולות עבריות תקניות (״) וגרשיים (׳)',
-          author: 'TypesetOK Core',
-          sourceType: 'ts',
-          enabled: true
-        },
-        {
-          id: 'tok-word-counter',
-          name: 'מונה מילים ואותיות חי (Live Counter JS)',
-          version: '1.1.0',
-          description: 'תוסף JavaScript לסטטיסטיקה חיה של אותיות, מילים ופסוקים בעמוד',
-          author: 'Community Contributor',
-          sourceType: 'js',
-          enabled: true
-        }
-      ];
+      // Standalone web preview: start with empty plugins list
+      this.plugins = [];
     }
 
     for (const p of this.plugins) {

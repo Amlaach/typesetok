@@ -153,6 +153,12 @@ if (fs.existsSync(esbuildSrc) && fs.existsSync(esbuildBinSrc)) {
 const assetsSrc = path.join(rootDir, 'assets');
 if (fs.existsSync(assetsSrc)) {
   fs.cpSync(assetsSrc, path.join(appDir, 'assets'), { recursive: true });
+  if (fs.existsSync(path.join(assetsSrc, 'icon.ico'))) {
+    fs.copyFileSync(path.join(assetsSrc, 'icon.ico'), path.join(resourcesDir, 'icon.ico'));
+  }
+  if (fs.existsSync(path.join(assetsSrc, 'icon.png'))) {
+    fs.copyFileSync(path.join(assetsSrc, 'icon.png'), path.join(resourcesDir, 'icon.png'));
+  }
 }
 const builtinPluginsSrc = path.join(rootDir, 'plugins');
 if (fs.existsSync(builtinPluginsSrc)) {
@@ -165,5 +171,32 @@ for (const f of ['LICENSE.md', 'README.md']) {
   if (fs.existsSync(src)) fs.copyFileSync(src, path.join(outDir, f));
 }
 
+// 7. Embed application icon and version metadata into Windows executable (PE resources)
+if (isWin && fs.existsSync(targetExe)) {
+  const iconFile = path.join(assetsSrc, 'icon.ico');
+  if (fs.existsSync(iconFile)) {
+    try {
+      const { rcedit } = await import('rcedit');
+      console.log('[BUNDLE] Embedding icon and metadata into TypesetOK.exe...');
+      await rcedit(targetExe, {
+        icon: iconFile,
+        'file-version': version,
+        'product-version': version,
+        'version-string': {
+          CompanyName: 'TypesetOK Team',
+          FileDescription: 'TypesetOK - מערכת עימוד מקצועית בעברית',
+          ProductName: 'TypesetOK',
+          LegalCopyright: 'Copyright © 2026 TypesetOK Contributors',
+          OriginalFilename: 'TypesetOK.exe'
+        }
+      });
+      console.log('[BUNDLE] Successfully embedded icon and metadata into TypesetOK.exe.');
+    } catch (err) {
+      console.warn('[BUNDLE] Warning: could not embed PE icon into TypesetOK.exe:', err.message);
+    }
+  }
+}
+
 console.log('[BUNDLE] Created portable app at:', outDir);
 console.log('[BUNDLE] Executable binary:', targetExe);
+

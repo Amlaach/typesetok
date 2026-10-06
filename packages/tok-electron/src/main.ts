@@ -289,7 +289,20 @@ function createSplashWindow(): void {
   if (STARTUP_TRACE) splashWindow.webContents.once('did-finish-load', () => trace('splash-loaded'));
 }
 
+function getAppIconPath(): string | undefined {
+  const candidates = [
+    path.join(__dirname, '../../../assets/icon.ico'),
+    path.join(__dirname, '../../../assets/icon.png'),
+    path.join(process.resourcesPath, 'app/assets/icon.ico'),
+    path.join(process.resourcesPath, 'app/assets/icon.png'),
+    path.join(process.resourcesPath, 'icon.ico'),
+    path.join(process.resourcesPath, 'icon.png'),
+  ];
+  return candidates.find((p) => fs.existsSync(p));
+}
+
 function createWindow(): void {
+  const appIcon = getAppIconPath();
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -297,6 +310,7 @@ function createWindow(): void {
     minHeight: 700,
     title: 'TypesetOK (TOK) - תוכנת עימוד מקצועית',
     backgroundColor: '#0B132B',
+    icon: appIcon,
     show: false, // Hidden until ready, preventing any white flicker
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -336,11 +350,12 @@ function createWindow(): void {
   // a frame with no TypesetOK window on screen.
   win.once('ready-to-show', () => {
     trace('main-ready-to-show');
+    win.maximize();
     win.show();
     win.focus();
     trace('main-shown');
     closeSplash();
-    logger.info('[MAIN] Main window ready to show.');
+    logger.info('[MAIN] Main window ready to show (maximized).');
     scheduleDeferredStartupWork();
   });
 
@@ -503,6 +518,11 @@ app.on('web-contents-created', (_e, contents) => {
   });
 });
 
+// Set App User Model ID so Windows properly groups and displays the custom taskbar icon
+if (process.platform === 'win32') {
+  app.setAppUserModelId('TypesetOK.App');
+}
+
 // A second launch focuses the running instance instead of starting a competing
 // copy on the same profile.
 if (!app.requestSingleInstanceLock()) {
@@ -519,10 +539,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     trace('app-ready');
-    // Splash first so feedback appears as early as possible. (Creating the main window
-    // first starts its renderer ~40 ms earlier, but the splash creation then delays the
-    // main page's load by about as much; measured no net gain.)
-    createSplashWindow();
+    // Launch main window directly without competing splash process for fastest launch
     createWindow();
     trace('main-window-created');
     // Cheap: resolves the log dir; file writes are async and buffered.
