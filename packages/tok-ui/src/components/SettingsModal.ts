@@ -17,6 +17,8 @@ export interface SettingsModalCallbacks {
   /** Page guides shown on the canvas (margins / baseline grid). */
   getGuides?: () => { margins: boolean; baseline: boolean };
   setGuide?: (guide: 'margins' | 'baseline', visible: boolean) => void;
+  getZoom?: () => number;
+  setZoom?: (zoom: number) => void;
 }
 
 type SettingsTab = 'appearance' | 'accessibility' | 'language' | 'logs' | 'updates' | 'plugins';
@@ -283,13 +285,34 @@ export class SettingsModal {
     }, { fill: true, focusPrefix: 'density' })));
     container.appendChild(two);
 
-    // Page guides
+    // Page view & guides
+    const pageViewSection = el('div', undefined, { style: 'display:flex;flex-direction:column;gap:12px;max-width:420px' });
+    if (this.callbacks.getZoom && this.callbacks.setZoom) {
+      const curZoom = this.callbacks.getZoom();
+      const zoomSelect = selectField(
+        t('appearanceZoom'),
+        [50, 75, 100, 125, 150, 200].map((z) => ({ value: String(z), label: `${z}%` })),
+        String(curZoom),
+        (v) => {
+          const z = parseInt(v, 10);
+          if (Number.isFinite(z)) {
+            this.callbacks.setZoom!(z);
+            this.callbacks.showToast(`${t('appearanceZoom')}: ${z}%`);
+          }
+        },
+        { 'data-focus-key': 'appearance-zoom' }
+      );
+      pageViewSection.appendChild(group(t('appearanceZoom'), zoomSelect));
+    }
     if (this.callbacks.getGuides && this.callbacks.setGuide) {
       const g = this.callbacks.getGuides();
-      const rows = el('div', undefined, { style: 'display:flex;flex-direction:column;gap:4px;max-width:420px' });
-      rows.appendChild(switchRow(t('appearanceShowMargins'), g.margins, (v) => this.callbacks.setGuide!('margins', v), { focusKey: 'guide-margins' }));
-      rows.appendChild(switchRow(t('appearanceShowBaseline'), g.baseline, (v) => this.callbacks.setGuide!('baseline', v), { focusKey: 'guide-baseline' }));
-      container.appendChild(group(t('appearancePageView'), rows));
+      const guideRows = el('div', undefined, { style: 'display:flex;flex-direction:column;gap:4px' });
+      guideRows.appendChild(switchRow(t('appearanceShowMargins'), g.margins, (v) => this.callbacks.setGuide!('margins', v), { focusKey: 'guide-margins' }));
+      guideRows.appendChild(switchRow(t('appearanceShowBaseline'), g.baseline, (v) => this.callbacks.setGuide!('baseline', v), { focusKey: 'guide-baseline' }));
+      pageViewSection.appendChild(guideRows);
+    }
+    if (pageViewSection.children.length > 0) {
+      container.appendChild(group(t('appearancePageView'), pageViewSection));
     }
   }
 

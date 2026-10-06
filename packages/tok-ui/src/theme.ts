@@ -287,13 +287,10 @@ export function sanitizeThemeSettings(raw: unknown, defaults: ThemeSettings): Th
   return out;
 }
 
-/** Settings saved by the previous UI generation: keep the accessibility choices, drop the old look. */
+/** Settings migration: preserve user theme choices and accessibility preferences safely. */
 function migrateThemeSettings(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object') return raw;
-  const r = raw as Record<string, unknown>;
-  if (r.version === THEME_SETTINGS_VERSION) return r;
-  const { paletteId, accentColor, canvasTone, ...rest } = r;
-  return rest;
+  return raw;
 }
 
 function systemPrefersDark(): boolean {
