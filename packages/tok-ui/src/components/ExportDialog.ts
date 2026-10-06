@@ -29,7 +29,7 @@ export interface ExportDialogCallbacks {
   onExport: (options: ExportOptions) => void;
 }
 
-/** "מסכת ברכות — מהדורת מופת.tok" -> "מסכת-ברכות-מהדורת-מופת.pdf" */
+/** "פרויקט.tok" -> "פרויקט.pdf" */
 export function defaultExportFileName(documentTitle: string): string {
   const base = documentTitle.replace(/\.tok$/i, '').replace(/[\\/:*?"<>|]+/g, '').replace(/[\s—–-]+/g, '-').replace(/^-+|-+$/g, '');
   return `${base || 'TypesetOK'}.pdf`;
@@ -41,20 +41,17 @@ const FORMATS: { id: ExportFormat; code: string; titleKey: string; descKey: stri
   { id: 'pdf', code: 'PDF', titleKey: 'exportScreenTitle', descKey: 'exportScreenDesc' }
 ];
 
-/** Talmud page drawing for the preview (same proportions as the start screen). */
+/** Document page drawing for the preview (same proportions as the start screen). */
 function previewPage(rightHand: boolean): HTMLElement {
   const page = el('div', 'tok-page-art', { 'aria-hidden': 'true' });
   page.style.width = '96px';
   page.style.height = '136px';
   page.style.boxShadow = 'none';
   const outer = rightHand ? 'right' : 'left';
-  const inner = rightHand ? 'left' : 'right';
   page.innerHTML = `
-    <i class="tr" style="top:6%;right:8%;width:84%"></i>
-    <i class="tl" style="top:10%;${outer}:8%;width:24%;height:84%"></i>
-    <i class="tg" style="top:10%;right:36%;width:28%;height:48%"></i>
-    <i class="tl" style="top:10%;${inner}:8%;width:24%;height:84%"></i>
-    <i class="tl" style="top:61%;${outer}:36%;${inner}:8%;height:33%"></i>`;
+    <i class="tr" style="top:8%;right:10%;width:80%"></i>
+    <i class="tg2" style="top:18%;right:10%;width:80%;height:68%"></i>
+    <i class="tr" style="top:90%;${outer}:10%;width:25%"></i>`;
   return page;
 }
 
@@ -282,7 +279,7 @@ export class ExportDialog {
     foot.appendChild(button(t('exportCancel'), { attrs: { 'data-focus-key': 'cancel' }, onClick: () => this.hide() }));
     foot.appendChild(button(t('exportGo'), {
       className: 'tok-btn tok-btn-primary',
-      icon: 'upload',
+      icon: 'export',
       attrs: { 'data-focus-key': 'export' },
       onClick: () => {
         let name = o.fileName.trim() || defaultExportFileName(this.context.documentTitle);

@@ -127,8 +127,8 @@ export class ActionHud {
     this.element.appendChild(this.createDivider());
 
     // 3. Bold
-    const boldBtn = el('button', 'tok-hud-btn', { type: 'button', title: t('hudBold'), 'aria-label': t('hudBold'), 'aria-pressed': String(this.isBold) }, 'B');
-    boldBtn.style.fontWeight = '700';
+    const boldBtn = el('button', 'tok-hud-btn', { type: 'button', title: t('hudBold'), 'aria-label': t('hudBold'), 'aria-pressed': String(this.isBold) });
+    boldBtn.appendChild(icon('bold', 15));
     boldBtn.addEventListener('click', () => {
       this.isBold = !this.isBold;
       boldBtn.setAttribute('aria-pressed', String(this.isBold));

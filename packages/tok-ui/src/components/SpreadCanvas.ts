@@ -45,26 +45,7 @@ export function fitZoom(viewportWidth: number, viewportHeight: number): number {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.floor(z)));
 }
 
-// Sample text (Bavli Berakhot 2a, with Rashi and Tosafot), shown until the engine
-// provides the laid-out pages.
-const GEMARA_TEXT =
-  '<b>מתני׳</b> מאימתי קורין את שמע בערבית? משעה שהכהנים נכנסים לאכול בתרומתן, עד סוף האשמורה הראשונה, דברי רבי אליעזר. וחכמים אומרים: עד חצות. רבן גמליאל אומר: עד שיעלה עמוד השחר. ' +
-  '<b>גמ׳</b> תנא היכא קאי דקתני מאימתי? ותו, מאי שנא דתני בערבית ברישא? לתני דשחרית ברישא! תנא אקרא קאי, דכתיב: ״בשכבך ובקומך״, והכי קתני: זמן קריאת שמע דשכיבה אימת? משעה שהכהנים נכנסין לאכול בתרומתן. ' +
-  'ואי בעית אימא: יליף מברייתו של עולם, דכתיב: ״ויהי ערב ויהי בקר יום אחד״. אי הכי, סיפא דקתני: בשחר מברך שתים לפניה ואחת לאחריה, ובערב מברך שתים לפניה ושתים לאחריה, לתני דערבית ברישא! ' +
-  'תנא פתח בערבית והדר תני בשחרית, עד דקאי בשחרית פריש מילי דשחרית, והדר פריש מילי דערבית. <b>אמר מר:</b> משעה שהכהנים נכנסים לאכול בתרומתן. מכדי, כהנים אימת קא אכלי תרומה? משעת צאת הכוכבים. לתני משעת צאת הכוכבים!';
-const RASHI_TEXT =
-  '<b>מאימתי. קורין את שמע בערבית</b> משעה שהכהנים נכנסים לאכול בתרומתן: כהנים שנטמאו וטבלו והעריב שמשן והגיע עתם לאכול בתרומה. <b>עד סוף האשמורה הראשונה</b> שליש הלילה כדמפרש בגמרא, ומשם ואילך לא מקרי זמן שכיבה ולא קרינן ביה בשכבך, ומקמי הכי נמי לאו זמן שכיבה, לפיכך הקורא קודם לכן לא יצא ידי חובתו. ' +
-  '<b>אם כן למה קורין אותה בבית הכנסת</b> כדי לעמוד בתפלה מתוך דברי תורה, והכי תניא בברייתא בברכות ירושלמי, ולפיכך חובה עלינו לקרותה משתחשך, ובקריאת פרשה ראשונה שאדם קורא על מטתו יצא. <b>עד שיעלה עמוד השחר</b> שכל הלילה קרוי זמן שכיבה. ' +
-  '<b>הקטר חלבים ואברים</b> של קרבנות שנזרק דמן ביום. <b>מצותן</b> להעלות כל הלילה, ואינן נפסלים בלינה עד שיעלה עמוד השחר והן למטה מן המזבח, דכתיב לא ילין לבקר. <b>חלבים</b> של כל קרבנות. <b>אברים</b> של עולה. ' +
-  '<b>וכל הנאכלים ליום אחד</b> כגון חטאת ואשם וכבשי עצרת ומנחות ותודה. <b>מצותן</b> זמן אכילתן עד שיעלה עמוד השחר, והוא מביאן להיות נותר, דכתיב בתודה לא יניח ממנו עד בקר, וכלן מתודה ילפינן. ' +
-  '<b>אם כן למה אמרו חכמים עד חצות</b> בקריאת שמע ובאכילת קדשים. <b>כדי להרחיק את האדם מן העבירה</b> ואסרום באכילה קודם זמנן כדי שלא יבא לאכלן לאחר עמוד השחר ויתחייב כרת.';
-const TOSAFOT_TEXT =
-  '<b>מאימתי קורין את שמע בערבית.</b> פירש רש״י, ואנן היכי קרינן מבעוד יום ואין אנו ממתינין לצאת הכוכבים, כדמפרש בגמרא. ועל כן פירש שקריאת שמע שעל המטה עיקר, והוא לאחר צאת הכוכבים, כדאמר בירושלמי: אם קרא קודם לכן לא יצא. ' +
-  'ואם כן למה אנו מתפללין קריאת שמע בבית הכנסת? כדי לעמוד בתפלה מתוך דברי תורה. תימה לפירושו, והלא אין העולם רגילין לקרות סמוך לשכיבה אלא פרשה ראשונה, ואם כן שלש פרשיות היה לו לקרות. ' +
-  'ועוד קשה, דצריך לברך בקריאת שמע שתים לפניה ושתים לאחריה בערבית. ועוד, דאותה קריאת שמע סמוך למטה אינה אלא בשביל המזיקין, כדאמר בסמוך, ואם תלמיד חכם הוא אינו צריך. ' +
-  'ועוד קשה, דאם כן פסקינן כרבי יהושע בן לוי דאמר תפלות באמצע תקנום, כלומר באמצע בין שני קריאת שמע, ואנן קיימא לן כרבי יוחנן דאמר לקמן: איזהו בן העולם הבא? זה הסומך גאולה של ערבית לתפלה. ' +
-  '<b>לכן פירש רבינו תם</b>, דאדרבה קריאת שמע של בית הכנסת עיקר, ואנו שקורין מבעוד יום סבירא לן כרבי יהודה דאמר בפרק תפלת השחר, דזמן תפלת מנחה עד פלג המנחה, ומיד כשיכלה זמן המנחה מתחיל זמן ערבית.';
-const NOTES_TEXT = '<b>עין משפט:</b> א מיימון פ״א מהלכות ק״ש הל׳ ט סמ״ג עשין י״ח טוש״ע או״ח סימן רל״ה סעיף ג.';
+
 
 type FlowId = 'gemara' | 'rashi' | 'tosafot' | 'notes';
 
@@ -101,8 +82,6 @@ export class SpreadCanvas {
   private innerContainer!: HTMLElement;
   /** Takes the scaled size of the pages so the scroll area matches what is drawn. */
   private zoomBox!: HTMLElement;
-  private zoomPill!: HTMLElement;
-  private zoomValue!: HTMLButtonElement;
   private lastReportedPage = -1;
   private scrollRaf = 0;
   private programmaticScroll = false;
@@ -116,12 +95,24 @@ export class SpreadCanvas {
     this.element.appendChild(this.scroller);
 
     this.renderContainer();
-    this.renderZoomPill();
     this.bindEvents();
+
+    try {
+      const savedGuides = localStorage.getItem('tok_canvas_guides');
+      if (savedGuides) {
+        const parsed = JSON.parse(savedGuides);
+        if (typeof parsed.margins === 'boolean') this.showMargins = parsed.margins;
+        if (typeof parsed.baseline === 'boolean') this.showBaseline = parsed.baseline;
+      }
+      const savedZoom = localStorage.getItem('tok_canvas_zoom');
+      if (savedZoom) {
+        const z = parseInt(savedZoom, 10);
+        if (z >= MIN_ZOOM && z <= MAX_ZOOM) this.zoomPercent = z;
+      }
+    } catch {}
 
     i18n.onChange(() => {
       this.scroller.setAttribute('aria-label', t('canvasAria'));
-      this.renderZoomPill();
       if (this.pages.length) this.renderSpreads();
     });
   }
@@ -193,17 +184,12 @@ export class SpreadCanvas {
 
   public setZoom(zoom: number): void {
     this.zoomPercent = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round(zoom)));
+    try {
+      localStorage.setItem('tok_canvas_zoom', String(this.zoomPercent));
+    } catch {}
     if (this.innerContainer) {
-      // transform: scale (not CSS `zoom`): Chromium before v128 (Electron 29) reports
-      // wrong element positions inside a `zoom`ed box, which sent "go to page" and the
-      // current-page tracking to the wrong page whenever the zoom was not 100%.
-      // The zoom box gets the scaled size so the whole page stays scrollable.
       this.innerContainer.style.transform = `scale(${this.zoomPercent / 100})`;
       this.updateZoomBox();
-    }
-    if (this.zoomValue) {
-      this.zoomValue.textContent = `${this.zoomPercent}%`;
-      this.zoomValue.setAttribute('aria-label', `${t('statusZoom')} ${this.zoomPercent}% · ${t('canvasZoomReset')}`);
     }
   }
 
@@ -230,12 +216,20 @@ export class SpreadCanvas {
 
   public toggleMarginsGuide(): void {
     this.showMargins = !this.showMargins;
+    this.saveGuides();
     this.updateGuides();
   }
 
   public toggleBaselineGuide(): void {
     this.showBaseline = !this.showBaseline;
+    this.saveGuides();
     this.updateGuides();
+  }
+
+  private saveGuides(): void {
+    try {
+      localStorage.setItem('tok_canvas_guides', JSON.stringify({ margins: this.showMargins, baseline: this.showBaseline }));
+    } catch {}
   }
 
   public getGuides(): { margins: boolean; baseline: boolean } {
@@ -256,26 +250,6 @@ export class SpreadCanvas {
     const z = this.zoomPercent / 100;
     this.zoomBox.style.width = `${this.innerContainer.offsetWidth * z}px`;
     this.zoomBox.style.height = `${this.innerContainer.offsetHeight * z}px`;
-  }
-
-  private renderZoomPill(): void {
-    this.zoomPill?.remove();
-    const pill = el('div', 'tok-zoom-pill', { role: 'group', 'aria-label': t('statusZoom') });
-    pill.appendChild(button(t('canvasFit'), {
-      className: 'tok-btn tok-btn-ghost tok-btn-sm',
-      icon: 'fit',
-      iconSize: 15,
-      onClick: () => this.fitToWindow()
-    }));
-    pill.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:18px;margin:0 4px' }));
-    pill.appendChild(iconButton('minus', t('canvasZoomOut'), () => this.applyUserZoom(this.zoomPercent - 10), { size: 16 }));
-    this.zoomValue = el('button', 'tok-zoom-value', { type: 'button', title: t('canvasZoomReset') }, `${this.zoomPercent}%`);
-    this.zoomValue.addEventListener('click', () => this.applyUserZoom(100));
-    pill.appendChild(this.zoomValue);
-    pill.appendChild(iconButton('plus', t('canvasZoomIn'), () => this.applyUserZoom(this.zoomPercent + 10), { size: 16 }));
-    this.zoomPill = pill;
-    this.element.appendChild(pill);
-    this.setZoom(this.zoomPercent);
   }
 
   private renderSpreads(): void {
@@ -324,35 +298,29 @@ export class SpreadCanvas {
     // 1. Running head: page number on the outer corner.
     const head = el('div', 'tok-page-head');
     const pageNo = el('span', undefined, undefined, `דף ${page.gematriaNumber} ${amud}`);
-    const chapter = el('strong', undefined, undefined, t('pageHeadChapter'));
-    const tractate = el('span', undefined, undefined, t('pageHeadTractate'));
-    if (isRightPage) head.append(pageNo, chapter, tractate);
-    else head.append(tractate, chapter, pageNo);
+    if (isRightPage) head.append(pageNo);
+    else head.append(pageNo);
     sheet.appendChild(head);
 
-    // 2. Talmud layout: Gemara in the center, Rashi on the inner (spine) side, Tosafot
-    // on the outer side, Rashi widening under the Gemara (the "L"). The grid is RTL, so
-    // its first column is the rightmost one; a right-hand page's spine is on its left.
-    const grid = el('div', 'tok-talmud-grid');
-    grid.style.gridTemplateAreas = isRightPage ? "'out gem in' 'out wide wide'" : "'in gem out' 'wide wide out'";
+    // 2. Page body: rendered document content or clean interactive editable text frame.
+    if (page.htmlContent && page.htmlContent.trim().length > 0) {
+      const content = el('div', 'tok-page-content', { style: 'flex: 1; min-height: 0; overflow: hidden;' });
+      content.innerHTML = page.htmlContent;
+      sheet.appendChild(content);
+    } else {
+      const bodyFrame = this.createInteractiveFrame({
+        id: `frame-main-${page.pageIndex}`,
+        title: t('appMainText'),
+        flowId: 'gemara',
+        className: 'tok-frame-gemara',
+        text: ''
+      });
+      bodyFrame.style.flex = '1';
+      bodyFrame.style.minHeight = '0';
+      sheet.appendChild(bodyFrame);
+    }
 
-    const tosafot = this.createInteractiveFrame({ id: `frame-tosafot-${page.pageIndex}`, title: 'תוספות', flowId: 'tosafot', className: 'tok-frame-comm', label: 'תוספות', text: TOSAFOT_TEXT });
-    tosafot.style.gridArea = 'out';
-    const gemara = this.createInteractiveFrame({ id: `frame-gemara-${page.pageIndex}`, title: 'גמרא ראשי', flowId: 'gemara', className: 'tok-frame-gemara', text: GEMARA_TEXT });
-    gemara.style.gridArea = 'gem';
-    const rashi = this.createInteractiveFrame({ id: `frame-rashi-${page.pageIndex}`, title: 'רש״י', flowId: 'rashi', className: 'tok-frame-comm', label: 'רש״י', text: RASHI_TEXT });
-    rashi.style.gridArea = 'in';
-    const rashiWide = this.createInteractiveFrame({ id: `frame-rashi-cont-${page.pageIndex}`, title: 'רש״י', flowId: 'rashi', className: 'tok-frame-comm', text: RASHI_TEXT.slice(RASHI_TEXT.indexOf('<b>הקטר')) });
-    rashiWide.style.gridArea = 'wide';
-    grid.append(tosafot, gemara, rashi, rashiWide);
-    sheet.appendChild(grid);
-
-    // 3. Footnotes / references at the bottom.
-    const notes = this.createInteractiveFrame({ id: `frame-notes-${page.pageIndex}`, title: 'עין משפט ותורה אור', flowId: 'notes', className: 'tok-frame-notes', text: NOTES_TEXT });
-    notes.style.flex = 'none';
-    sheet.appendChild(notes);
-
-    // 4. Running foot.
+    // 3. Running foot.
     sheet.appendChild(el('div', 'tok-page-foot', { 'aria-hidden': 'true' }, `- ${page.gematriaNumber} -`));
 
     // Guides (margin rectangle, baseline grid).
@@ -371,8 +339,7 @@ export class SpreadCanvas {
   private createInteractiveFrame(params: FrameParams): HTMLElement {
     const frame = el('div', 'tok-interactive-frame', { 'data-frame-id': params.id, 'data-flow-id': params.flowId });
     const inner = el('div', `tok-frame-text ${params.className}`);
-    // Sample text is static markup from this file (never user input).
-    inner.innerHTML = (params.label ? `<div class="tok-frame-label">${params.label}</div>` : '') + params.text;
+    inner.innerHTML = (params.label ? `<div class="tok-frame-label">${params.label}</div>` : '') + (params.text || '');
     frame.appendChild(inner);
 
     frame.addEventListener('click', (e) => {

@@ -353,7 +353,7 @@ export class CommandPalette {
 
       const row = el('div', 'tok-palette-item', { id: `tok-palette-item-${index}`, role: 'option', 'aria-selected': 'false' });
       const ic = el('span', 'tok-palette-icon', { 'aria-hidden': 'true' });
-      ic.appendChild(icon(item.icon ?? 'zap', 17));
+      ic.appendChild(icon(item.icon ?? 'arrowForward', 16));
       row.appendChild(ic);
 
       const title = el('span', 'tok-palette-title');

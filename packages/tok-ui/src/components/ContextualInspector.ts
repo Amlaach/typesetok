@@ -46,7 +46,7 @@ export class ContextualInspector {
   private callbacks: InspectorCallbacks;
 
   private documentSettings: DocumentSettings = {
-    title: 'מסכת ברכות — מהדורת מופת',
+    title: 'מסמך ללא שם',
     pageSize: '17x24',
     pageWidthMm: 170,
     pageHeightMm: 240,
@@ -63,7 +63,7 @@ export class ContextualInspector {
   };
 
   private selectedFrame: TextFrameData = {
-    id: 'frame-gemara-1',
+    id: 'frame-1',
     xMm: 35,
     yMm: 45,
     widthMm: 100,
@@ -77,8 +77,8 @@ export class ContextualInspector {
     insetRightMm: 4,
     insetLeftMm: 4,
     verticalAlign: 'top',
-    nextFrameId: 'frame-gemara-2',
-    text: 'מאימתי קורין את שמע בערבית...'
+    nextFrameId: '',
+    text: ''
   };
 
   private typographySettings: TypographySettings = {
@@ -89,8 +89,8 @@ export class ContextualInspector {
     paragraphSpacingPt: 8,
     firstLineIndentMm: 0,
     alignment: 'justify',
-    styleTokenId: 'gemara-main',
-    styleTokenName: 'גמרא ראשי',
+    styleTokenId: 'main-text',
+    styleTokenName: 'טקסט ראשי',
     isOverride: false,
     justification: {
       tier1WordSpacingMin: 85,

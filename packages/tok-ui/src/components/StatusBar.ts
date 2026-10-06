@@ -14,8 +14,8 @@ export class StatusBar {
   private callbacks: StatusBarCallbacks;
   private pageLabel = '';
   private zoom = 100;
-  private wordCount = 4210;
-  private activeFlow = 'גמרא (ראשי)';
+  private wordCount = 0;
+  private activeFlow = '';
   private preflightStatus: 'clean' | 'warning' | 'error' = 'clean';
 
   // Live nodes updated in place by updateStats().
