@@ -45,7 +45,7 @@ export class TopSystemBar {
   private callbacks: TopSystemBarCallbacks;
   private activeDropdown: HTMLElement | null = null;
   private activeAnchor: HTMLElement | null = null;
-  private documentTitle = 'מסכת ברכות — מהדורת מופת.tok';
+  private documentTitle = '';
   private pageLabel = '';
   private pageLabelEl: HTMLElement | null = null;
 
@@ -106,27 +106,31 @@ export class TopSystemBar {
     const start = el('div', 'tok-top-side');
 
     const brand = el('button', 'tok-brand-btn', { type: 'button', title: t('topBarProjects'), 'aria-label': `TypesetOK · ${t('topBarProjects')}` });
-    brand.appendChild(el('span', 'tok-brand-mark', { 'aria-hidden': 'true' }, 'ת'));
+    const mark = el('span', 'tok-brand-mark', { 'aria-hidden': 'true' });
+    mark.appendChild(icon('brand', 20));
+    brand.appendChild(mark);
     brand.appendChild(el('span', 'tok-brand-name', undefined, 'TypesetOK'));
     brand.addEventListener('click', () => this.callbacks.onOpenProjects?.());
     start.appendChild(brand);
 
     start.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true' }));
 
-    const doc = el('div', 'tok-doc-title', { title: this.documentTitle });
-    doc.appendChild(el('span', 'tok-doc-title-name', undefined, this.documentTitle.replace(/\.tok$/i, '')));
-    const sep = el('span', 'tok-doc-title-sep', { 'aria-hidden': 'true' }, '/');
-    sep.hidden = !this.pageLabel;
-    doc.appendChild(sep);
-    this.pageLabelEl = el('span', 'tok-doc-title-page', undefined, this.pageLabel);
-    this.pageLabelEl.hidden = !this.pageLabel;
-    doc.appendChild(this.pageLabelEl);
-    start.appendChild(doc);
+    if (this.documentTitle) {
+      const doc = el('div', 'tok-doc-title', { title: this.documentTitle });
+      doc.appendChild(el('span', 'tok-doc-title-name', undefined, this.documentTitle.replace(/\.tok$/i, '')));
+      const sep = el('span', 'tok-doc-title-sep', { 'aria-hidden': 'true' }, '/');
+      sep.hidden = !this.pageLabel;
+      doc.appendChild(sep);
+      this.pageLabelEl = el('span', 'tok-doc-title-page', undefined, this.pageLabel);
+      this.pageLabelEl.hidden = !this.pageLabel;
+      doc.appendChild(this.pageLabelEl);
+      start.appendChild(doc);
 
-    const saved = el('span', 'tok-saved', { role: 'status' });
-    saved.appendChild(el('span', 'tok-dot', { 'aria-hidden': 'true' }));
-    saved.appendChild(el('span', undefined, undefined, t('topBarSaved')));
-    start.appendChild(saved);
+      const saved = el('span', 'tok-saved', { role: 'status' });
+      saved.appendChild(el('span', 'tok-dot', { 'aria-hidden': 'true' }));
+      saved.appendChild(el('span', undefined, undefined, t('topBarSaved')));
+      start.appendChild(saved);
+    }
 
     const menuBtn = el('button', 'tok-btn tok-menu-btn', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
     menuBtn.appendChild(el('span', undefined, undefined, t('topBarFileAndMenu')));
@@ -191,7 +195,7 @@ export class TopSystemBar {
 
     end.appendChild(button(t('topBarExportPdf'), {
       className: 'tok-btn tok-btn-primary',
-      icon: 'upload',
+      icon: 'export',
       attrs: { 'aria-keyshortcuts': 'Control+E' },
       onClick: () => this.callbacks.onExportPdf()
     }));

@@ -19,18 +19,11 @@ export interface StructureBarCallbacks {
 
 type TabId = 'pages' | 'flows' | 'styles' | 'layers';
 
-/** Mini drawing of a Talmud page (Gemara block, commentary columns, L-shape below). */
-function pageThumbDrawing(rightHandPage: boolean): string {
-  // Commentary sits on the spine (inner) and outer sides; the inner side of a
-  // right-hand page is its left edge.
-  const outer = rightHandPage ? 'right' : 'left';
-  const inner = rightHandPage ? 'left' : 'right';
+/** Mini drawing of a page sheet with header rule and text frame boundaries. */
+function pageThumbDrawing(_rightHandPage: boolean): string {
   return `
-    <i class="tr" style="top:5px;left:5px;right:5px"></i>
-    <i class="tl" style="top:9px;bottom:6px;${outer}:5px;width:10px"></i>
-    <i class="tl" style="top:9px;bottom:6px;${inner}:5px;width:10px"></i>
-    <i class="tg" style="top:9px;height:30px;left:17px;right:17px"></i>
-    <i class="tl" style="top:42px;bottom:6px;${outer}:17px;${inner}:5px"></i>`;
+    <i class="tr" style="top:5px;left:5px;right:5px;height:1px;opacity:0.6"></i>
+    <div style="position:absolute;top:10px;bottom:6px;left:6px;right:6px;border:1px dashed var(--tok-border-strong);border-radius:2px;opacity:0.4;"></div>`;
 }
 
 /**
@@ -45,14 +38,15 @@ export class StructureBar {
   private activePageIndex = 0;
   private activeFlowId = 'gemara';
   private pages: PageThumbnailItem[] = [];
+  private isBottomExpanded = false;
   private rail!: HTMLElement;
   private panel!: HTMLElement;
 
   private flows: MultiFlowItem[] = [
-    { id: 'gemara', name: 'גמרא (ראשי)', color: '#1E4A9E', role: 'מרכז העמוד', wordCount: 2450, isActive: true },
-    { id: 'rashi', name: 'רש"י', color: '#B45309', role: 'פירוש פנימי', wordCount: 1180, isActive: false },
-    { id: 'tosafot', name: 'תוספות', color: '#15803D', role: 'פירוש חיצוני', wordCount: 860, isActive: false },
-    { id: 'notes', name: 'הערות שוליים', color: '#7C3AED', role: 'תחתית העמוד', wordCount: 340, isActive: false }
+    { id: 'gemara', name: 'גמרא (ראשי)', color: '#1E4A9E', role: 'מרכז העמוד', wordCount: 0, isActive: true },
+    { id: 'rashi', name: 'רש"י', color: '#B45309', role: 'פירוש פנימי', wordCount: 0, isActive: false },
+    { id: 'tosafot', name: 'תוספות', color: '#15803D', role: 'פירוש חיצוני', wordCount: 0, isActive: false },
+    { id: 'notes', name: 'הערות שוליים', color: '#7C3AED', role: 'תחתית העמוד', wordCount: 0, isActive: false }
   ];
 
   private styles: StyleToken[] = [
@@ -73,6 +67,9 @@ export class StructureBar {
 
   constructor(callbacks: StructureBarCallbacks) {
     this.callbacks = callbacks;
+    try {
+      this.isBottomExpanded = localStorage.getItem('tok_structure_bottom_expanded') === 'true';
+    } catch {}
     this.element = el('div', 'tok-structure');
     this.element.style.display = 'flex';
     this.element.style.flex = 'none';
@@ -158,13 +155,37 @@ export class StructureBar {
     }
     this.rail.appendChild(el('div', 'tok-rail-spacer'));
 
-    const bottom = el('div', 'tok-structure-bottom');
-    const settings = el('button', 'tok-rail-btn', { type: 'button' });
+    const bottom = el('div', `tok-structure-bottom ${this.isBottomExpanded ? 'tok-expanded' : 'tok-collapsed'}`);
+    const toggleBtn = el('button', 'tok-structure-bottom-toggle', {
+      type: 'button',
+      title: t(this.isBottomExpanded ? 'sidebarCollapse' : 'sidebarExpand'),
+      'aria-label': t(this.isBottomExpanded ? 'sidebarCollapse' : 'sidebarExpand')
+    });
+    toggleBtn.appendChild(icon(this.isBottomExpanded ? 'chevronDown' : 'chevronUp', 12));
+    toggleBtn.addEventListener('click', () => {
+      this.isBottomExpanded = !this.isBottomExpanded;
+      try {
+        localStorage.setItem('tok_structure_bottom_expanded', String(this.isBottomExpanded));
+      } catch {}
+      this.render();
+    });
+    bottom.appendChild(toggleBtn);
+
+    const settings = el('button', 'tok-rail-btn', {
+      type: 'button',
+      title: t('sidebarSettings'),
+      'aria-label': t('sidebarSettings')
+    });
     settings.appendChild(icon('settings', 20));
     settings.appendChild(el('span', undefined, undefined, t('sidebarSettings')));
     settings.addEventListener('click', () => this.callbacks.onOpenSettings?.());
     bottom.appendChild(settings);
-    const about = el('button', 'tok-rail-btn', { type: 'button' });
+
+    const about = el('button', 'tok-rail-btn', {
+      type: 'button',
+      title: t('sidebarAbout'),
+      'aria-label': t('sidebarAbout')
+    });
     about.appendChild(icon('info', 20));
     about.appendChild(el('span', undefined, undefined, t('sidebarAbout')));
     about.addEventListener('click', () => this.callbacks.onOpenAbout?.());
