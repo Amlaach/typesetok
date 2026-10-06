@@ -59,7 +59,10 @@ export type IconName =
   | 'alignLeft'
   | 'help'
   | 'upload'
-  | 'chevronUp';
+  | 'chevronUp'
+  | 'bold'
+  | 'history'
+  | 'documentEmpty';
 
 const ICONS_SVG: Record<IconName, string> = {
   undo: `
@@ -316,7 +319,7 @@ const ICONS_SVG: Record<IconName, string> = {
   `,
   sparkle: `
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M10 2.5l1.8 5.7 5.7 1.8-5.7 1.8-1.8 5.7-1.8-5.7-5.7-1.8 5.7-1.8 1.8-5.7z"/>
+      <path d="M3.5 14.5h13M3.5 10h13M3.5 5.5h8"/><circle cx="15.5" cy="5.5" r="1.5" fill="currentColor"/>
     </svg>
   `,
   alignJustify: `
@@ -355,7 +358,24 @@ const ICONS_SVG: Record<IconName, string> = {
   `,
   zap: `
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <polygon points="11 1.5 3.5 10.5 9.5 10.5 8.5 18.5 16.5 9.5 10.5 9.5 11 1.5"/>
+      <polyline points="6 6 10 10 6 14"/><line x1="12" y1="14" x2="15" y2="14"/>
+    </svg>
+  `,
+  bold: `
+    <svg viewBox="0 0 20 20" fill="currentColor">
+      <path d="M5.5 3.5h5.2a3.5 3.5 0 0 1 2.3 6.1A3.7 3.7 0 0 1 11.5 16.5H5.5V3.5zm2.8 2.2v3.6h2.4a1.8 1.8 0 0 0 0-3.6H8.3zm0 5.8v3.6H12a1.8 1.8 0 0 0 0-3.6H8.3z"/>
+    </svg>
+  `,
+  history: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="10" cy="10" r="7"/>
+      <polyline points="10 6 10 10 13 12"/>
+    </svg>
+  `,
+  documentEmpty: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5L12.5 3H5z"/>
+      <polyline points="12 3 12 8 17 8"/>
     </svg>
   `,
   ruler: `

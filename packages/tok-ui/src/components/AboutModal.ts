@@ -1,5 +1,5 @@
 import { t, i18n } from '../i18n';
-import { el, iconButton, button } from '../ui';
+import { el, icon, iconButton, button } from '../ui';
 import { ModalController } from './ModalController';
 import { fillAppVersion } from '../appInfo';
 
@@ -60,9 +60,10 @@ export class AboutModal {
     head.appendChild(headText);
     head.appendChild(iconButton('close', t('aboutClose'), () => this.hide(), { attrs: { 'data-focus-key': 'x' } }));
     card.appendChild(head);
-
     const body = el('div', 'tok-about-body');
-    body.appendChild(el('span', 'tok-brand-mark', { 'aria-hidden': 'true' }, 'ת'));
+    const brandMark = el('span', 'tok-brand-mark', { 'aria-hidden': 'true' });
+    brandMark.appendChild(icon('brand', 32));
+    body.appendChild(brandMark);
     body.appendChild(el('h2', undefined, undefined, 'TypesetOK (TOK)'));
     body.appendChild(el('p', undefined, undefined, t('appTagline')));
 

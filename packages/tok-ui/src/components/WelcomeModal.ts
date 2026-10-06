@@ -5,9 +5,8 @@ import { fillAppVersion } from '../appInfo';
 
 export interface WelcomeModalCallbacks {
   onSelectTemplate: (templateId: string) => void;
-  /** Open a .tok file; `path` is set when a file was dropped on the screen. */
+  /** Open a .tok file; `path` is set when a file was dropped on the screen or selected. */
   onOpenProject: (path?: string) => void;
-  onLoadDemo: () => void;
   onClose: () => void;
   onOpenSettings?: () => void;
   onOpenAbout?: () => void;
@@ -55,21 +54,23 @@ export interface RecentProject {
   template: number;
 }
 
-const DEFAULT_RECENT: RecentProject[] = [
-  { name: 'מסכת ברכות — מהדורת מופת.tok', time: 'היום, 14:32', pages: 12, template: 0 },
-  { name: 'ספר תהילים עם פירוש המילות.tok', time: 'אתמול', pages: 48, template: 1 },
-  { name: 'עלון שבת קודש — גיליון ק״מ.tok', time: 'לפני 3 ימים', pages: 4, template: 4 }
-];
+const DUMMY_PROJECT_NAMES = new Set([
+  'מסכת ברכות — מהדורת מופת.tok',
+  'ספר תהילים עם פירוש המילות.tok',
+  'עלון שבת קודש — גיליון ק״מ.tok'
+]);
 
 export function getRecentProjects(): RecentProject[] {
   try {
     const raw = localStorage.getItem('tok_recent_projects');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length) return parsed;
+      if (Array.isArray(parsed)) {
+        return parsed.filter((p) => p && typeof p.name === 'string' && !DUMMY_PROJECT_NAMES.has(p.name));
+      }
     }
   } catch {}
-  return DEFAULT_RECENT;
+  return [];
 }
 
 export function addRecentProject(entry: { name: string; path?: string; pages?: number; template?: number }): void {
@@ -85,7 +86,6 @@ export function addRecentProject(entry: { name: string; path?: string; pages?: n
     localStorage.setItem('tok_recent_projects', JSON.stringify(list.slice(0, 10)));
   } catch {}
 }
-
 
 function pageArt(blocks: ArtBlock[], w: number, h: number): HTMLElement {
   const page = el('div', 'tok-page-art', { 'aria-hidden': 'true' });
@@ -103,13 +103,14 @@ function pageArt(blocks: ArtBlock[], w: number, h: number): HTMLElement {
 }
 
 /**
- * Start screen: fills the window (it used to be a dialog over a dimmed workbench).
- * Escape or "continue to workspace" closes it.
+ * Start screen: full-screen primary launcher for TypesetOK.
+ * When no document is open, skipping is disabled.
  */
 export class WelcomeModal {
   public element: HTMLElement;
   private callbacks: WelcomeModalCallbacks;
   private isVisible = false;
+  private hasOpenDocument = false;
   private modal: ModalController;
 
   constructor(callbacks: WelcomeModalCallbacks) {
@@ -147,6 +148,11 @@ export class WelcomeModal {
     });
   }
 
+  public setHasOpenDocument(hasDoc: boolean): void {
+    this.hasOpenDocument = hasDoc;
+    if (this.isVisible) this.render();
+  }
+
   public show(): void {
     this.isVisible = true;
     this.element.classList.add('tok-open');
@@ -162,6 +168,7 @@ export class WelcomeModal {
   }
 
   private close(): void {
+    if (!this.hasOpenDocument) return;
     this.hide();
     this.callbacks.onClose();
   }
@@ -176,20 +183,30 @@ export class WelcomeModal {
     this.element.innerHTML = '';
 
     // ---- Top strip ----
-    const top = el('header', 'tok-welcome-top');
-    top.appendChild(el('span', 'tok-brand-mark', { 'aria-hidden': 'true' }, 'ת'));
-    top.appendChild(el('span', 'tok-brand-name', undefined, 'TypesetOK'));
-    top.appendChild(el('span', 'tok-grow'));
-    top.appendChild(iconButton('settings', t('sidebarSettings'), () => {
+    const topStrip = el('div', 'tok-welcome-top');
+    const brandMark = el('span', 'tok-brand-mark', { 'aria-hidden': 'true' });
+    brandMark.appendChild(icon('brand', 18));
+    topStrip.appendChild(brandMark);
+    topStrip.appendChild(el('span', 'tok-brand-name', undefined, 'TypesetOK'));
+    topStrip.appendChild(el('span', 'tok-grow'));
+    topStrip.appendChild(iconButton('settings', t('sidebarSettings'), () => {
       this.hide();
       this.callbacks.onOpenSettings?.();
     }, { attrs: { 'data-focus-key': 'settings' } }));
-    top.appendChild(iconButton('info', t('sidebarAbout'), () => {
+    topStrip.appendChild(iconButton('info', t('sidebarAbout'), () => {
       this.hide();
       this.callbacks.onOpenAbout?.();
     }, { attrs: { 'data-focus-key': 'about' } }));
-    top.appendChild(iconButton('close', t('continueToWorkspace'), () => this.close(), { attrs: { 'data-focus-key': 'close' } }));
-    this.element.appendChild(top);
+
+    if (this.hasOpenDocument) {
+      topStrip.appendChild(button(t('returnToDocument'), {
+        className: 'tok-btn tok-btn-sm',
+        icon: 'arrowForward',
+        attrs: { 'data-focus-key': 'return' },
+        onClick: () => this.close()
+      }));
+    }
+    this.element.appendChild(topStrip);
 
     // ---- Body ----
     const body = el('div', 'tok-welcome-body');
@@ -232,26 +249,6 @@ export class WelcomeModal {
     });
     grid.appendChild(blank);
     main.appendChild(grid);
-
-    // First-run hint with the sample project
-    const firstRun = el('div', 'tok-first-run');
-    const frIcon = el('span', 'tok-first-run-icon', { 'aria-hidden': 'true' });
-    frIcon.appendChild(icon('brand', 18));
-    firstRun.appendChild(frIcon);
-    const frText = el('span', 'tok-first-run-text');
-    frText.appendChild(el('strong', undefined, undefined, t('welcomeFirstRunTitle')));
-    frText.appendChild(el('span', undefined, undefined, t('welcomeFirstRunDesc')));
-    firstRun.appendChild(frText);
-    firstRun.appendChild(button(t('demoProject'), {
-      className: 'tok-btn tok-btn-primary',
-      icon: 'sparkle',
-      attrs: { 'data-focus-key': 'demo' },
-      onClick: () => {
-        this.hide();
-        this.callbacks.onLoadDemo();
-      }
-    }));
-    main.appendChild(firstRun);
     card.appendChild(main);
 
     // Recent projects
@@ -271,30 +268,36 @@ export class WelcomeModal {
     side.appendChild(sideHead);
 
     const recent = getRecentProjects();
-    const list = el('div', undefined, { role: 'list', style: 'display:flex;flex-direction:column;gap:2px' });
+    const list = el('div', undefined, { role: 'list', style: 'display:flex;flex-direction:column;gap:2px;flex:1' });
     if (recent.length === 0) {
-      list.appendChild(el('p', 'tok-recent-empty', undefined, t('noRecentProjects')));
-    }
-    for (const rec of recent) {
-      const row = el('button', 'tok-recent-row', { type: 'button', role: 'listitem' });
-      const tpl = TEMPLATES[rec.template] || TEMPLATES[0];
-      row.appendChild(pageArt(tpl.art, 34, 48));
-      const info = el('span', 'tok-recent-main');
-      info.appendChild(el('span', 'tok-recent-name', { title: rec.name }, rec.name.replace(/\.tok$/i, '')));
-      info.appendChild(el('span', 'tok-recent-sub', undefined, `${t(tpl.titleKey)} · ${tf('welcomePagesCount', { n: rec.pages })}`));
-      row.appendChild(info);
-      row.appendChild(el('span', 'tok-recent-when', undefined, rec.time));
-      row.addEventListener('click', () => {
-        this.hide();
-        if (rec.path) this.callbacks.onOpenProject(rec.path);
-        else this.callbacks.onLoadDemo();
-      });
-      list.appendChild(row);
+      const emptyBox = el('div', 'tok-recent-empty', { style: 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:36px 12px;margin:auto 0' });
+      const emptyIcon = el('div', undefined, { style: 'color:var(--tok-text-muted);opacity:0.6' });
+      emptyIcon.appendChild(icon('history', 32));
+      emptyBox.appendChild(emptyIcon);
+      emptyBox.appendChild(el('strong', undefined, { style: 'font-size:13px;color:var(--tok-text-primary)' }, t('noRecentProjects')));
+      emptyBox.appendChild(el('span', undefined, { style: 'font-size:12px;color:var(--tok-text-muted);text-align:center' }, t('noRecentProjectsSub')));
+      list.appendChild(emptyBox);
+    } else {
+      for (const rec of recent) {
+        const row = el('button', 'tok-recent-row', { type: 'button', role: 'listitem' });
+        const tpl = TEMPLATES[rec.template] || TEMPLATES[0];
+        row.appendChild(pageArt(tpl.art, 34, 48));
+        const info = el('span', 'tok-recent-main');
+        info.appendChild(el('span', 'tok-recent-name', { title: rec.name }, rec.name.replace(/\.tok$/i, '')));
+        info.appendChild(el('span', 'tok-recent-sub', undefined, `${t(tpl.titleKey)} · ${tf('welcomePagesCount', { n: rec.pages })}`));
+        row.appendChild(info);
+        row.appendChild(el('span', 'tok-recent-when', undefined, rec.time));
+        row.addEventListener('click', () => {
+          this.hide();
+          this.callbacks.onOpenProject(rec.path || rec.name);
+        });
+        list.appendChild(row);
+      }
     }
     side.appendChild(list);
 
     const drop = el('div', 'tok-dropzone');
-    const dropIcon = icon('upload', 22);
+    const dropIcon = icon('folder', 22);
     dropIcon.style.color = 'var(--tok-text-muted)';
     drop.appendChild(dropIcon);
     drop.appendChild(el('span', undefined, undefined, t('welcomeDropHint')));
@@ -306,23 +309,6 @@ export class WelcomeModal {
 
     // ---- Footer ----
     const foot = el('footer', 'tok-welcome-foot');
-    const label = el('label');
-    const check = el('input', undefined, { type: 'checkbox' });
-    // Reflect the saved preference (the app only auto-opens this screen when it isn't 'false').
-    let showOnStartup = true;
-    try {
-      showOnStartup = localStorage.getItem('tok_show_welcome') !== 'false';
-    } catch {}
-    check.checked = showOnStartup;
-    check.addEventListener('change', () => {
-      try {
-        localStorage.setItem('tok_show_welcome', check.checked ? 'true' : 'false');
-      } catch {}
-    });
-    label.appendChild(check);
-    label.appendChild(document.createTextNode(t('showOnStartup')));
-    foot.appendChild(label);
-    foot.appendChild(el('span', 'tok-grow'));
     const guide = el('button', 'tok-link', { type: 'button' }, t('welcomeGuide'));
     guide.addEventListener('click', () => {
       const url = 'https://github.com/TypesetOK/typesetok#readme';
@@ -331,14 +317,18 @@ export class WelcomeModal {
       else window.open(url, '_blank', 'noopener,noreferrer');
     });
     foot.appendChild(guide);
+    foot.appendChild(el('span', 'tok-grow'));
     const verSpan = el('span');
     fillAppVersion(verSpan, (v) => tf('welcomeVersion', { v }));
     foot.appendChild(verSpan);
-    foot.appendChild(button(t('continueToWorkspace'), {
-      className: 'tok-btn tok-btn-sm',
-      attrs: { 'data-focus-key': 'continue' },
-      onClick: () => this.close()
-    }));
+
+    if (this.hasOpenDocument) {
+      foot.appendChild(button(t('returnToDocument'), {
+        className: 'tok-btn tok-btn-sm',
+        attrs: { 'data-focus-key': 'continue' },
+        onClick: () => this.close()
+      }));
+    }
     this.element.appendChild(foot);
   }
 }

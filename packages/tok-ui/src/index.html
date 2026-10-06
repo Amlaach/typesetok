@@ -7,6 +7,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TypesetOK</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%231E4A9E' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 16.5A2.5 2.5 0 0 1 6.5 14H16V3.5A1.5 1.5 0 0 0 14.5 2H6.5A2.5 2.5 0 0 0 4 4.5v12z'/%3E%3Cpath d='M16 14v4.5A1.5 1.5 0 0 1 14.5 20H6.5A2.5 2.5 0 0 1 4 17.5'/%3E%3Cline x1='7.5' y1='6' x2='12.5' y2='6'/%3E%3Cline x1='7.5' y1='9.5' x2='12.5' y2='9.5'/%3E%3C/svg%3E">
   <style>
     /* ==========================================================================
        Fonts (SIL Open Font License, shipped in assets/fonts/ui)
@@ -274,20 +275,28 @@
        ========================================================================== */
     .tok-top-bar {
       height: var(--tok-top-bar-height); min-height: var(--tok-top-bar-height);
-      display: flex; align-items: center; gap: 16px; padding: 0 16px;
+      display: flex; align-items: center; gap: 18px; padding: 0 20px;
       background: var(--tok-bg-app); border-bottom: 1px solid var(--tok-border-subtle);
       position: relative; z-index: 50;
     }
-    .tok-top-side { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
-    .tok-top-side.tok-end { justify-content: flex-end; gap: 6px; }
+    .tok-top-side { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
+    .tok-top-side.tok-end { justify-content: flex-end; gap: 8px; }
     .tok-brand-mark {
-      width: 28px; height: 28px; flex: none; border-radius: 7px;
+      width: 32px; height: 32px; flex: none; border-radius: 8px;
       background: var(--tok-accent-primary); color: var(--tok-on-accent);
       display: inline-flex; align-items: center; justify-content: center;
-      font-family: var(--tok-font-hebrew-body); font-size: 19px; font-weight: 700; line-height: 1; padding-bottom: 2px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+      transition: transform 0.15s ease, background 0.15s ease;
     }
-    .tok-brand-btn { display: inline-flex; align-items: center; gap: 10px; border: none; background: transparent; padding: 2px; border-radius: 8px; }
-    .tok-brand-name { font-size: 14px; font-weight: 600; }
+    .tok-brand-btn {
+      display: inline-flex; align-items: center; gap: 10px; border: none; background: transparent;
+      padding: 4px 8px; border-radius: 8px; cursor: pointer; transition: background 0.15s;
+    }
+    .tok-brand-btn:hover { background: var(--tok-bg-surface-hover); }
+    .tok-brand-btn:hover .tok-brand-mark { transform: scale(1.05); }
+    .tok-brand-name {
+      font-size: 17px; font-weight: 800; letter-spacing: -0.02em; color: var(--tok-text-primary);
+    }
     .tok-doc-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
     .tok-doc-title-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tok-doc-title-sep { color: var(--tok-text-muted); }
@@ -333,7 +342,31 @@
     .tok-rail-btn:hover { background: var(--tok-bg-surface-hover); color: var(--tok-text-primary); }
     .tok-rail-btn[aria-pressed="true"] { background: var(--tok-accent-soft); color: var(--tok-accent-text); }
     .tok-rail-spacer { flex: 1; }
-    .tok-structure-bottom { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 8px; border-top: 1px solid var(--tok-border-subtle); width: 52px; }
+    .tok-structure-bottom {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 6px 4px 8px; border-top: 1px solid var(--tok-border-subtle); width: 56px;
+      transition: all 0.15s ease;
+    }
+    .tok-structure-bottom-toggle {
+      width: 44px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+      border: none; border-radius: 4px; background: transparent; color: var(--tok-text-muted);
+      cursor: pointer; transition: background 0.12s, color 0.12s; margin-bottom: 2px;
+    }
+    .tok-structure-bottom-toggle:hover {
+      background: var(--tok-bg-surface-hover); color: var(--tok-text-primary);
+    }
+    .tok-structure-bottom.tok-collapsed .tok-rail-btn {
+      height: 38px; width: 44px;
+    }
+    .tok-structure-bottom.tok-collapsed .tok-rail-btn span {
+      display: none;
+    }
+    .tok-structure-bottom.tok-expanded {
+      background: var(--tok-bg-surface-hover); border-radius: var(--tok-radius) var(--tok-radius) 0 0;
+    }
+    .tok-structure-bottom.tok-expanded .tok-rail-btn {
+      height: 50px; width: 52px;
+    }
 
     .tok-structure-bar {
       width: var(--tok-structure-width); min-width: var(--tok-structure-width); flex: none;
