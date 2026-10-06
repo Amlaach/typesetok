@@ -1,6 +1,6 @@
 {
   "name": "typesetok-monorepo",
-  "version": "0.7.5",
+  "version": "0.9.1",
   "private": true,
   "description": "TypesetOK (TOK) - Professional Hebrew Desktop Publishing System",
   "workspaces": [

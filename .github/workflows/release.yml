@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name for release (e.g. v0.7.5)'
+        description: 'Tag name for release (e.g. v0.9.1)'
         required: false
-        default: 'v0.7.5'
+        default: 'v0.9.1'
 
 permissions:
   contents: write
@@ -77,13 +77,13 @@ jobs:
         include:
           - os: ubuntu-latest
             binary_name: tok-cli
-            asset_name: tok-cli-v0.7.5-linux-x64.tar.gz
+            asset_name: tok-cli-v0.9.1-linux-x64.tar.gz
           - os: windows-latest
             binary_name: tok-cli.exe
-            asset_name: tok-cli-v0.7.5-windows-x64.zip
+            asset_name: tok-cli-v0.9.1-windows-x64.zip
           - os: macos-latest
             binary_name: tok-cli
-            asset_name: tok-cli-v0.7.5-macos.tar.gz
+            asset_name: tok-cli-v0.9.1-macos.tar.gz
 
     steps:
       - uses: actions/checkout@v4
@@ -126,28 +126,28 @@ jobs:
           npm install
           npm run build
           node scripts/build-desktop-bundle.mjs
-          Compress-Archive -Path dist/TypesetOK-v0.7.5-windows-x64 -DestinationPath TypesetOK-v0.7.5-windows-desktop-app.zip
+          Compress-Archive -Path dist/TypesetOK-v0.9.1-windows-x64 -DestinationPath TypesetOK-v0.9.1-windows-desktop-app.zip
 
       - name: Compile Official Windows Installer (Inno Setup)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           node scripts/build-installer.mjs
-          Copy-Item dist/TypesetOK-v0.7.5-Setup-x64.exe TypesetOK-v0.7.5-Setup.exe
+          Copy-Item dist/TypesetOK-v0.9.1-Setup-x64.exe TypesetOK-v0.9.1-Setup.exe
 
       - name: Upload Windows Installer artifact
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: TypesetOK-v0.7.5-Setup.exe
-          path: TypesetOK-v0.7.5-Setup.exe
+          name: TypesetOK-v0.9.1-Setup.exe
+          path: TypesetOK-v0.9.1-Setup.exe
 
       - name: Upload Desktop App artifact
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: TypesetOK-v0.7.5-windows-desktop-app.zip
-          path: TypesetOK-v0.7.5-windows-desktop-app.zip
+          name: TypesetOK-v0.9.1-windows-desktop-app.zip
+          path: TypesetOK-v0.9.1-windows-desktop-app.zip
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -183,13 +183,13 @@ jobs:
           cp -r packages/tok-electron/dist dist-package/electron
           cp -r assets dist-package/assets
           cp README.md LICENSE.md dist-package/
-          tar -czvf typesetok-desktop-workbench-v0.7.5.tar.gz dist-package
+          tar -czvf typesetok-desktop-workbench-v0.9.1.tar.gz dist-package
 
       - name: Upload UI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: typesetok-desktop-workbench-v0.7.5.tar.gz
-          path: typesetok-desktop-workbench-v0.7.5.tar.gz
+          name: typesetok-desktop-workbench-v0.9.1.tar.gz
+          path: typesetok-desktop-workbench-v0.9.1.tar.gz
 
   # ──────────────────────────────────────────────
   # 3. Create GitHub Release & Attach Assets
@@ -218,23 +218,22 @@ jobs:
           prerelease: false
           files: release-assets/*
           body: |
-            ## TypesetOK (TOK) ${{ needs.check-release.outputs.tag_name }} — תמיכה מלאה במשקלי גופנים, חוויית משתמש ומתקין רשמי
+            ## TypesetOK (TOK) ${{ needs.check-release.outputs.tag_name }} — שדרוג חוויית משתמש, קיצורי מקשים ועימוד מקצועי
 
-            ### 🚀 מה חדש בגרסה 0.7.5 (Highlights):
-            - **תמיכה מלאה במשקלי גופנים (Font Weight 700 / 400):** תמיכה מלאה בהגדרת סגנונות מודגשים (Bold / 700) ורגילים (Regular / 400), הן בליבת העימוד והן בסרגלי הממשק (StructureBar, Action HUD, Inspector).
-            - **מנוע טיפוגרפיה מתקדם ושילוב גופנים מובנים:** טעינת גופני OFL מודגשים (Frank Ruhl Libre Bold, Taamey Frank CLM Bold, Keter YG Bold) לעימוד כותרות וטקסט ש"ס מהודר.
-            - **מתקין Windows רשמי (Setup Wizard):** קובץ התקנה מלא `TypesetOK-v0.7.5-Setup.exe` דו-לשוני (עברית ואנגלית), עם שיוך קובצי מסמך `.tok` וקיצור דרך בשולחן העבודה.
-            - **ממשק משתמש מסודר ומופחת כפתורים:** צמצום עומס כפתורים בממשק, סידור היררכי חכם של תפריטים, וריכוז פקודות בסרגל עליון מינימליסטי ונוח.
-            - **גיוון עשיר בצבעים וערכות נושא:** 5 ערכות עיצוב ייחודיות (כחול נייבי עמוק, קלף עברי מהודר, פחם גרפיט וזהב, אינדיגו רויאל ואזמרגד, וסטודיו בהיר קלאסי) + צבעי תזרימים מובחנים.
-            - **הגדרות ואודות נגישים ישירות מכל מסך:** כפתורים ישירים בסרגל העליון, במסך הפתיחה (Welcome Dialog), בסרגל הצד ובפלטת הפקודות.
-            - **עליית תוכנה מהירה במיוחד (Instant Launch):** מעבר מיידי ומהיר מחלון הספלאש לחלון הראשי ללא זמני המתנה מלאכותיים.
-            - **הסרה מלאה של אימוג'ים:** החלפה של 100% מהאימוג'ים באייקונים וקטוריים מקצועיים (SVG).
-            - **לשונית נגישות מקיפה:** ניגודיות גבוהה, הגדלת טקסט, הפחתת תנועה, הדגשת פוקוס למקלדת וגופן נגיש.
+            ### 🚀 מה חדש בגרסה 0.9.1 (Highlights):
+            - **תמיכה מלאה בקיצורי מקשים סטנדרטיים דו-לשוניים:** Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S, Ctrl+E, Ctrl+P, Ctrl+Z, Ctrl+Y, Ctrl+1/2/3, Ctrl++, Ctrl+-, Ctrl+0, Ctrl+Enter, Ctrl+, — עם זיהוי מלא ומדויק של פריסת מקלדת עברית ואנגלית ללא חטיפת הקשות בשדות טקסט.
+            - **מינוח תצוגה מקצועי מעולם הדפוס:** שינוי כפתור 'עורך סיפור' ל**'עורך טקסט'** (Text Editor), שינוי 'מצב קנבס' ל**'תצוגת עמודים'** (Pages View), ושינוי 'מפוצל' ל**'תצוגה משולבת'** (Split View).
+            - **סרגל עליון רחב ומודגש:** שורה עליונה מרווחת ומאוזנת (56px), הדגשת שם התוכנה בצד ימין (17px במשקל 800) לצד סמל הספר הווקטורי, עם חזרה בלחיצה ישירה למסך בחירת פרויקט.
+            - **שמירת הגדרות וערכות נושא קבועה:** שמירה מלאה של כל ערכות הנושא (בהיר, כהה, כחול לילה, קלף, גרפיט, אינדיגו, מערכת), גוון שולחן עבודה, קווי עזר ושמירת לוגים מפתחה לפתחה ב-localStorage.
+            - **סרגל הגדרות ואודות מודולרי:** סרגל תחתון ייעודי בצד ימין למטה עם אפשרות הרחבה וצמצום ומצב שמור.
+            - **לוח עבודה נקי ומקצועי:** הסרה מוחלטת של בועת הזום המרחפת מעל העמודים, והעברת בקרת התקריב להגדרות התוכנה ולקיצורי מקשים.
+            - **סמל הספר הרשמי (Book Emblem):** החלפת כל הסמלים הישנים בסמל הווקטורי של ספר פתוח / קודקס בכל הממשק, כולל Favicon ייעודי.
+            - **מתקין Windows רשמי (Setup Wizard) וגרסה ניידת (Portable):** התקנה קלה ומהירה בעברית ובאנגלית עם שיוך קובצי .tok.
 
             ### 📦 קבצים להורדה (Downloads & Installation):
-            - **מתקין רשמי למחשב (מומלץ):** `TypesetOK-v0.7.5-Setup.exe` (מתקין אשף מלא בעברית ובאנגלית).
-            - **גרסה ניידת ללא התקנה (Portable):** `TypesetOK-v0.7.5-windows-desktop-app.zip` (פריקה והרצה ישירה של `TypesetOK.exe`).
-            - **CLI בלבד (Windows x64):** `tok-cli-v0.7.5-windows-x64.zip`
-            - **CLI בלבד (Linux x64):** `tok-cli-v0.7.5-linux-x64.tar.gz`
-            - **CLI בלבד (macOS):** `tok-cli-v0.7.5-macos.tar.gz`
-            - **Workbench Source Bundle:** `typesetok-desktop-workbench-v0.7.5.tar.gz`
+            - **מתקין רשמי למחשב (מומלץ):** `TypesetOK-v0.9.1-Setup.exe` (מתקין אשף מלא בעברית ובאנגלית).
+            - **גרסה ניידת ללא התקנה (Portable):** `TypesetOK-v0.9.1-windows-desktop-app.zip` (פריקה והרצה ישירה של `TypesetOK.exe`).
+            - **CLI בלבד (Windows x64):** `tok-cli-v0.9.1-windows-x64.zip`
+            - **CLI בלבד (Linux x64):** `tok-cli-v0.9.1-linux-x64.tar.gz`
+            - **CLI בלבד (macOS):** `tok-cli-v0.9.1-macos.tar.gz`
+            - **Workbench Source Bundle:** `typesetok-desktop-workbench-v0.9.1.tar.gz`
