@@ -40,14 +40,13 @@ const FLOW_NAME_KEYS: Record<string, string> = {
 
 /** Template id → document title shown in the top bar (document names, not UI text). */
 const TEMPLATE_TITLES: Record<string, string> = {
-  gemara: 'מסכת ברכות — צורת הדף.tok',
-  mikraot: 'מקראות גדולות — בראשית.tok',
-  prose: 'ספר קריאה — מהדורה ראשונה.tok',
-  notes: 'ספר עם הערות — חלק א׳.tok',
-  bulletin: 'עלון שבת קודש.tok'
+  gemara: 'פרויקט דף גמרא.tok',
+  mikraot: 'פרויקט מקראות גדולות.tok',
+  prose: 'ספר קריאה וטקסט רציף.tok',
+  notes: 'ספר עם הערות שוליים.tok',
+  bulletin: 'עלון וקונטרס.tok'
 };
 const BLANK_TEMPLATE_TITLE = 'מסמך ריק.tok';
-const DEMO_PROJECT_TITLE = 'מסכת ברכות — מהדורת מופת.tok';
 
 const countWords = (text: string) => (text.match(/\S+/g) || []).length;
 
@@ -68,7 +67,7 @@ export class TypesetOkApp {
   private storyFontPx = 19;
   private splitDivider!: HTMLElement;
   private panelOpenBeforeSplit: boolean | null = null;
-  private documentTitle = DEMO_PROJECT_TITLE;
+  private documentTitle = '';
   private workbench!: HTMLElement;
 
   // Feature modals are built on first use (they are hidden at startup).
@@ -256,6 +255,9 @@ export class TypesetOkApp {
     this.commandPalette = new CommandPalette(this.buildCommands());
     this.root.appendChild(this.commandPalette.element);
 
+    // Global keyboard shortcuts supporting Hebrew & English layouts
+    this.bindKeyboardShortcuts();
+
     // 7. Welcome / Settings / About are created lazily on first open (see getters below).
 
     // Load plugins once the first frame is on screen: discovery/compilation happens
@@ -264,14 +266,146 @@ export class TypesetOkApp {
       this.pluginEngine.loadPlugins().catch(console.error);
     });
 
-    // 8. First launch project picker check
-    let showWelcome: string | null = null;
-    try {
-      showWelcome = localStorage.getItem('tok_show_welcome');
-    } catch {}
-    if (showWelcome !== 'false') {
-      setTimeout(() => this.welcomeModal.show(), 100);
-    }
+    // 8. Main startup: Open project picker unconditionally as the primary screen
+    this.welcomeModal.setHasOpenDocument(false);
+    this.welcomeModal.show();
+  }
+
+  /** Standard keyboard shortcuts supporting both English and Hebrew layouts. */
+  private bindKeyboardShortcuts(): void {
+    window.addEventListener('keydown', (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = Boolean(
+        target && (
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable ||
+          target.closest?.('.tok-story-scroll')
+        )
+      );
+
+      const hasCtrl = e.ctrlKey || e.metaKey;
+      if (!hasCtrl) return;
+
+      const code = e.code;
+      const key = e.key.toLowerCase();
+
+      // Ctrl+Shift+P: Projects / Welcome Modal
+      if (e.shiftKey && (code === 'KeyP' || key === 'p' || key === 'פ')) {
+        e.preventDefault();
+        this.welcomeModal.show();
+        return;
+      }
+
+      // Ctrl+Shift+S: Save As
+      if (e.shiftKey && (code === 'KeyS' || key === 's' || key === 'ד')) {
+        e.preventDefault();
+        this.handleSystemAction('save-as');
+        return;
+      }
+
+      // Ctrl+S: Save Document
+      if (!e.shiftKey && (code === 'KeyS' || key === 's' || key === 'ד')) {
+        e.preventDefault();
+        this.handleSystemAction('save-document');
+        return;
+      }
+
+      // Ctrl+N: New Document
+      if (!e.shiftKey && (code === 'KeyN' || key === 'n' || key === 'מ')) {
+        e.preventDefault();
+        this.handleSystemAction('new-document');
+        return;
+      }
+
+      // Ctrl+O: Open Document
+      if (!e.shiftKey && (code === 'KeyO' || key === 'o' || key === 'ם')) {
+        e.preventDefault();
+        this.handleSystemAction('open-document');
+        return;
+      }
+
+      // Ctrl+E or Ctrl+P: Export PDF
+      if (!e.shiftKey && (code === 'KeyE' || key === 'e' || key === 'ק' || code === 'KeyP' || key === 'p' || key === 'פ')) {
+        e.preventDefault();
+        this.handleSystemAction('export-pdf');
+        return;
+      }
+
+      // Ctrl+, : Settings
+      if (code === 'Comma' || key === ',' || key === 'ת') {
+        e.preventDefault();
+        this.settingsModal.show();
+        return;
+      }
+
+      // Don't hijack typing or input editing
+      if (isInput) return;
+
+      // Undo / Redo outside text inputs
+      if (code === 'KeyZ' || key === 'z' || key === 'ז') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.runEditCommand('redo');
+        } else {
+          this.runEditCommand('undo');
+        }
+        return;
+      }
+      if (code === 'KeyY' || key === 'y' || key === 'ט') {
+        e.preventDefault();
+        this.runEditCommand('redo');
+        return;
+      }
+
+      // View modes: Ctrl+1 (Canvas / Pages), Ctrl+2 (Split), Ctrl+3 (Story / Text Editor)
+      if (code === 'Digit1' || key === '1') {
+        e.preventDefault();
+        this.setViewMode('canvas');
+        this.topBar.setViewMode('canvas');
+        return;
+      }
+      if (code === 'Digit2' || key === '2') {
+        e.preventDefault();
+        this.setViewMode('split');
+        this.topBar.setViewMode('split');
+        return;
+      }
+      if (code === 'Digit3' || key === '3') {
+        e.preventDefault();
+        this.setViewMode('story');
+        this.topBar.setViewMode('story');
+        return;
+      }
+
+      // Zoom: Ctrl+= / Ctrl++ (Zoom In), Ctrl+- (Zoom Out), Ctrl+0 (Fit / 100%)
+      if (code === 'Equal' || key === '=' || key === '+') {
+        e.preventDefault();
+        const nextZoom = Math.min(300, Math.round(this.canvas.getZoom() * 1.2));
+        this.canvas.setZoom(nextZoom);
+        this.statusBar.updateStats({ zoom: nextZoom });
+        return;
+      }
+      if (code === 'Minus' || key === '-') {
+        e.preventDefault();
+        const nextZoom = Math.max(25, Math.round(this.canvas.getZoom() / 1.2));
+        this.canvas.setZoom(nextZoom);
+        this.statusBar.updateStats({ zoom: nextZoom });
+        return;
+      }
+      if (code === 'Digit0' || key === '0') {
+        e.preventDefault();
+        this.canvas.fitToWindow();
+        return;
+      }
+
+      // Add new page: Ctrl+Enter
+      if (code === 'Enter' || key === 'enter') {
+        e.preventDefault();
+        this.addNewPage();
+        return;
+      }
+    });
   }
 
   /** Re-applies texts owned by the app shell after a language switch. */
@@ -300,7 +434,6 @@ export class TypesetOkApp {
       this.welcomeModalInstance = new WelcomeModal({
         onSelectTemplate: (tmpl) => this.handleTemplateSelect(tmpl),
         onOpenProject: (path) => this.handleSystemAction('open-document', path),
-        onLoadDemo: () => this.loadDemoProject(),
         onClose: () => {},
         onOpenSettings: () => this.settingsModal.show(),
         onOpenAbout: () => this.aboutModal.show()
@@ -324,6 +457,11 @@ export class TypesetOkApp {
           const current = this.canvas.getGuides();
           if (guide === 'margins' && current.margins !== visible) this.canvas.toggleMarginsGuide();
           if (guide === 'baseline' && current.baseline !== visible) this.canvas.toggleBaselineGuide();
+        },
+        getZoom: () => this.canvas.getZoom(),
+        setZoom: (z) => {
+          this.canvas.setZoom(z);
+          this.statusBar.updateStats({ zoom: z });
         }
       });
       this.root.appendChild(this.settingsModalInstance.element);
@@ -555,7 +693,7 @@ export class TypesetOkApp {
       },
       {
         id: 'cmd-export-pdf',
-        icon: 'upload',
+        icon: 'export',
         category: t('cmdCatPrint'),
         title: t('cmdExportTitle'),
         subtitle: t('cmdExportSub'),
@@ -681,7 +819,18 @@ export class TypesetOkApp {
     const name = TEMPLATE_TITLES[templateId] || BLANK_TEMPLATE_TITLE;
     this.documentTitle = name;
     this.topBar.setDocumentTitle(name);
+    this.pages = [{
+      pageIndex: 0,
+      gematriaNumber: 'א׳',
+      widthPt: 480,
+      heightPt: 678,
+      htmlContent: ''
+    }];
+    this.loadDocumentPages(this.pages);
+    this.storyEditor.loadStory([]);
+    this.statusBar.updateStats({ wordCount: 0, activeFlow: this.flowDisplayName('gemara') });
     addRecentProject({ name, pages: 1 });
+    this.welcomeModal.setHasOpenDocument(true);
     this.showToast(tf('toastProjectCreated', { name }));
   }
 
@@ -689,15 +838,20 @@ export class TypesetOkApp {
     const baseName = filePath.split(/[\\/]/).pop() || filePath;
     this.documentTitle = baseName;
     this.topBar.setDocumentTitle(baseName);
+    if (this.pages.length === 0) {
+      this.pages = [{
+        pageIndex: 0,
+        gematriaNumber: 'א׳',
+        widthPt: 480,
+        heightPt: 678,
+        htmlContent: ''
+      }];
+      this.loadDocumentPages(this.pages);
+      this.storyEditor.loadStory([]);
+    }
     addRecentProject({ name: baseName, path: filePath, pages: this.pages.length || 1 });
+    this.welcomeModal.setHasOpenDocument(true);
     this.showToast(tf('toastOpenFile', { path: baseName }));
-  }
-
-  private loadDemoProject(): void {
-    this.documentTitle = DEMO_PROJECT_TITLE;
-    this.topBar.setDocumentTitle(DEMO_PROJECT_TITLE);
-    addRecentProject({ name: DEMO_PROJECT_TITLE, pages: this.pages.length || 1 });
-    this.showToast(t('toastDemoLoaded'));
   }
 
   public setViewMode(mode: ViewMode): void {
