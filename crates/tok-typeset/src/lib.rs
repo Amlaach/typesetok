@@ -18,6 +18,7 @@ pub mod co_pagination;
 pub mod engine;
 pub mod font;
 pub mod footnote_paginator;
+pub mod fixtures;
 pub mod gematria;
 pub mod geometry;
 pub mod hebrew_justify;
