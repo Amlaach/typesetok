@@ -56,6 +56,8 @@ export const strings: Translations = {
   menuImportDocument: { he: 'ייבוא מסמך (Word, MD, טקסט)...', en: 'Import Document (Word, MD, TXT)...' },
   importDocument: { he: 'ייבא מסמך...', en: 'Import Document...' },
   importDocumentDesc: { he: 'ייבוא קובץ Word (.docx), Markdown (.md) או טקסט פשוט (.txt)', en: 'Import Word (.docx), Markdown (.md) or plain text (.txt)' },
+  importChooseTemplateTitle: { he: 'בחירת תבנית עימוד עבור: {title}', en: 'Choose Layout Template for: {title}' },
+  importChooseTemplateSub: { he: 'התוכן המיובא ({count} פסקאות) ישובץ בתבנית הנבחרת ללא דריסת טקסט', en: 'Imported content ({count} paragraphs) will be placed in the selected template' },
   menuSave: { he: 'שמירת מסמך', en: 'Save Document' },
   menuSaveAs: { he: 'שמירה בשם...', en: 'Save As...' },
   menuNormalizeNiqqud: { he: 'נרמול ניקוד וטעמים (ת״י 6100)', en: 'Normalize Niqqud & Cantillation (SI 6100)' },

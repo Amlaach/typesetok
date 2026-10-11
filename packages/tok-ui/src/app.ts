@@ -11,6 +11,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
 import { UserGuideModal } from './components/UserGuideModal';
 import { TextStatsModal } from './components/TextStatsModal';
+import { ImportTemplateModal } from './components/ImportTemplateModal';
 import { PluginEngine } from './plugins/PluginEngine';
 import { StoryEditor, StoryParagraph } from 'tok-story-editor';
 import { PageDescriptor } from 'tok-viewer';
@@ -103,6 +104,8 @@ export class TypesetOkApp {
   private exportDialogInstance?: ExportDialog;
   private userGuideModalInstance?: UserGuideModal;
   private textStatsModalInstance?: TextStatsModal;
+  private importTemplateModalInstance?: ImportTemplateModal;
+  private pendingImportResult: { result: ImportResult; filePath?: string } | null = null;
   private pluginEngine!: PluginEngine;
 
   private hasOpenDocument = false;
@@ -796,6 +799,27 @@ export class TypesetOkApp {
       this.root.appendChild(this.textStatsModalInstance.element);
     }
     return this.textStatsModalInstance;
+  }
+
+  private get importTemplateModal(): ImportTemplateModal {
+    if (!this.importTemplateModalInstance) {
+      this.importTemplateModalInstance = new ImportTemplateModal({
+        onSelect: (templateId) => {
+          if (this.pendingImportResult) {
+            this.applyImportedDocument(this.pendingImportResult.result, this.pendingImportResult.filePath, templateId);
+            this.pendingImportResult = null;
+          }
+        },
+        onCancel: () => {
+          if (this.pendingImportResult) {
+            this.applyImportedDocument(this.pendingImportResult.result, this.pendingImportResult.filePath, 'prose');
+            this.pendingImportResult = null;
+          }
+        }
+      });
+      this.root.appendChild(this.importTemplateModalInstance.element);
+    }
+    return this.importTemplateModalInstance;
   }
 
   private openTextStatsDialog(): void {
@@ -2039,7 +2063,8 @@ export class TypesetOkApp {
         throw new Error('IPC reader not available');
       }
 
-      this.applyImportedDocument(result, targetPath);
+      this.pendingImportResult = { result, filePath: targetPath };
+      this.importTemplateModal.show(result);
     } catch (err: any) {
       console.error('[TOK] Import error:', err);
       this.showToast(tf('toastImportError', { error: err?.userMessage || err?.message || String(err) }), true);
@@ -2066,7 +2091,8 @@ export class TypesetOkApp {
             content = reader.result as string;
           }
           const result = importDocument(content, { fileName: file.name });
-          this.applyImportedDocument(result);
+          this.pendingImportResult = { result, filePath: file.name };
+          this.importTemplateModal.show(result);
         } catch (e: any) {
           this.showToast(tf('toastImportError', { error: e?.userMessage || e?.message || String(e) }), true);
         }
@@ -2082,7 +2108,7 @@ export class TypesetOkApp {
     setTimeout(() => input.remove(), 1000);
   }
 
-  public applyImportedDocument(result: ImportResult, filePath?: string): void {
+  public applyImportedDocument(result: ImportResult, filePath?: string, templateType: TemplateType = 'prose'): void {
     this.resetDocumentSession();
     this.documentTitle = result.title;
     this.currentFilePath = filePath || '';
@@ -2091,7 +2117,7 @@ export class TypesetOkApp {
     this.hasOpenDocument = true;
     this.welcomeModal.setHasOpenDocument(true);
 
-    this.documentState = importResultToDocumentState(result, this.documentState.templateType || 'prose');
+    this.documentState = importResultToDocumentState(result, templateType);
     this.activeFlowId = 'gemara';
     this.storyEditor.loadStory(this.documentState.flows.gemara);
     this.activePageIndex = 0;
