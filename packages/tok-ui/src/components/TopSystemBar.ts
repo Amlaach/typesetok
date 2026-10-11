@@ -46,6 +46,7 @@ export class TopSystemBar {
   private activeDropdown: HTMLElement | null = null;
   private activeAnchor: HTMLElement | null = null;
   private documentTitle = '';
+  private isDirty = false;
   private pageLabel = '';
   private pageLabelEl: HTMLElement | null = null;
   private undoBtn?: HTMLButtonElement;
@@ -74,9 +75,32 @@ export class TopSystemBar {
     });
   }
 
-  public setDocumentTitle(title: string): void {
+  public setDocumentTitle(title: string, isDirty: boolean = false): void {
     this.documentTitle = title;
+    this.isDirty = isDirty;
     this.render();
+  }
+
+  public setDirty(isDirty: boolean): void {
+    if (this.isDirty === isDirty) return;
+    this.isDirty = isDirty;
+    const savedEl = this.element.querySelector('.tok-saved');
+    if (savedEl) {
+      if (isDirty) {
+        savedEl.classList.add('tok-unsaved');
+      } else {
+        savedEl.classList.remove('tok-unsaved');
+      }
+      const labelSpan = savedEl.querySelector('span:not(.tok-dot)');
+      if (labelSpan) {
+        labelSpan.textContent = isDirty ? t('topBarUnsaved') : t('topBarSaved');
+      }
+    }
+    const nameEl = this.element.querySelector('.tok-doc-title-name');
+    if (nameEl && this.documentTitle) {
+      const cleanTitle = this.documentTitle.replace(/\.tok$/i, '');
+      nameEl.textContent = isDirty ? `• ${cleanTitle}` : cleanTitle;
+    }
   }
 
   /** Current page shown next to the document name (e.g. "דף ב׳ ע״ב"). */
@@ -130,7 +154,8 @@ export class TopSystemBar {
 
     if (this.documentTitle) {
       const doc = el('div', 'tok-doc-title', { title: this.documentTitle });
-      doc.appendChild(el('span', 'tok-doc-title-name', undefined, this.documentTitle.replace(/\.tok$/i, '')));
+      const cleanTitle = this.documentTitle.replace(/\.tok$/i, '');
+      doc.appendChild(el('span', 'tok-doc-title-name', undefined, this.isDirty ? `• ${cleanTitle}` : cleanTitle));
       const sep = el('span', 'tok-doc-title-sep', { 'aria-hidden': 'true' }, '/');
       sep.hidden = !this.pageLabel;
       doc.appendChild(sep);
@@ -139,9 +164,9 @@ export class TopSystemBar {
       doc.appendChild(this.pageLabelEl);
       start.appendChild(doc);
 
-      const saved = el('span', 'tok-saved', { role: 'status' });
+      const saved = el('span', this.isDirty ? 'tok-saved tok-unsaved' : 'tok-saved', { role: 'status' });
       saved.appendChild(el('span', 'tok-dot', { 'aria-hidden': 'true' }));
-      saved.appendChild(el('span', undefined, undefined, t('topBarSaved')));
+      saved.appendChild(el('span', undefined, undefined, this.isDirty ? t('topBarUnsaved') : t('topBarSaved')));
       start.appendChild(saved);
     }
 

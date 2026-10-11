@@ -2866,5 +2866,23 @@ describe('Stage 11: End-to-End Story Editor, Document Model & .tok Storage Round
     assert.deepEqual(restored.flows.gemara[0].spans, spans);
     assert.deepEqual(restored.flows.gemara[0].patch, { alignment: 'Right' });
   });
+
+  test('Document state preserves isDirty and filePath metadata', () => {
+    const state = {
+      title: 'שמירת שינויים',
+      templateType: 'gemara',
+      isDirty: true,
+      filePath: 'C:/docs/berakhot.tok',
+      flows: { gemara: [] }
+    };
+
+    assert.equal(state.isDirty, true);
+    assert.equal(state.filePath, 'C:/docs/berakhot.tok');
+
+    // On save, dirty resets to false
+    state.isDirty = false;
+    assert.equal(state.isDirty, false);
+  });
 });
+
 

@@ -45,6 +45,8 @@ export const strings: Translations = {
   topBarViewStory: { he: 'עורך טקסט', en: 'Text Editor' },
   topBarExportPdf: { he: 'ייצוא PDF', en: 'Export PDF' },
   topBarSaved: { he: 'נשמר', en: 'Saved' },
+  topBarUnsaved: { he: 'לא נשמר', en: 'Unsaved' },
+  confirmUnsavedChanges: { he: 'ישנם שינויים שלא נשמרו במסמך. האם להמשיך?', en: 'There are unsaved changes in the document. Do you want to continue?' },
   topBarSwitchLanguage: { he: 'החלפת שפה', en: 'Switch language' },
   topBarViewMode: { he: 'תצוגה', en: 'View' },
 

@@ -234,6 +234,7 @@ export class TypesetOkApp {
         if (sel) {
           this.storyEditor.setParagraphStyle(sel.paraId, styleId);
           this.updateFormattingToolbarState();
+          this.setDirty(true);
         }
         this.inspector.setMode('text-edit');
         this.showToast(tf('toastStyleApplied', { name: styleId }));
@@ -278,7 +279,7 @@ export class TypesetOkApp {
       if (this.activeFlowId) {
         const story = paragraphs || this.storyEditor.getStory();
         this.documentState.flows[this.activeFlowId] = story;
-        this.documentState.isDirty = true;
+        this.setDirty(true);
       }
       this.scheduleWordCountUpdate();
       this.scheduleRepaginate();
@@ -314,11 +315,11 @@ export class TypesetOkApp {
     this.inspector = new ContextualInspector({
       onDocumentChange: (settings) => {
         this.documentState.settings = { ...(this.documentState.settings || this.inspector.getDocumentSettings()), ...settings };
-        this.documentState.isDirty = true;
+        this.setDirty(true);
         this.scheduleRepaginate();
       },
       onFrameChange: (geometry) => {
-        this.documentState.isDirty = true;
+        this.setDirty(true);
         this.scheduleRepaginate();
       },
       onTypographyChange: (typo) => {
@@ -345,7 +346,7 @@ export class TypesetOkApp {
           }
           this.updateFormattingToolbarState();
         }
-        this.documentState.isDirty = true;
+        this.setDirty(true);
         this.scheduleRepaginate();
       },
       onSyncStyleToken: () => {
@@ -353,7 +354,7 @@ export class TypesetOkApp {
         if (sel) {
           this.storyEditor.setParagraphPatch(sel.paraId, {});
           this.updateFormattingToolbarState();
-          this.documentState.isDirty = true;
+          this.setDirty(true);
           this.scheduleRepaginate();
         }
         this.showToast(t('toastGlobalStyleSynced'));
@@ -614,6 +615,15 @@ export class TypesetOkApp {
         return;
       }
     });
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', (e) => {
+        if (this.documentState?.isDirty) {
+          e.preventDefault();
+          e.returnValue = '';
+        }
+      });
+    }
   }
 
   /** Re-applies texts owned by the app shell after a language switch. */
@@ -1586,7 +1596,6 @@ export class TypesetOkApp {
   private handleTemplateSelect(templateId: string): void {
     const name = TEMPLATE_TITLES[templateId] || BLANK_TEMPLATE_TITLE;
     this.documentTitle = name;
-    this.topBar.setDocumentTitle(name);
     this.documentState.title = name;
     this.documentState.templateType = (templateId in TEMPLATE_TITLES ? templateId : 'gemara') as TemplateType;
 
@@ -1601,6 +1610,8 @@ export class TypesetOkApp {
     this.repaginateAndSync(true);
 
     this.hasOpenDocument = true;
+    this.setDirty(false);
+    this.topBar.setDocumentTitle(name, false);
     addRecentProject({ name, pages: this.pages.length, lastSavedAt: new Date().toISOString() });
     this.welcomeModal.setHasOpenDocument(true);
     this.showToast(tf('toastProjectCreated', { name }));
@@ -1621,7 +1632,8 @@ export class TypesetOkApp {
         await win.tokIpc.saveDocument({ document: docRoot, filePath });
         this.currentFilePath = filePath;
         this.documentTitle = baseName;
-        this.topBar.setDocumentTitle(baseName);
+        this.setDirty(false);
+        this.topBar.setDocumentTitle(baseName, false);
         addRecentProject({
           name: baseName,
           path: filePath,
@@ -1638,7 +1650,8 @@ export class TypesetOkApp {
     } else {
       this.currentFilePath = filePath;
       this.documentTitle = baseName;
-      this.topBar.setDocumentTitle(baseName);
+      this.setDirty(false);
+      this.topBar.setDocumentTitle(baseName, false);
       addRecentProject({
         name: baseName,
         path: filePath,
@@ -1662,7 +1675,8 @@ export class TypesetOkApp {
           this.currentFilePath = filePath;
           const displayTitle = docRoot.metadata?.title || baseName;
           this.documentTitle = displayTitle;
-          this.topBar.setDocumentTitle(displayTitle);
+          this.setDirty(false);
+          this.topBar.setDocumentTitle(displayTitle, false);
 
           const activeKey = this.activeFlowId || (newState.templateType === 'prose' ? 'gemara' : 'gemara');
           this.activeFlowId = activeKey;
@@ -1689,7 +1703,8 @@ export class TypesetOkApp {
     }
 
     this.documentTitle = baseName;
-    this.topBar.setDocumentTitle(baseName);
+    this.setDirty(false);
+    this.topBar.setDocumentTitle(baseName, false);
     this.currentFilePath = filePath;
     if (this.pages.length === 0) {
       this.pages = [{
@@ -1772,6 +1787,12 @@ export class TypesetOkApp {
   public handleSystemAction(action: string, data?: unknown): void {
     switch (action) {
       case 'new-document':
+        if (!this.confirmDiscardUnsaved()) return;
+        if (this.documentTitle) {
+          updateProjectClosedTime(this.documentTitle);
+        }
+        this.welcomeModal.show();
+        break;
       case 'open-projects':
       case 'open-welcome':
         if (this.documentTitle) {
@@ -1786,6 +1807,7 @@ export class TypesetOkApp {
         this.aboutModal.show();
         break;
       case 'open-document': {
+        if (!this.confirmDiscardUnsaved()) return;
         const win = window as any;
         if (typeof data === 'string' && data) {
           this.openProjectFile(data);
@@ -1858,5 +1880,23 @@ export class TypesetOkApp {
       toast.style.opacity = '0';
       setTimeout(() => toast.remove(), 250);
     }, 3200);
+  }
+
+  public setDirty(dirty: boolean): void {
+    if (!this.documentState) return;
+    this.documentState.isDirty = dirty;
+    this.topBar?.setDirty(dirty);
+    const cleanTitle = (this.documentTitle || 'TypesetOK').replace(/\.tok$/i, '');
+    if (typeof document !== 'undefined') {
+      document.title = dirty ? `• ${cleanTitle} - TypesetOK` : `${cleanTitle} - TypesetOK`;
+    }
+  }
+
+  public confirmDiscardUnsaved(): boolean {
+    if (!this.documentState?.isDirty) return true;
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      return window.confirm(t('confirmUnsavedChanges'));
+    }
+    return true;
   }
 }
