@@ -4,6 +4,7 @@ pub mod id;
 pub mod model;
 pub mod normalizer;
 pub mod outline;
+pub mod reference;
 pub mod styles;
 pub mod transaction;
 
@@ -16,6 +17,9 @@ pub use model::{
 };
 pub use normalizer::{HebrewMarkCategory, HebrewNormalizer};
 pub use outline::{DocumentHierarchyNode, DocumentOutline, HierarchyLevel};
+pub use reference::{
+    CrossReferenceNode, CrossReferenceRegistry, ReferenceKind, ReferenceTarget,
+};
 pub use styles::{
     AhaltermStretchMode, CharacterStyle, Color, ParagraphStyle, Progression, StylePatch,
     TextAlignment,

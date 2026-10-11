@@ -207,6 +207,8 @@ pub struct DocumentRoot {
     pub sections: Vec<SectionNode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outline: Option<crate::outline::DocumentOutline>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cross_references: Option<crate::reference::CrossReferenceRegistry>,
 }
 
 impl DocumentRoot {
@@ -221,6 +223,7 @@ impl DocumentRoot {
             character_styles: Vec::new(),
             sections: Vec::new(),
             outline: None,
+            cross_references: None,
         };
 
         // Add a default first section
@@ -231,6 +234,11 @@ impl DocumentRoot {
 
     pub fn with_outline(mut self, outline: crate::outline::DocumentOutline) -> Self {
         self.outline = Some(outline);
+        self
+    }
+
+    pub fn with_cross_references(mut self, refs: crate::reference::CrossReferenceRegistry) -> Self {
+        self.cross_references = Some(refs);
         self
     }
 
