@@ -26,6 +26,7 @@ pub mod geometry;
 pub mod hebrew_justify;
 pub mod hit_test;
 pub mod knuth_plass;
+pub mod layout_cache;
 pub mod layout_classifier;
 pub mod layout_family;
 pub mod layout_features;
@@ -56,6 +57,7 @@ pub use geometry::{
 pub use hebrew_justify::{HebrewJustifier, JustificationTier, JustifiedLine, AHALTERM_LETTERS};
 pub use hit_test::{HitTestResult, HitTester};
 pub use knuth_plass::{BrokenLine, KnuthPlassBreaker, LayoutItem, LineSpan, MeasureProfile};
+pub use layout_cache::{CachedParagraphLayout, ParagraphCacheKey, ParagraphLayoutCache};
 pub use layout_classifier::{ClassificationConfidence, ClassificationResult, DocumentClassifier};
 pub use layout_family::LayoutFamily;
 pub use layout_features::{DocumentLayoutFeatures, FlowFeature};
