@@ -121,3 +121,78 @@ impl DynamicFootnotePaginator {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_fn_line(idx: usize, height: f32) -> LineBox {
+        LineBox {
+            line_index: idx,
+            paragraph_id: None,
+            baseline_y: height,
+            height,
+            width: 400.0,
+            glyphs: Vec::new(),
+            text: format!("הערה {}", idx),
+            is_rtl: true,
+            fonts: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_calculate_target_height_empty_returns_none() {
+        let lines = Vec::new();
+        let config = FootnotePaginatorConfig::default();
+        assert_eq!(DynamicFootnotePaginator::calculate_target_height(&lines, 500.0, &config), None);
+    }
+
+    #[test]
+    fn test_calculate_target_height_capped_at_max_ratio() {
+        let lines: Vec<_> = (0..20).map(|i| make_fn_line(i, 20.0)).collect(); // 400pt total
+        let config = FootnotePaginatorConfig {
+            max_height_ratio: 0.30, // 30% of 600 = 180pt max
+            min_band_height_pt: 20.0,
+            ..Default::default()
+        };
+        let target = DynamicFootnotePaginator::calculate_target_height(&lines, 600.0, &config);
+        assert_eq!(target, Some(180.0));
+    }
+
+    #[test]
+    fn test_calculate_target_height_small_demand_bounded_by_min() {
+        let lines = vec![make_fn_line(0, 10.0)];
+        let config = FootnotePaginatorConfig {
+            max_height_ratio: 0.40,
+            min_band_height_pt: 30.0,
+            ..Default::default()
+        };
+        let target = DynamicFootnotePaginator::calculate_target_height(&lines, 500.0, &config);
+        assert_eq!(target, Some(30.0));
+    }
+
+    #[test]
+    fn test_slice_for_allocated_band_partial_and_carry_over() {
+        let lines: Vec<_> = (0..10).map(|i| make_fn_line(i, 15.0)).collect(); // 150pt
+        let config = FootnotePaginatorConfig::default();
+
+        let slice = DynamicFootnotePaginator::slice_for_allocated_band(&lines, 50.0, &config);
+        // 50pt / 15pt = 3 lines (45pt)
+        assert_eq!(slice.placed_lines.len(), 3);
+        assert_eq!(slice.lines_consumed, 3);
+        assert_eq!(slice.actual_height_pt, 45.0);
+        assert!(slice.has_carry_over);
+    }
+
+    #[test]
+    fn test_slice_for_allocated_band_all_fit() {
+        let lines: Vec<_> = (0..3).map(|i| make_fn_line(i, 15.0)).collect(); // 45pt
+        let config = FootnotePaginatorConfig::default();
+
+        let slice = DynamicFootnotePaginator::slice_for_allocated_band(&lines, 60.0, &config);
+        assert_eq!(slice.placed_lines.len(), 3);
+        assert_eq!(slice.lines_consumed, 3);
+        assert_eq!(slice.actual_height_pt, 45.0);
+        assert!(!slice.has_carry_over);
+    }
+}
