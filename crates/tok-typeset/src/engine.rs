@@ -16,6 +16,7 @@ use crate::layout_features::DocumentLayoutFeatures;
 use crate::layout_template::LayoutTemplate;
 use crate::multi_flow::{FlowGeometrySpec, FlowPlacementRole, MultiFlowSolver, SpreadSide};
 use crate::shaper::PositionedGlyph;
+use crate::solver::{GeometricConstraintSolver, PageConstraintModel, PageGeometryConfig};
 use crate::template_synthesizer::TemplateSynthesizer;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -426,13 +427,36 @@ impl TypesettingEngine {
         break_token: Option<BreakToken>,
         flow_id: &str,
     ) -> PageLayoutBox {
+        let side = if page_num % 2 == 1 {
+            SpreadSide::Recto
+        } else {
+            SpreadSide::Verso
+        };
+        let page_config = PageGeometryConfig::new(
+            self.config.page_width_pt,
+            self.config.page_height_pt,
+            self.config.margin_inner_pt,
+            self.config.margin_outer_pt,
+            self.config.margin_top_pt,
+            self.config.margin_bottom_pt,
+            side,
+        );
+        let mut solver = GeometricConstraintSolver::new();
+        let page_model = PageConstraintModel::new();
+        let (frame_x, frame_y, frame_w) = if page_model.apply(&mut solver, &page_config).is_ok() {
+            let content = page_model.get_content_rect(&solver);
+            (content.x, content.y, content.width)
+        } else {
+            (self.config.margin_inner_pt, self.config.margin_top_pt, content_width)
+        };
+
         let frame = TextFrameBox {
             frame_id: format!("frame_{}_{}", page_num, flow_id),
             flow_id: flow_id.to_string(),
             rect: PhysicalRect::new(
-                self.config.margin_inner_pt,
-                self.config.margin_top_pt,
-                content_width,
+                frame_x,
+                frame_y,
+                frame_w,
                 content_height,
             ),
             lines,
@@ -458,10 +482,26 @@ impl TypesettingEngine {
             return self.typeset_document_multi_flow(doc);
         }
 
-        let content_width =
-            self.config.page_width_pt - self.config.margin_inner_pt - self.config.margin_outer_pt;
-        let content_height =
-            self.config.page_height_pt - self.config.margin_top_pt - self.config.margin_bottom_pt;
+        let page_config = PageGeometryConfig::new(
+            self.config.page_width_pt,
+            self.config.page_height_pt,
+            self.config.margin_inner_pt,
+            self.config.margin_outer_pt,
+            self.config.margin_top_pt,
+            self.config.margin_bottom_pt,
+            SpreadSide::Recto,
+        );
+        let mut solver = GeometricConstraintSolver::new();
+        let page_model = PageConstraintModel::new();
+        let (content_width, content_height) = if page_model.apply(&mut solver, &page_config).is_ok() {
+            let content = page_model.get_content_rect(&solver);
+            (content.width, content.height)
+        } else {
+            (
+                (self.config.page_width_pt - self.config.margin_inner_pt - self.config.margin_outer_pt).max(0.0),
+                (self.config.page_height_pt - self.config.margin_top_pt - self.config.margin_bottom_pt).max(0.0),
+            )
+        };
         let flow_id = doc
             .sections
             .first()
