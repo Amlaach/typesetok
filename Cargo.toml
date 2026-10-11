@@ -27,10 +27,11 @@ thiserror = "1.0"
 log = "0.4"
 env_logger = "0.11"
 
-# Typography & Text
+# Typography, Layout & Geometry
 rustybuzz = "0.18"
 unicode-bidi = "0.3"
 unicode-normalization = "0.1"
+cassowary = "0.3"
 
 # Storage
 rusqlite = { version = "0.31", features = ["bundled"] }
