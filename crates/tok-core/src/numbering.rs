@@ -11,9 +11,10 @@ pub enum GematriaPunctuation {
 }
 
 /// Extensible numbering schemes supporting Torah, Hebrew liturgical, and secular documents.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum NumberingScheme {
     /// Standard Arabic decimal digits (1, 2, 3...).
+    #[default]
     Arabic,
     /// Hebrew Gematria numerals (א׳, ב׳... ט״ו, ט״ז... ק״כ).
     HebrewGematria(GematriaPunctuation),
@@ -36,12 +37,6 @@ pub enum NumberingScheme {
         base: Box<NumberingScheme>,
         suffix: String,
     },
-}
-
-impl Default for NumberingScheme {
-    fn default() -> Self {
-        NumberingScheme::Arabic
-    }
 }
 
 /// Scope at which counter increments or resets.
@@ -98,7 +93,11 @@ impl NumberingFormatter {
             }
             NumberingScheme::RomanLower => Self::to_roman(value).to_lowercase(),
             NumberingScheme::RomanUpper => Self::to_roman(value),
-            NumberingScheme::Custom { prefix, base, suffix } => {
+            NumberingScheme::Custom {
+                prefix,
+                base,
+                suffix,
+            } => {
                 format!("{}{}{}", prefix, Self::format(base, value), suffix)
             }
         }
@@ -132,7 +131,8 @@ impl NumberingFormatter {
                     s.push('׳');
                 }
                 if remainder > 0 {
-                    let rem_chars: Vec<char> = Self::to_gematria_sub_1000(remainder).chars().collect();
+                    let rem_chars: Vec<char> =
+                        Self::to_gematria_sub_1000(remainder).chars().collect();
                     if rem_chars.len() == 1 {
                         s.push(rem_chars[0]);
                         s.push('׳');
@@ -256,14 +256,38 @@ mod tests {
 
     #[test]
     fn test_gematria_standard_numbers() {
-        assert_eq!(NumberingFormatter::to_gematria(1, GematriaPunctuation::StandardPunctuation), "א׳");
-        assert_eq!(NumberingFormatter::to_gematria(2, GematriaPunctuation::StandardPunctuation), "ב׳");
-        assert_eq!(NumberingFormatter::to_gematria(10, GematriaPunctuation::StandardPunctuation), "י׳");
-        assert_eq!(NumberingFormatter::to_gematria(15, GematriaPunctuation::StandardPunctuation), "ט״ו");
-        assert_eq!(NumberingFormatter::to_gematria(16, GematriaPunctuation::StandardPunctuation), "ט״ז");
-        assert_eq!(NumberingFormatter::to_gematria(42, GematriaPunctuation::StandardPunctuation), "מ״ב");
-        assert_eq!(NumberingFormatter::to_gematria(100, GematriaPunctuation::StandardPunctuation), "ק׳");
-        assert_eq!(NumberingFormatter::to_gematria(5786, GematriaPunctuation::StandardPunctuation), "ה׳תשפ״ו");
+        assert_eq!(
+            NumberingFormatter::to_gematria(1, GematriaPunctuation::StandardPunctuation),
+            "א׳"
+        );
+        assert_eq!(
+            NumberingFormatter::to_gematria(2, GematriaPunctuation::StandardPunctuation),
+            "ב׳"
+        );
+        assert_eq!(
+            NumberingFormatter::to_gematria(10, GematriaPunctuation::StandardPunctuation),
+            "י׳"
+        );
+        assert_eq!(
+            NumberingFormatter::to_gematria(15, GematriaPunctuation::StandardPunctuation),
+            "ט״ו"
+        );
+        assert_eq!(
+            NumberingFormatter::to_gematria(16, GematriaPunctuation::StandardPunctuation),
+            "ט״ז"
+        );
+        assert_eq!(
+            NumberingFormatter::to_gematria(42, GematriaPunctuation::StandardPunctuation),
+            "מ״ב"
+        );
+        assert_eq!(
+            NumberingFormatter::to_gematria(100, GematriaPunctuation::StandardPunctuation),
+            "ק׳"
+        );
+        assert_eq!(
+            NumberingFormatter::to_gematria(5786, GematriaPunctuation::StandardPunctuation),
+            "ה׳תשפ״ו"
+        );
     }
 
     #[test]
@@ -283,12 +307,20 @@ mod tests {
 
     #[test]
     fn test_roman_and_custom_formatting() {
-        assert_eq!(NumberingFormatter::format(&NumberingScheme::RomanUpper, 14), "XIV");
-        assert_eq!(NumberingFormatter::format(&NumberingScheme::RomanLower, 4), "iv");
+        assert_eq!(
+            NumberingFormatter::format(&NumberingScheme::RomanUpper, 14),
+            "XIV"
+        );
+        assert_eq!(
+            NumberingFormatter::format(&NumberingScheme::RomanLower, 4),
+            "iv"
+        );
 
         let custom = NumberingScheme::Custom {
             prefix: "ס\"ק ".to_string(),
-            base: Box::new(NumberingScheme::HebrewGematria(GematriaPunctuation::StandardPunctuation)),
+            base: Box::new(NumberingScheme::HebrewGematria(
+                GematriaPunctuation::StandardPunctuation,
+            )),
             suffix: ")".to_string(),
         };
         assert_eq!(NumberingFormatter::format(&custom, 5), "ס\"ק ה׳)");

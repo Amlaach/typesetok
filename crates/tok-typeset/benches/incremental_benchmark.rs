@@ -26,7 +26,11 @@ fn main() {
         .map(|p| p.frames.iter().map(|f| f.lines.len()).sum::<usize>())
         .sum();
 
-    println!("  - 50-Page Corpus Emitted:  {} pages ({} justified lines)", pages_50.len(), total_lines_50);
+    println!(
+        "  - 50-Page Corpus Emitted:  {} pages ({} justified lines)",
+        pages_50.len(),
+        total_lines_50
+    );
     println!("  - Cold Typesetting Time:   {:.2?}", cold_dur_50);
     println!(
         "  - Cold Throughput:         {:.1} pages/sec ({:.2} ms/page)",
@@ -74,7 +78,8 @@ fn main() {
         .expect("middle paragraph exists");
 
     if let Some(p) = doc_mid.find_paragraph_mut(mid_id) {
-        p.text.push_str(" תוספת משפט באמצע הספר לבדיקת עצירת גלישה.");
+        p.text
+            .push_str(" תוספת משפט באמצע הספר לבדיקת עצירת גלישה.");
     }
 
     let inc_mid_start = Instant::now();
@@ -150,10 +155,17 @@ fn main() {
     let report_zero = RecomputeReport::from_diagnostics(&diag_zero, pages_50.len());
     println!("  {}", report_zero.summary_string());
     println!("  - Zero-Cascade Detected:   {}", diag_zero.zero_cascade);
-    println!("  - Measured Latency:        {:.3} ms", zero_dur.as_secs_f64() * 1000.0);
+    println!(
+        "  - Measured Latency:        {:.3} ms",
+        zero_dur.as_secs_f64() * 1000.0
+    );
     println!(
         "  - Sub-millisecond Target:  {}",
-        if zero_dur.as_millis() < 5 { "PASSED [INTERACTIVE 120 FPS]" } else { "CHECK" }
+        if zero_dur.as_millis() < 5 {
+            "PASSED [INTERACTIVE 120 FPS]"
+        } else {
+            "CHECK"
+        }
     );
 
     // -------------------------------------------------------------------------
@@ -170,12 +182,12 @@ fn main() {
         .map(|p| p.id)
         .expect("paragraph 15 exists");
 
-    for key_idx in 1..=10 {
+    for _key_idx in 1..=10 {
         if let Some(p) = running_doc.find_paragraph_mut(keystroke_target_id) {
             p.text.push('א');
         }
         let t0 = Instant::now();
-        let (new_pages, diag) = engine.typeset_document_incremental(
+        let (new_pages, _diag) = engine.typeset_document_incremental(
             &running_doc,
             &running_pages,
             Some(keystroke_target_id),
@@ -198,11 +210,17 @@ fn main() {
     // -------------------------------------------------------------------------
     println!("\n[BENCHMARK 7: Layout Cache Memory & Footprint]");
     let metrics = engine.cache_metrics();
-    println!("  - Total Cache Entries:     {} paragraphs", metrics.entry_count);
+    println!(
+        "  - Total Cache Entries:     {} paragraphs",
+        metrics.entry_count
+    );
     println!("  - Cache Hits:              {}", metrics.hits);
     println!("  - Cache Misses:            {}", metrics.misses);
     println!("  - Cache Evictions:         {}", metrics.evictions);
-    println!("  - Cache Hit Ratio:         {:.1}%", metrics.hit_ratio * 100.0);
+    println!(
+        "  - Cache Hit Ratio:         {:.1}%",
+        metrics.hit_ratio * 100.0
+    );
     println!(
         "  - Cache Memory Usage:      {} KB ({:.2} MB)",
         metrics.approx_memory_bytes / 1024,

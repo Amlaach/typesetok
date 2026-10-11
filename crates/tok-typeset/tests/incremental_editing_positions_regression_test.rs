@@ -16,13 +16,14 @@ use tok_typeset::engine::{TypesettingEngine, TypesettingEngineConfig};
 use tok_typeset::gematria::GematriaEngine;
 
 fn make_engine() -> TypesettingEngine {
-    let mut config = TypesettingEngineConfig::default();
-    config.page_width_pt = 595.28; // A4 portrait
-    config.page_height_pt = 841.89;
-    config.margin_top_pt = 50.0;
-    config.margin_bottom_pt = 50.0;
-    config.margin_inner_pt = 50.0;
-    config.margin_outer_pt = 50.0;
+    let config = TypesettingEngineConfig {
+        page_width_pt: 595.28, // A4 portrait
+        page_height_pt: 841.89,
+        margin_top_pt: 50.0,
+        margin_bottom_pt: 50.0,
+        margin_inner_pt: 50.0,
+        margin_outer_pt: 50.0,
+    };
     TypesettingEngine::new(config)
 }
 
@@ -51,7 +52,10 @@ fn test_regression_edit_at_beginning_of_large_document() {
     let mut doc = build_test_book(80);
     let eng = make_engine();
     let initial_pages = eng.typeset_document(&doc);
-    assert!(initial_pages.len() >= 6, "Initial document must span multiple pages");
+    assert!(
+        initial_pages.len() >= 6,
+        "Initial document must span multiple pages"
+    );
 
     let p0_id = doc.sections[0].flows[0].paragraphs[0].id;
     // Edit paragraph 0 (beginning of book)
@@ -60,14 +64,23 @@ fn test_regression_edit_at_beginning_of_large_document() {
 
     let (new_pages, diag) = eng.typeset_document_incremental(&doc, &initial_pages, Some(p0_id));
 
-    assert_eq!(diag.first_affected_page, 0, "Edit at beginning must affect page 0");
+    assert_eq!(
+        diag.first_affected_page, 0,
+        "Edit at beginning must affect page 0"
+    );
     assert!(diag.recomputed_pages >= 1);
-    assert!(new_pages.len() >= initial_pages.len(), "Page count should remain stable or grow");
+    assert!(
+        new_pages.len() >= initial_pages.len(),
+        "Page count should remain stable or grow"
+    );
 
     // Verify all pages maintain strictly monotonic 0-based index and authentic gematria folios
     for (idx, page) in new_pages.iter().enumerate() {
         assert_eq!(page.page_index, idx);
-        assert_eq!(page.page_number_gematria, GematriaEngine::to_hebrew_numeral(idx + 1));
+        assert_eq!(
+            page.page_number_gematria,
+            GematriaEngine::to_hebrew_numeral(idx + 1)
+        );
     }
 }
 
@@ -76,7 +89,10 @@ fn test_regression_edit_in_middle_of_large_document() {
     let mut doc = build_test_book(100);
     let eng = make_engine();
     let initial_pages = eng.typeset_document(&doc);
-    assert!(initial_pages.len() >= 8, "Initial document must span at least 8 pages");
+    assert!(
+        initial_pages.len() >= 8,
+        "Initial document must span at least 8 pages"
+    );
 
     // Find a paragraph positioned around page 4 (middle)
     let mid_para_idx = 45;
@@ -90,11 +106,15 @@ fn test_regression_edit_in_middle_of_large_document() {
         })
         .expect("Middle paragraph must be present on a page");
 
-    assert!(mid_page_before >= 3, "Middle paragraph must be on page 3 or later");
+    assert!(
+        mid_page_before >= 3,
+        "Middle paragraph must be on page 3 or later"
+    );
 
     // Edit middle paragraph
     doc.sections[0].flows[0].paragraphs[mid_para_idx].text =
-        "פסקה באמצע המסמך שעברה עריכה מקומית ונוספו לה כמה משפטים לבדיקת שימור עמודים קודמים.".to_string();
+        "פסקה באמצע המסמך שעברה עריכה מקומית ונוספו לה כמה משפטים לבדיקת שימור עמודים קודמים."
+            .to_string();
 
     let (new_pages, diag) = eng.typeset_document_incremental(&doc, &initial_pages, Some(mid_p_id));
 
@@ -145,7 +165,10 @@ fn test_regression_edit_at_end_of_large_document() {
         diag.reused_pages, last_page_idx,
         "All pages before the last page must be reused"
     );
-    assert_eq!(diag.recomputed_pages, 1, "Only 1 page recomputed at document end");
+    assert_eq!(
+        diag.recomputed_pages, 1,
+        "Only 1 page recomputed at document end"
+    );
 
     // Preceding pages must be identical
     for i in 0..last_page_idx {

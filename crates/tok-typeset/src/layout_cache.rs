@@ -1,10 +1,10 @@
 use crate::geometry::LineBox;
+use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
 use tok_core::id::NodeId;
 use tok_core::model::ParagraphNode;
 use tok_core::styles::ParagraphStyle;
@@ -116,7 +116,10 @@ impl ParagraphLayoutCache {
             overrides.force_page_break_before.hash(&mut hasher);
             overrides.force_page_break_after.hash(&mut hasher);
             overrides.locked_line_breaks.hash(&mut hasher);
-            overrides.manual_leading_offset_pt.to_bits().hash(&mut hasher);
+            overrides
+                .manual_leading_offset_pt
+                .to_bits()
+                .hash(&mut hasher);
             overrides.is_frozen.hash(&mut hasher);
         }
         hasher.finish()
@@ -137,7 +140,11 @@ impl ParagraphLayoutCache {
     }
 
     /// Builds a cache key for the paragraph with given style and column width.
-    pub fn make_key(p: &ParagraphNode, s: &ParagraphStyle, column_width_pt: f32) -> ParagraphCacheKey {
+    pub fn make_key(
+        p: &ParagraphNode,
+        s: &ParagraphStyle,
+        column_width_pt: f32,
+    ) -> ParagraphCacheKey {
         ParagraphCacheKey {
             node_id: p.id,
             content_hash: Self::compute_content_hash(p),
@@ -203,7 +210,8 @@ impl ParagraphLayoutCache {
 
     /// Returns approximate memory consumed by cache entries in bytes.
     pub fn approx_memory_bytes(&self) -> usize {
-        let entry_base = std::mem::size_of::<(NodeId, (ParagraphCacheKey, CachedParagraphLayout))>();
+        let entry_base =
+            std::mem::size_of::<(NodeId, (ParagraphCacheKey, CachedParagraphLayout))>();
         let mut total = self.entries.len() * entry_base;
         for (_, layout) in self.entries.values() {
             total += layout.lines.len() * std::mem::size_of::<crate::geometry::LineBox>();

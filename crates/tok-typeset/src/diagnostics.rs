@@ -63,6 +63,7 @@ impl RecomputeReport {
     }
 
     /// Creates a report from raw typesetting metrics and execution duration.
+    #[allow(clippy::too_many_arguments)]
     pub fn from_metrics(
         pages_before: usize,
         pages_after: usize,

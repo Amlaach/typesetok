@@ -123,7 +123,9 @@ impl TypesettingEngine {
         Self {
             config,
             font_manager: FontManager::default(),
-            paragraph_cache: std::sync::RwLock::new(crate::layout_cache::ParagraphLayoutCache::new()),
+            paragraph_cache: std::sync::RwLock::new(
+                crate::layout_cache::ParagraphLayoutCache::new(),
+            ),
         }
     }
 
@@ -131,7 +133,9 @@ impl TypesettingEngine {
         Self {
             config,
             font_manager,
-            paragraph_cache: std::sync::RwLock::new(crate::layout_cache::ParagraphLayoutCache::new()),
+            paragraph_cache: std::sync::RwLock::new(
+                crate::layout_cache::ParagraphLayoutCache::new(),
+            ),
         }
     }
 
@@ -141,7 +145,10 @@ impl TypesettingEngine {
     }
 
     /// Invalidates cached layout lines for a collection of paragraph IDs.
-    pub fn invalidate_paragraphs<I: IntoIterator<Item = tok_core::id::NodeId>>(&self, ids: I) -> usize {
+    pub fn invalidate_paragraphs<I: IntoIterator<Item = tok_core::id::NodeId>>(
+        &self,
+        ids: I,
+    ) -> usize {
         let mut cache = self.paragraph_cache.write().unwrap();
         let mut count = 0;
         for id in ids {
@@ -558,14 +565,22 @@ impl TypesettingEngine {
                         .iter()
                         .find(|s| s.id == p.style_id)
                         .unwrap_or(&default_style);
-                    let key = crate::layout_cache::ParagraphLayoutCache::make_key(p, style, content_width);
+                    let key = crate::layout_cache::ParagraphLayoutCache::make_key(
+                        p,
+                        style,
+                        content_width,
+                    );
                     let hit = cache.get(&key).map(|c| c.lines.clone());
                     (key, hit)
                 })
                 .collect()
         };
 
-        let misses: Vec<(usize, &ParagraphNode, crate::layout_cache::ParagraphCacheKey)> = jobs
+        let misses: Vec<(
+            usize,
+            &ParagraphNode,
+            crate::layout_cache::ParagraphCacheKey,
+        )> = jobs
             .iter()
             .zip(&cached_lookup)
             .enumerate()
@@ -603,7 +618,13 @@ impl TypesettingEngine {
                     let session = sessions
                         .entry(font_family)
                         .or_insert_with_key(|family| self.font_manager.session(family));
-                    let lines = Self::typeset_with_session(session, p, content_width, font_size, line_height);
+                    let lines = Self::typeset_with_session(
+                        session,
+                        p,
+                        content_width,
+                        font_size,
+                        line_height,
+                    );
                     (idx, key.clone(), lines)
                 },
             )
@@ -689,7 +710,10 @@ impl TypesettingEngine {
                     char_offset,
                     force_page_break_before: p.has_forced_page_break_before(),
                     force_page_break_after: p.has_forced_page_break_after(),
-                    keep_lines_together: p.overrides.as_ref().map_or(false, |o| o.keep_lines_together),
+                    keep_lines_together: p
+                        .overrides
+                        .as_ref()
+                        .is_some_and(|o| o.keep_lines_together),
                 });
             }
             prev_space_after = space_after;
@@ -731,14 +755,22 @@ impl TypesettingEngine {
         doc: &DocumentRoot,
         previous_pages: &[PageLayoutBox],
         modified_node_id: Option<tok_core::id::NodeId>,
-    ) -> (Vec<PageLayoutBox>, crate::incremental::IncrementalTypesetDiagnostics) {
+    ) -> (
+        Vec<PageLayoutBox>,
+        crate::incremental::IncrementalTypesetDiagnostics,
+    ) {
         let start_time = std::time::Instant::now();
 
         // If no previous pages exist, perform full typeset
         if previous_pages.is_empty() {
             let pages = self.typeset_document(doc);
             let total = pages.len();
-            let total_paras: usize = doc.sections.iter().flat_map(|s| &s.flows).map(|f| f.paragraphs.len()).sum();
+            let total_paras: usize = doc
+                .sections
+                .iter()
+                .flat_map(|s| &s.flows)
+                .map(|f| f.paragraphs.len())
+                .sum();
             let diag = crate::incremental::IncrementalTypesetDiagnostics {
                 total_pages: total,
                 first_affected_page: 0,
@@ -787,14 +819,22 @@ impl TypesettingEngine {
                         .iter()
                         .find(|s| s.id == p.style_id)
                         .unwrap_or(&default_style);
-                    let key = crate::layout_cache::ParagraphLayoutCache::make_key(p, style, content_width);
+                    let key = crate::layout_cache::ParagraphLayoutCache::make_key(
+                        p,
+                        style,
+                        content_width,
+                    );
                     let hit = cache.get(&key).map(|c| c.lines.clone());
                     (key, hit)
                 })
                 .collect()
         };
 
-        let misses: Vec<(usize, &ParagraphNode, crate::layout_cache::ParagraphCacheKey)> = jobs
+        let misses: Vec<(
+            usize,
+            &ParagraphNode,
+            crate::layout_cache::ParagraphCacheKey,
+        )> = jobs
             .iter()
             .zip(&cached_lookup)
             .enumerate()
@@ -835,7 +875,13 @@ impl TypesettingEngine {
                     let session = sessions
                         .entry(font_family)
                         .or_insert_with_key(|family| self.font_manager.session(family));
-                    let lines = Self::typeset_with_session(session, p, content_width, font_size, line_height);
+                    let lines = Self::typeset_with_session(
+                        session,
+                        p,
+                        content_width,
+                        font_size,
+                        line_height,
+                    );
                     (idx, key.clone(), lines)
                 },
             )
@@ -865,18 +911,16 @@ impl TypesettingEngine {
         // If exactly 1 paragraph was modified, and it is located completely within 1 page in previous_pages,
         // and its new line count equals its old line count on that page, and line heights match:
         if recomputed_paras_count == 1 {
-            let target_node_id = modified_node_id.or_else(|| {
-                misses.first().map(|(_, p, _)| p.id)
-            });
+            let target_node_id = modified_node_id.or_else(|| misses.first().map(|(_, p, _)| p.id));
 
             if let Some(target_id) = target_node_id {
                 let pages_containing: Vec<usize> = previous_pages
                     .iter()
                     .enumerate()
                     .filter(|(_, page)| {
-                        page.frames.iter().any(|f| {
-                            f.lines.iter().any(|l| l.paragraph_id == Some(target_id))
-                        })
+                        page.frames
+                            .iter()
+                            .any(|f| f.lines.iter().any(|l| l.paragraph_id == Some(target_id)))
                     })
                     .map(|(idx, _)| idx)
                     .collect();
@@ -884,21 +928,32 @@ impl TypesettingEngine {
                 if pages_containing.len() == 1 {
                     let page_idx = pages_containing[0];
                     let old_page = &previous_pages[page_idx];
-                    let old_lines_count = old_page.frames.iter()
+                    let old_lines_count = old_page
+                        .frames
+                        .iter()
                         .flat_map(|f| &f.lines)
                         .filter(|l| l.paragraph_id == Some(target_id))
                         .count();
 
-                    if let Some((job_idx, _)) = jobs.iter().enumerate().find(|(_, (_, _, p))| p.id == target_id) {
+                    if let Some((job_idx, _)) = jobs
+                        .iter()
+                        .enumerate()
+                        .find(|(_, (_, _, p))| p.id == target_id)
+                    {
                         let new_lines = &laid_out[job_idx];
                         if new_lines.len() == old_lines_count {
                             // Check line heights match
-                            let old_lines: Vec<&LineBox> = old_page.frames.iter()
+                            let old_lines: Vec<&LineBox> = old_page
+                                .frames
+                                .iter()
                                 .flat_map(|f| &f.lines)
                                 .filter(|l| l.paragraph_id == Some(target_id))
                                 .collect();
 
-                            let heights_match = new_lines.iter().zip(&old_lines).all(|(n, o)| (n.height - o.height).abs() < 1e-3);
+                            let heights_match = new_lines
+                                .iter()
+                                .zip(&old_lines)
+                                .all(|(n, o)| (n.height - o.height).abs() < 1e-3);
 
                             if heights_match {
                                 // ZERO-CASCADE TRIGGERED!
@@ -910,7 +965,9 @@ impl TypesettingEngine {
 
                                     for old_line in &frame.lines {
                                         let line = if old_line.paragraph_id == Some(target_id) {
-                                            let mut n = new_lines_iter.next().unwrap_or_else(|| old_line.clone());
+                                            let mut n = new_lines_iter
+                                                .next()
+                                                .unwrap_or_else(|| old_line.clone());
                                             n.baseline_y = old_line.baseline_y;
                                             n
                                         } else {
@@ -1010,7 +1067,10 @@ impl TypesettingEngine {
                     char_offset,
                     force_page_break_before: p.has_forced_page_break_before(),
                     force_page_break_after: p.has_forced_page_break_after(),
-                    keep_lines_together: p.overrides.as_ref().map_or(false, |o| o.keep_lines_together),
+                    keep_lines_together: p
+                        .overrides
+                        .as_ref()
+                        .is_some_and(|o| o.keep_lines_together),
                 });
             }
             prev_space_after = space_after;
@@ -1114,7 +1174,9 @@ impl TypesettingEngine {
                     if let Some(node_id) = line.paragraph_id {
                         if let Some(registry) = &doc.cross_references {
                             for (key, target) in &registry.targets {
-                                if target.anchor.node_id == node_id && !target_pages.contains_key(key) {
+                                if target.anchor.node_id == node_id
+                                    && !target_pages.contains_key(key)
+                                {
                                     target_pages.insert(key.clone(), page_idx);
                                 }
                             }
@@ -1129,13 +1191,12 @@ impl TypesettingEngine {
                 if let Some(&page_idx) = target_pages.get(&xref.target_key) {
                     let page_num = page_idx + 1;
                     let gematria = GematriaEngine::to_hebrew_numeral(page_num);
-                    let target_label = registry.targets.get(&xref.target_key).and_then(|t| t.label.as_deref());
-                    let resolved = xref.format_resolved(
-                        Some(page_num),
-                        Some(&gematria),
-                        target_label,
-                        None,
-                    );
+                    let target_label = registry
+                        .targets
+                        .get(&xref.target_key)
+                        .and_then(|t| t.label.as_deref());
+                    let resolved =
+                        xref.format_resolved(Some(page_num), Some(&gematria), target_label, None);
                     if xref.cached_resolved_text.as_deref() != Some(&resolved) {
                         xref.resolve_text(resolved);
                         updated_refs += 1;
@@ -1606,7 +1667,10 @@ impl TypesettingEngine {
         doc: &DocumentRoot,
         previous_pages: &[PageLayoutBox],
         modified_node_id: Option<tok_core::id::NodeId>,
-    ) -> (Vec<PageLayoutBox>, crate::incremental::IncrementalTypesetDiagnostics) {
+    ) -> (
+        Vec<PageLayoutBox>,
+        crate::incremental::IncrementalTypesetDiagnostics,
+    ) {
         let start_time = std::time::Instant::now();
         if let Some(target_id) = modified_node_id {
             self.invalidate_paragraph(target_id);
@@ -1617,7 +1681,11 @@ impl TypesettingEngine {
             let mut page_indices = Vec::new();
             for (p_idx, page) in previous_pages.iter().enumerate() {
                 for frame in &page.frames {
-                    if frame.lines.iter().any(|l| l.paragraph_id == Some(target_id)) {
+                    if frame
+                        .lines
+                        .iter()
+                        .any(|l| l.paragraph_id == Some(target_id))
+                    {
                         page_indices.push(p_idx);
                         break;
                     }
@@ -1631,7 +1699,8 @@ impl TypesettingEngine {
                 if let Some(first_sec) = doc.sections.first() {
                     for flow in &first_sec.flows {
                         if let Some(p) = flow.paragraphs.iter().find(|p| p.id == target_id) {
-                            let prev_frame = old_page.frames.iter().find(|f| f.flow_id == flow.id.0);
+                            let prev_frame =
+                                old_page.frames.iter().find(|f| f.flow_id == flow.id.0);
                             if let Some(p_frame) = prev_frame {
                                 let flow_width = p_frame.rect.width;
                                 let old_lines: Vec<&LineBox> = p_frame
@@ -1668,9 +1737,9 @@ impl TypesettingEngine {
                                     }
                                 };
 
-                                let mut session = self.font_manager.session(&font_family);
+                                let session = self.font_manager.session(&font_family);
                                 let new_lines = Self::typeset_with_session(
-                                    &mut session,
+                                    &session,
                                     p,
                                     flow_width,
                                     font_size,
@@ -1685,11 +1754,10 @@ impl TypesettingEngine {
 
                                     if heights_match {
                                         // Cache new lines
-                                        let key = crate::layout_cache::ParagraphLayoutCache::make_key(
-                                            p,
-                                            style,
-                                            flow_width,
-                                        );
+                                        let key =
+                                            crate::layout_cache::ParagraphLayoutCache::make_key(
+                                                p, style, flow_width,
+                                            );
                                         self.paragraph_cache
                                             .write()
                                             .unwrap()
@@ -1701,7 +1769,8 @@ impl TypesettingEngine {
                                             if frame.flow_id == flow.id.0 {
                                                 let mut new_frame_lines =
                                                     Vec::with_capacity(frame.lines.len());
-                                                let mut new_lines_iter = new_lines.clone().into_iter();
+                                                let mut new_lines_iter =
+                                                    new_lines.clone().into_iter();
                                                 for old_line in &frame.lines {
                                                     let line = if old_line.paragraph_id
                                                         == Some(target_id)
@@ -2954,8 +3023,16 @@ mod tests {
     fn test_paragraph_cache_integration_in_engine() {
         let mut doc = DocumentRoot::new("מבחן מטמון פסקאות");
         let flow = doc.sections[0].main_flow_mut().unwrap();
-        let p1 = ParagraphNode::new(tok_core::id::FractionalIndex::new("a"), "default-body", "פסקה ראשונה לצורך בדיקת מטמון");
-        let p2 = ParagraphNode::new(tok_core::id::FractionalIndex::new("b"), "default-body", "פסקה שנייה לצורך בדיקת מטמון וחישוב אינקרמנטלי");
+        let p1 = ParagraphNode::new(
+            tok_core::id::FractionalIndex::new("a"),
+            "default-body",
+            "פסקה ראשונה לצורך בדיקת מטמון",
+        );
+        let p2 = ParagraphNode::new(
+            tok_core::id::FractionalIndex::new("b"),
+            "default-body",
+            "פסקה שנייה לצורך בדיקת מטמון וחישוב אינקרמנטלי",
+        );
         let p1_id = p1.id;
         flow.add_paragraph(p1);
         flow.add_paragraph(p2);
@@ -3025,8 +3102,15 @@ mod tests {
 
         // Verify trailing pages are identical
         for page_idx in 1..pages1.len() {
-            assert_eq!(pages1[page_idx].frames[0].lines.len(), pages2[page_idx].frames[0].lines.len());
-            for (l1, l2) in pages1[page_idx].frames[0].lines.iter().zip(&pages2[page_idx].frames[0].lines) {
+            assert_eq!(
+                pages1[page_idx].frames[0].lines.len(),
+                pages2[page_idx].frames[0].lines.len()
+            );
+            for (l1, l2) in pages1[page_idx].frames[0]
+                .lines
+                .iter()
+                .zip(&pages2[page_idx].frames[0].lines)
+            {
                 assert_eq!(l1.text, l2.text);
                 assert_eq!(l1.baseline_y, l2.baseline_y);
             }
@@ -3055,7 +3139,10 @@ mod tests {
         // Verify initial page numbers and gematria
         for (idx, page) in pages1.iter().enumerate() {
             assert_eq!(page.page_index, idx);
-            assert_eq!(page.page_number_gematria, GematriaEngine::to_hebrew_numeral(idx + 1));
+            assert_eq!(
+                page.page_number_gematria,
+                GematriaEngine::to_hebrew_numeral(idx + 1)
+            );
         }
 
         // Insert 80 new paragraphs at beginning to cause page expansion
@@ -3076,7 +3163,10 @@ mod tests {
 
         // Verify that after incremental reflow, every page has correct monotonic numbering and gematria
         for (idx, page) in pages2.iter().enumerate() {
-            assert_eq!(page.page_index, idx, "Page index must be strictly monotonic");
+            assert_eq!(
+                page.page_index, idx,
+                "Page index must be strictly monotonic"
+            );
             assert_eq!(
                 page.page_number_gematria,
                 GematriaEngine::to_hebrew_numeral(idx + 1),
@@ -3118,7 +3208,8 @@ mod tests {
         let target = tok_core::reference::ReferenceTarget::new(
             "anchor-target-topic",
             tok_core::anchor::TextAnchor::start_of(target_node_id),
-        ).with_label("סוגיא בפרק ראשון");
+        )
+        .with_label("סוגיא בפרק ראשון");
         registry.register_target(target);
 
         let xref = tok_core::reference::CrossReferenceNode::new(
@@ -3144,7 +3235,10 @@ mod tests {
             "Initial target should resolve to page 1 gematria"
         );
         assert_eq!(
-            doc.dependency_tracker.as_ref().unwrap().page_for_anchor("anchor-target-topic"),
+            doc.dependency_tracker
+                .as_ref()
+                .unwrap()
+                .page_for_anchor("anchor-target-topic"),
             Some(0)
         );
 
@@ -3165,7 +3259,10 @@ mod tests {
         assert!(pages2.len() >= 2);
 
         let updated_count = eng.update_cross_references_and_dependencies(&mut doc, &pages2);
-        assert!(updated_count > 0, "Cross-reference should update due to page shift");
+        assert!(
+            updated_count > 0,
+            "Cross-reference should update due to page shift"
+        );
 
         let target_page_idx = doc
             .dependency_tracker
@@ -3173,7 +3270,10 @@ mod tests {
             .unwrap()
             .page_for_anchor("anchor-target-topic")
             .unwrap();
-        assert!(target_page_idx >= 1, "Target node must have shifted to downstream page");
+        assert!(
+            target_page_idx >= 1,
+            "Target node must have shifted to downstream page"
+        );
 
         let resolved_after = doc.cross_references.as_ref().unwrap().references[0]
             .resolved_or_fallback()
@@ -3192,7 +3292,8 @@ mod tests {
         let sec = &mut doc.sections[0];
         sec.flows.clear();
 
-        let mut gemara_flow = tok_core::Flow::new(tok_core::FlowId::new("gemara"), tok_core::FlowType::Main);
+        let mut gemara_flow =
+            tok_core::Flow::new(tok_core::FlowId::new("gemara"), tok_core::FlowType::Main);
         let p_gemara = ParagraphNode::new(
             tok_core::id::FractionalIndex::new("g01"),
             "default-body",
@@ -3201,7 +3302,8 @@ mod tests {
         let _gemara_p_id = p_gemara.id;
         gemara_flow.add_paragraph(p_gemara);
 
-        let mut rashi_flow = tok_core::Flow::new(tok_core::FlowId::new("rashi"), tok_core::FlowType::CommentA);
+        let mut rashi_flow =
+            tok_core::Flow::new(tok_core::FlowId::new("rashi"), tok_core::FlowType::CommentA);
         let p_rashi = ParagraphNode::new(
             tok_core::id::FractionalIndex::new("r01"),
             "default-body",
@@ -3210,8 +3312,9 @@ mod tests {
         let _rashi_p_id = p_rashi.id;
         rashi_flow.add_paragraph(p_rashi);
 
-        let mut notes_flow = tok_core::Flow::new(tok_core::FlowId::new("notes"), tok_core::FlowType::Footnote)
-            .with_placement_role("bottom_band");
+        let mut notes_flow =
+            tok_core::Flow::new(tok_core::FlowId::new("notes"), tok_core::FlowType::Footnote)
+                .with_placement_role("bottom_band");
         let mut p_note = ParagraphNode::new(
             tok_core::id::FractionalIndex::new("n01"),
             "default-body",
@@ -3232,12 +3335,20 @@ mod tests {
         p_note.text = "הערה א: עיין ברכות דף ב עמוד א ובהגהות הב\"ח אות א.".to_string();
         doc.sections[0].flows[2].paragraphs[0] = p_note;
 
-        let (pages2, _diag) = eng.typeset_document_multi_flow_incremental(&doc, &pages1, Some(note_p_id));
+        let (pages2, _diag) =
+            eng.typeset_document_multi_flow_incremental(&doc, &pages1, Some(note_p_id));
         assert!(!pages2.is_empty());
 
         // Footnote frame must contain updated note
-        let note_frame = pages2[0].frames.iter().find(|f| f.flow_id == "notes").unwrap();
-        assert!(note_frame.lines.iter().any(|l| l.paragraph_id == Some(note_p_id)));
+        let note_frame = pages2[0]
+            .frames
+            .iter()
+            .find(|f| f.flow_id == "notes")
+            .unwrap();
+        assert!(note_frame
+            .lines
+            .iter()
+            .any(|l| l.paragraph_id == Some(note_p_id)));
     }
 
     #[test]
@@ -3277,18 +3388,45 @@ mod tests {
         let eng = engine();
         let pages1 = eng.typeset_document(&doc);
 
-        assert_eq!(pages1.len(), 3, "Each paragraph with forced page break before must be on its own page");
-        assert!(pages1[0].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p1_id)));
-        assert!(pages1[1].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p2_id)));
-        assert!(pages1[2].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p3_id)));
+        assert_eq!(
+            pages1.len(),
+            3,
+            "Each paragraph with forced page break before must be on its own page"
+        );
+        assert!(pages1[0].frames[0]
+            .lines
+            .iter()
+            .any(|l| l.paragraph_id == Some(p1_id)));
+        assert!(pages1[1].frames[0]
+            .lines
+            .iter()
+            .any(|l| l.paragraph_id == Some(p2_id)));
+        assert!(pages1[2].frames[0]
+            .lines
+            .iter()
+            .any(|l| l.paragraph_id == Some(p3_id)));
 
         // Incrementally edit P1 by adding more text
-        doc.sections[0].flows[0].paragraphs[0].text = "פסקה ראשונה שנערכה באופן אינקרמנטלי ונוספו לה מילים נוספות.".to_string();
+        doc.sections[0].flows[0].paragraphs[0].text =
+            "פסקה ראשונה שנערכה באופן אינקרמנטלי ונוספו לה מילים נוספות.".to_string();
 
         let (pages2, _diag) = eng.typeset_document_incremental(&doc, &pages1, Some(p1_id));
-        assert_eq!(pages2.len(), 3, "Forced page break overrides must be strictly preserved during incremental reflow");
-        assert!(pages2[0].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p1_id)));
-        assert!(pages2[1].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p2_id)));
-        assert!(pages2[2].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p3_id)));
+        assert_eq!(
+            pages2.len(),
+            3,
+            "Forced page break overrides must be strictly preserved during incremental reflow"
+        );
+        assert!(pages2[0].frames[0]
+            .lines
+            .iter()
+            .any(|l| l.paragraph_id == Some(p1_id)));
+        assert!(pages2[1].frames[0]
+            .lines
+            .iter()
+            .any(|l| l.paragraph_id == Some(p2_id)));
+        assert!(pages2[2].frames[0]
+            .lines
+            .iter()
+            .any(|l| l.paragraph_id == Some(p3_id)));
     }
 }

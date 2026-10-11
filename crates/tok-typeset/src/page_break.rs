@@ -316,7 +316,9 @@ impl GlobalPageBreaker {
                 penalty,
             });
 
-            if item.line_in_paragraph + 1 == item.total_lines_in_paragraph && item.force_page_break_after {
+            if item.line_in_paragraph + 1 == item.total_lines_in_paragraph
+                && item.force_page_break_after
+            {
                 // Forced break immediately after this paragraph!
                 return (idx + 1, curr_h);
             }
@@ -832,7 +834,11 @@ mod tests {
         ];
 
         let pages_before = breaker.break_pages(&inputs_before);
-        assert_eq!(pages_before.len(), 2, "Forced break before must push line 1 to page 2");
+        assert_eq!(
+            pages_before.len(),
+            2,
+            "Forced break before must push line 1 to page 2"
+        );
 
         // Test forced page break after
         let inputs_after = vec![
@@ -873,6 +879,10 @@ mod tests {
         ];
 
         let pages_after = breaker.break_pages(&inputs_after);
-        assert_eq!(pages_after.len(), 2, "Forced break after must terminate page immediately");
+        assert_eq!(
+            pages_after.len(),
+            2,
+            "Forced break after must terminate page immediately"
+        );
     }
 }

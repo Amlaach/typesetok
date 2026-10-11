@@ -280,11 +280,7 @@ mod tests {
         let flow = sec.main_flow_mut().unwrap();
 
         let idx1 = FractionalIndex::initial();
-        let mut p1 = ParagraphNode::new(
-            idx1,
-            "normal",
-            "שָׁלוֹם עוֹלָם וּבְרָכָה",
-        );
+        let mut p1 = ParagraphNode::new(idx1, "normal", "שָׁלוֹם עוֹלָם וּבְרָכָה");
 
         let format = tok_core::styles::CharacterFormat {
             font_weight: Some(700),
@@ -304,14 +300,14 @@ mod tests {
 
         flow.paragraphs.push(p1.clone());
 
-
         let doc = DocumentModel::new(root);
         let tmp_dir = tempfile::tempdir().unwrap();
         let tok_path = tmp_dir.path().join("rich_document.tok");
 
         let mut package = TokPackage::new();
-        package.save_atomic(&doc, &tok_path).expect("Must save rich document package");
-
+        package
+            .save_atomic(&doc, &tok_path)
+            .expect("Must save rich document package");
 
         let (loaded_doc, _) = TokPackage::open(&tok_path).expect("Must open rich document package");
         let loaded_sec = &loaded_doc.root().sections[0];
@@ -328,8 +324,13 @@ mod tests {
 
         assert_eq!(loaded_p.style_patches.len(), 1);
         assert_eq!(loaded_p.style_patches[0].indent_start_pt, Some(20.0));
-        assert_eq!(loaded_p.style_patches[0].direction, Some(tok_core::styles::Progression::Rtl));
-        assert_eq!(loaded_p.style_patches[0].alignment, Some(tok_core::styles::TextAlignment::Justified));
+        assert_eq!(
+            loaded_p.style_patches[0].direction,
+            Some(tok_core::styles::Progression::Rtl)
+        );
+        assert_eq!(
+            loaded_p.style_patches[0].alignment,
+            Some(tok_core::styles::TextAlignment::Justified)
+        );
     }
 }
-

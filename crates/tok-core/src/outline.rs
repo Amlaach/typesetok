@@ -97,7 +97,7 @@ impl DocumentOutline {
 
     /// Finds a node by its unique NodeId anywhere in the hierarchy.
     pub fn find_node(&self, id: NodeId) -> Option<&DocumentHierarchyNode> {
-        fn search<'a>(nodes: &'a [DocumentHierarchyNode], id: NodeId) -> Option<&'a DocumentHierarchyNode> {
+        fn search(nodes: &[DocumentHierarchyNode], id: NodeId) -> Option<&DocumentHierarchyNode> {
             for node in nodes {
                 if node.id == id {
                     return Some(node);
@@ -113,7 +113,10 @@ impl DocumentOutline {
 
     /// Finds a mutable reference to a node by its NodeId.
     pub fn find_node_mut(&mut self, id: NodeId) -> Option<&mut DocumentHierarchyNode> {
-        fn search<'a>(nodes: &'a mut [DocumentHierarchyNode], id: NodeId) -> Option<&'a mut DocumentHierarchyNode> {
+        fn search(
+            nodes: &mut [DocumentHierarchyNode],
+            id: NodeId,
+        ) -> Option<&mut DocumentHierarchyNode> {
             for node in nodes {
                 if node.id == id {
                     return Some(node);
@@ -130,7 +133,11 @@ impl DocumentOutline {
     /// Collects all nodes in pre-order depth-first traversal with their nesting depth.
     pub fn flatten_in_order(&self) -> Vec<(&DocumentHierarchyNode, usize)> {
         let mut list = Vec::new();
-        fn traverse<'a>(nodes: &'a [DocumentHierarchyNode], depth: usize, out: &mut Vec<(&'a DocumentHierarchyNode, usize)>) {
+        fn traverse<'a>(
+            nodes: &'a [DocumentHierarchyNode],
+            depth: usize,
+            out: &mut Vec<(&'a DocumentHierarchyNode, usize)>,
+        ) {
             for node in nodes {
                 out.push((node, depth));
                 traverse(&node.children, depth + 1, out);

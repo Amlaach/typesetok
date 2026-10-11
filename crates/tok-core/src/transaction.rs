@@ -277,7 +277,8 @@ impl AtomicOperation {
                 let byte = char_to_byte(&p.text, offset);
                 p.text.insert_str(byte, &norm_text);
                 let ins_chars = norm_text.chars().count();
-                p.spans = crate::spans::insert_range(&p.spans, offset, ins_chars, spans, total_chars);
+                p.spans =
+                    crate::spans::insert_range(&p.spans, offset, ins_chars, spans, total_chars);
                 Ok(AtomicOperation::DeleteText {
                     node_id: *node_id,
                     char_offset: offset,
@@ -402,7 +403,11 @@ impl AtomicOperation {
                     let sp_s = (s + span.start).min(e);
                     let sp_e = (s + span.end).min(e);
                     if sp_s < sp_e && !span.format.is_empty() {
-                        new_spans.push(crate::spans::TextSpan::new(sp_s, sp_e, span.format.clone()));
+                        new_spans.push(crate::spans::TextSpan::new(
+                            sp_s,
+                            sp_e,
+                            span.format.clone(),
+                        ));
                     }
                 }
                 p.spans = crate::spans::normalize_spans(new_spans, total_chars);
@@ -431,9 +436,7 @@ impl AtomicOperation {
                 })
             }
             AtomicOperation::SetParagraphPatches {
-                node_id,
-                patches,
-                ..
+                node_id, patches, ..
             } => {
                 let p = doc
                     .find_paragraph_mut(*node_id)
@@ -1017,11 +1020,7 @@ mod tests {
         let (mut doc, sec_id, pid) = doc_with_paragraph("חלק ראשון וחלק שני");
         let before = doc.clone();
 
-        let split_para = ParagraphNode::new(
-            FractionalIndex::new("b"),
-            "default-body",
-            "",
-        );
+        let split_para = ParagraphNode::new(FractionalIndex::new("b"), "default-body", "");
         let split_para_id = split_para.id;
 
         let mut tx = CompoundTransaction::new("פיצול פסקה באנטר");

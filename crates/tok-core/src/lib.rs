@@ -29,9 +29,7 @@ pub use normalizer::{HebrewMarkCategory, HebrewNormalizer};
 pub use numbering::{GematriaPunctuation, NumberingFormatter, NumberingScheme, NumberingScope};
 pub use outline::{DocumentHierarchyNode, DocumentOutline, HierarchyLevel};
 pub use overrides::LayoutLockOverrides;
-pub use reference::{
-    CrossReferenceNode, CrossReferenceRegistry, ReferenceKind, ReferenceTarget,
-};
+pub use reference::{CrossReferenceNode, CrossReferenceRegistry, ReferenceKind, ReferenceTarget};
 pub use spans::{
     insert_range, is_canonical, normalize_spans, remove_range, spans_in_range, TextSpan,
 };

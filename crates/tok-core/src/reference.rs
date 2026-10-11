@@ -165,7 +165,11 @@ mod tests {
     #[test]
     fn test_cross_reference_formatting() {
         let node_id = NodeId::new();
-        let anchor = TextAnchor::new(node_id, FractionalIndex::new("b"), crate::anchor::AnchorBias::Before);
+        let anchor = TextAnchor::new(
+            node_id,
+            FractionalIndex::new("b"),
+            crate::anchor::AnchorBias::Before,
+        );
         let xref = CrossReferenceNode::new(
             anchor.clone(),
             "target-hilchot-tefila",
@@ -173,12 +177,8 @@ mod tests {
             "עיין לקמן",
         );
 
-        let resolved = xref.format_resolved(
-            Some(42),
-            Some("מ״ב"),
-            Some("הלכות תפילה"),
-            Some("סימן כ״ד"),
-        );
+        let resolved =
+            xref.format_resolved(Some(42), Some("מ״ב"), Some("הלכות תפילה"), Some("סימן כ״ד"));
         assert_eq!(resolved, "עיין לקמן עמ' מ״ב (הלכות תפילה)");
 
         let p_ref = CrossReferenceNode::new(
@@ -187,17 +187,18 @@ mod tests {
             ReferenceKind::PageGematria,
             "??",
         );
-        assert_eq!(p_ref.format_resolved(Some(42), Some("מ״ב"), None, None), "מ״ב");
+        assert_eq!(
+            p_ref.format_resolved(Some(42), Some("מ״ב"), None, None),
+            "מ״ב"
+        );
     }
 
     #[test]
     fn test_registry_registration_and_lookup() {
         let mut registry = CrossReferenceRegistry::new();
         let target_node = NodeId::new();
-        let target = ReferenceTarget::new(
-            "target-pesach",
-            TextAnchor::start_of(target_node),
-        ).with_label("הלכות פסח");
+        let target = ReferenceTarget::new("target-pesach", TextAnchor::start_of(target_node))
+            .with_label("הלכות פסח");
         registry.register_target(target);
 
         let source_node = NodeId::new();

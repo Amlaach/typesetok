@@ -676,12 +676,18 @@ fn handle_incremental_typeset(
 
     let json_bytes = serde_json::to_vec_pretty(&inc_pages)?;
     fs::write(output, json_bytes)?;
-    println!("  [SUCCESS] Written incremental PageLayoutBox array to: {}", output);
+    println!(
+        "  [SUCCESS] Written incremental PageLayoutBox array to: {}",
+        output
+    );
     Ok(())
 }
 
 fn handle_diagnose_recompute(input: &str) -> Result<(), Box<dyn std::error::Error>> {
-    println!("[TOK-CLI] Running comprehensive recomputation diagnostics on: {}", input);
+    println!(
+        "[TOK-CLI] Running comprehensive recomputation diagnostics on: {}",
+        input
+    );
     let (model, _manifest) = load_document_input(input, 80)?;
     let mut doc = model.root().clone();
 
@@ -697,7 +703,8 @@ fn handle_diagnose_recompute(input: &str) -> Result<(), Box<dyn std::error::Erro
         .map(|p| p.id);
     if let Some(id) = p0_id {
         if let Some(p) = doc.find_paragraph_mut(id) {
-            p.text.push_str(" תוספת מלל בתחילת הספר לבדיקת גלישת עמודים.");
+            p.text
+                .push_str(" תוספת מלל בתחילת הספר לבדיקת גלישת עמודים.");
         }
         let (_p, diag1) = engine.typeset_document_incremental(&doc, &pages1, Some(id));
         let r1 = tok_typeset::diagnostics::RecomputeReport::from_diagnostics(&diag1, pages1.len());

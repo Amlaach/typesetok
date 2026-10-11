@@ -12,13 +12,14 @@ pub enum HeaderSpreadSide {
 }
 
 /// Dynamic content extraction rule for running headers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum HeaderExtractionRule {
     /// Fixed static text (e.g. "ספר משנה תורה").
     Static(String),
     /// Current document title.
     DocumentTitle,
     /// Current section / chapter title.
+    #[default]
     CurrentSectionTitle,
     /// Highest-level ancestor outline title matching a specific hierarchy level.
     OutlineLevelTitle(HierarchyLevel),
@@ -28,12 +29,6 @@ pub enum HeaderExtractionRule {
     LastMarkerOnPage,
     /// Range formatted from first to last marker on page (e.g. "סימן י״א – י״ג").
     FirstAndLastMarkerRange { separator: String },
-}
-
-impl Default for HeaderExtractionRule {
-    fn default() -> Self {
-        HeaderExtractionRule::CurrentSectionTitle
-    }
 }
 
 /// Positioning of the folio (page number) within the header/footer band.
@@ -70,7 +65,9 @@ impl Default for RunningHeaderConfig {
             verso_rule: HeaderExtractionRule::DocumentTitle,
             recto_folio: HeaderFolioPosition::OuterMargin,
             verso_folio: HeaderFolioPosition::OuterMargin,
-            numbering_scheme: NumberingScheme::HebrewGematria(crate::numbering::GematriaPunctuation::StandardPunctuation),
+            numbering_scheme: NumberingScheme::HebrewGematria(
+                crate::numbering::GematriaPunctuation::StandardPunctuation,
+            ),
             style_id: "default-header".to_string(),
             suppress_on_first_page_of_section: true,
             height_pt: 18.0,
@@ -92,7 +89,9 @@ pub struct FootnoteApparatusConfig {
 impl Default for FootnoteApparatusConfig {
     fn default() -> Self {
         Self {
-            numbering_scheme: NumberingScheme::HebrewGematria(crate::numbering::GematriaPunctuation::StandardPunctuation),
+            numbering_scheme: NumberingScheme::HebrewGematria(
+                crate::numbering::GematriaPunctuation::StandardPunctuation,
+            ),
             scope: NumberingScope::PerPage,
             continuous_numbering: false,
             separator_rule_width_pt: 0.5,

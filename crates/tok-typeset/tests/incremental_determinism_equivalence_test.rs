@@ -12,13 +12,14 @@ use tok_typeset::engine::{TypesettingEngine, TypesettingEngineConfig};
 use tok_typeset::geometry::PageLayoutBox;
 
 fn make_engine() -> TypesettingEngine {
-    let mut config = TypesettingEngineConfig::default();
-    config.page_width_pt = 595.28;
-    config.page_height_pt = 841.89;
-    config.margin_top_pt = 50.0;
-    config.margin_bottom_pt = 50.0;
-    config.margin_inner_pt = 50.0;
-    config.margin_outer_pt = 50.0;
+    let config = TypesettingEngineConfig {
+        page_width_pt: 595.28,
+        page_height_pt: 841.89,
+        margin_top_pt: 50.0,
+        margin_bottom_pt: 50.0,
+        margin_inner_pt: 50.0,
+        margin_outer_pt: 50.0,
+    };
     TypesettingEngine::new(config)
 }
 
@@ -164,7 +165,10 @@ fn test_determinism_zero_cascade_in_line_edit_vs_cold_typeset() {
             let p = ParagraphNode::new(
                 FractionalIndex::new(format!("k{:03}", i)),
                 "default-body",
-                &format!("פסקה מספר {}: טקסט אחיד לבדיקת עריכה קבועה באורך שורה.", i + 1),
+                &format!(
+                    "פסקה מספר {}: טקסט אחיד לבדיקת עריכה קבועה באורך שורה.",
+                    i + 1
+                ),
             );
             flow.add_paragraph(p);
         }
@@ -227,7 +231,8 @@ fn test_determinism_multi_flow_commentary_incremental_vs_cold() {
     let pages1 = eng.typeset_document_multi_flow(&doc);
 
     // Edit footnote
-    p_note.text = "הערה א: עיין ברכות דף ב עמוד א ובהגהות הב\"ח אות א וציון לנאמן שמואל.".to_string();
+    p_note.text =
+        "הערה א: עיין ברכות דף ב עמוד א ובהגהות הב\"ח אות א וציון לנאמן שמואל.".to_string();
     doc.sections[0].flows[2].paragraphs[0] = p_note;
 
     let (inc_pages, _diag) =

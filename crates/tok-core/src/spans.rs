@@ -77,7 +77,13 @@ pub fn spans_in_range(spans: &[TextSpan], start: usize, end: usize) -> Vec<TextS
     spans
         .iter()
         .filter(|s| s.end > start && s.start < end)
-        .map(|s| TextSpan::new(s.start.max(start) - start, s.end.min(end) - start, s.format.clone()))
+        .map(|s| {
+            TextSpan::new(
+                s.start.max(start) - start,
+                s.end.min(end) - start,
+                s.format.clone(),
+            )
+        })
         .collect()
 }
 
@@ -122,16 +128,28 @@ pub fn insert_range(
         if s.end <= offset {
             out.push(s.clone());
         } else if s.start >= offset {
-            out.push(TextSpan::new(s.start + inserted_len, s.end + inserted_len, s.format.clone()));
+            out.push(TextSpan::new(
+                s.start + inserted_len,
+                s.end + inserted_len,
+                s.format.clone(),
+            ));
         } else {
             out.push(TextSpan::new(s.start, offset, s.format.clone()));
-            out.push(TextSpan::new(offset + inserted_len, s.end + inserted_len, s.format.clone()));
+            out.push(TextSpan::new(
+                offset + inserted_len,
+                s.end + inserted_len,
+                s.format.clone(),
+            ));
         }
     }
     for s in inserted {
         let start = s.start.min(inserted_len);
         let end = s.end.min(inserted_len);
-        out.push(TextSpan::new(offset + start, offset + end, s.format.clone()));
+        out.push(TextSpan::new(
+            offset + start,
+            offset + end,
+            s.format.clone(),
+        ));
     }
     normalize_spans(out, len + inserted_len)
 }
@@ -141,10 +159,16 @@ mod tests {
     use super::*;
 
     fn bold() -> CharacterFormat {
-        CharacterFormat { font_weight: Some(700), ..Default::default() }
+        CharacterFormat {
+            font_weight: Some(700),
+            ..Default::default()
+        }
     }
     fn italic() -> CharacterFormat {
-        CharacterFormat { italic: Some(true), ..Default::default() }
+        CharacterFormat {
+            italic: Some(true),
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -158,16 +182,26 @@ mod tests {
             TextSpan::new(1, 3, CharacterFormat::default()),
         ];
         let n = normalize_spans(spans, 10);
-        assert_eq!(n, vec![TextSpan::new(0, 6, bold()), TextSpan::new(8, 10, italic())]);
+        assert_eq!(
+            n,
+            vec![TextSpan::new(0, 6, bold()), TextSpan::new(8, 10, italic())]
+        );
         assert!(is_canonical(&n, 10));
     }
 
     #[test]
     fn later_span_wins_on_overlap() {
-        let n = normalize_spans(vec![TextSpan::new(0, 10, bold()), TextSpan::new(3, 5, italic())], 10);
+        let n = normalize_spans(
+            vec![TextSpan::new(0, 10, bold()), TextSpan::new(3, 5, italic())],
+            10,
+        );
         assert_eq!(
             n,
-            vec![TextSpan::new(0, 3, bold()), TextSpan::new(3, 5, italic()), TextSpan::new(5, 10, bold())]
+            vec![
+                TextSpan::new(0, 3, bold()),
+                TextSpan::new(3, 5, italic()),
+                TextSpan::new(5, 10, bold())
+            ]
         );
     }
 
@@ -175,9 +209,15 @@ mod tests {
     fn remove_then_reinsert_restores_spans() {
         let spans = vec![TextSpan::new(2, 8, bold()), TextSpan::new(9, 12, italic())];
         let deleted = spans_in_range(&spans, 5, 10);
-        assert_eq!(deleted, vec![TextSpan::new(0, 3, bold()), TextSpan::new(4, 5, italic())]);
+        assert_eq!(
+            deleted,
+            vec![TextSpan::new(0, 3, bold()), TextSpan::new(4, 5, italic())]
+        );
         let after = remove_range(&spans, 5, 10, 12);
-        assert_eq!(after, vec![TextSpan::new(2, 5, bold()), TextSpan::new(5, 7, italic())]);
+        assert_eq!(
+            after,
+            vec![TextSpan::new(2, 5, bold()), TextSpan::new(5, 7, italic())]
+        );
         let restored = insert_range(&after, 5, 5, &deleted, 7);
         assert_eq!(restored, spans);
     }
@@ -186,7 +226,10 @@ mod tests {
     fn plain_insert_inside_span_splits_it() {
         let spans = vec![TextSpan::new(0, 4, bold())];
         let after = insert_range(&spans, 2, 3, &[], 4);
-        assert_eq!(after, vec![TextSpan::new(0, 2, bold()), TextSpan::new(5, 7, bold())]);
+        assert_eq!(
+            after,
+            vec![TextSpan::new(0, 2, bold()), TextSpan::new(5, 7, bold())]
+        );
         let styled = insert_range(&spans, 2, 3, &[TextSpan::new(0, 3, bold())], 4);
         assert_eq!(styled, vec![TextSpan::new(0, 7, bold())]);
     }
