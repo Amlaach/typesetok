@@ -5,11 +5,8 @@
  * Allows authors to write and edit long texts with Niqqud without the overhead of page pagination.
  */
 
-export interface StoryParagraph {
-  id: string;
-  styleId: string;
-  text: string;
-}
+import { StoryParagraph } from './types';
+export { StoryParagraph };
 
 export class StoryEditor {
   private container: HTMLElement;
