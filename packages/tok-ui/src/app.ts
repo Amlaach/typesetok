@@ -78,7 +78,14 @@ export class TypesetOkApp {
   private storyFlowChip!: HTMLButtonElement;
   private storyWordCount!: HTMLElement;
   private storyFontPx = 19;
+  private storyBoldBtn?: HTMLButtonElement;
+  private storyItalicBtn?: HTMLButtonElement;
+  private storyUnderlineBtn?: HTMLButtonElement;
+  private findBar?: HTMLElement;
+  private findInput?: HTMLInputElement;
+  private replaceInput?: HTMLInputElement;
   private splitDivider!: HTMLElement;
+
   private panelOpenBeforeSplit: boolean | null = null;
   private documentTitle = '';
   private currentFilePath: string | null = null;
@@ -260,11 +267,7 @@ export class TypesetOkApp {
     this.storyContainer.style.display = 'none';
 
     this.storyHeader = el('h2', 'tok-visually-hidden', { id: 'tok-story-title' }, t('appStoryEditorTitle'));
-    this.storyContainer.appendChild(this.storyHeader);
-    this.storyContainer.appendChild(this.buildStoryToolbar());
-
     const storyScroll = el('div', 'tok-story-scroll');
-    this.storyContainer.appendChild(storyScroll);
     this.storyEditor = new StoryEditor(storyScroll);
     this.storyEditor.onTextChange(() => {
       if (this.activeFlowId) {
@@ -273,6 +276,23 @@ export class TypesetOkApp {
       this.scheduleWordCountUpdate();
       this.scheduleRepaginate();
     });
+
+    this.storyEditor.getElement().addEventListener('keydown', (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        this.toggleFindReplaceBar(true);
+      }
+    });
+
+    document.addEventListener('selectionchange', () => {
+      this.updateFormattingToolbarState();
+    });
+
+    this.storyContainer.appendChild(this.storyHeader);
+    this.storyContainer.appendChild(this.buildStoryToolbar());
+    this.storyContainer.appendChild(this.buildFindReplaceBar());
+    this.storyContainer.appendChild(storyScroll);
+
 
     this.splitDivider = this.buildSplitDivider();
     this.splitDivider.style.display = 'none';
@@ -668,11 +688,15 @@ export class TypesetOkApp {
     }
   }
 
-  /** Undo/redo in the story editor (the only editable text surface for now). */
+  /** Undo/redo in the story editor. */
   private runEditCommand(command: 'undo' | 'redo'): void {
-    const editor = this.storyEditor.getElement();
-    if (!editor.contains(document.activeElement)) editor.focus();
-    document.execCommand(command);
+    if (this.storyEditor) {
+      if (command === 'undo') {
+        this.storyEditor.undo();
+      } else {
+        this.storyEditor.redo();
+      }
+    }
     this.scheduleWordCountUpdate();
   }
 
@@ -690,7 +714,92 @@ export class TypesetOkApp {
     bar.appendChild(this.storyFlowChip);
     bar.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:18px' }));
 
-    // Item 17: Compact typography size buttons with Hebrew letters
+    // History controls
+    const undoBtn = iconButton('undo', 'ביטול פעולה (Ctrl+Z)', () => this.runEditCommand('undo'), {
+      size: 14,
+      className: 'tok-btn tok-btn-ghost tok-btn-xs'
+    });
+    const redoBtn = iconButton('redo', 'ביצוע חוזר (Ctrl+Y)', () => this.runEditCommand('redo'), {
+      size: 14,
+      className: 'tok-btn tok-btn-ghost tok-btn-xs'
+    });
+    this.storyEditor.onHistoryChange((canUndo, canRedo) => {
+      undoBtn.disabled = !canUndo;
+      redoBtn.disabled = !canRedo;
+      undoBtn.style.opacity = canUndo ? '1' : '0.4';
+      redoBtn.style.opacity = canRedo ? '1' : '0.4';
+    });
+    bar.appendChild(undoBtn);
+    bar.appendChild(redoBtn);
+    bar.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:18px' }));
+
+    // Text formatting controls
+    this.storyBoldBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
+      type: 'button',
+      title: 'הדגשה (Ctrl+B)',
+      style: 'font-weight:700;min-width:24px;height:24px;padding:0;font-size:13px;'
+    }, 'B');
+    this.storyBoldBtn.addEventListener('click', () => {
+      this.storyEditor.toggleFormatSelection('bold');
+      this.updateFormattingToolbarState();
+    });
+    bar.appendChild(this.storyBoldBtn);
+
+    this.storyItalicBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
+      type: 'button',
+      title: 'נטוי (Ctrl+I)',
+      style: 'font-style:italic;min-width:24px;height:24px;padding:0;font-size:13px;'
+    }, 'I');
+    this.storyItalicBtn.addEventListener('click', () => {
+      this.storyEditor.toggleFormatSelection('italic');
+      this.updateFormattingToolbarState();
+    });
+    bar.appendChild(this.storyItalicBtn);
+
+    this.storyUnderlineBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
+      type: 'button',
+      title: 'קו תחתי (Ctrl+U)',
+      style: 'text-decoration:underline;min-width:24px;height:24px;padding:0;font-size:13px;'
+    }, 'U');
+    this.storyUnderlineBtn.addEventListener('click', () => {
+      this.storyEditor.toggleFormatSelection('underline');
+      this.updateFormattingToolbarState();
+    });
+    bar.appendChild(this.storyUnderlineBtn);
+
+    bar.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:18px' }));
+
+    // Alignment controls
+    const alignRightBtn = iconButton('alignRight', 'יישור לימין', () => {
+      const sel = this.storyEditor.getStorySelection();
+      if (sel) this.storyEditor.setParagraphPatch(sel.paraId, { alignment: 'Right' });
+    }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
+
+    const alignCenterBtn = iconButton('alignCenter', 'יישור למרכז', () => {
+      const sel = this.storyEditor.getStorySelection();
+      if (sel) this.storyEditor.setParagraphPatch(sel.paraId, { alignment: 'Center' });
+    }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
+
+    const alignJustifyBtn = iconButton('alignJustify', 'יישור לשני הצדדים', () => {
+      const sel = this.storyEditor.getStorySelection();
+      if (sel) this.storyEditor.setParagraphPatch(sel.paraId, { alignment: 'Justified' });
+    }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
+
+    bar.appendChild(alignRightBtn);
+    bar.appendChild(alignCenterBtn);
+    bar.appendChild(alignJustifyBtn);
+
+    bar.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:18px' }));
+
+    // Find & replace button
+    const findToggleBtn = iconButton('search', 'חיפוש והחלפה (Ctrl+F)', () => {
+      this.toggleFindReplaceBar();
+    }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
+    bar.appendChild(findToggleBtn);
+
+    bar.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:18px' }));
+
+    // Typography size buttons
     const fontSmallerBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
       type: 'button',
       title: 'הקטנת גודל טקסט בעורך (Ctrl+-)',
@@ -721,6 +830,142 @@ export class TypesetOkApp {
     this.updateStoryToolbar();
     return bar;
   }
+
+  private buildFindReplaceBar(): HTMLElement {
+    this.findBar = el('div', 'tok-story-find-bar', {
+      style: 'display:none;padding:6px 10px;background:var(--tok-surface-2);border-bottom:1px solid var(--tok-border-subtle);flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;'
+    });
+
+    this.findInput = el('input', 'tok-input', {
+      type: 'text',
+      placeholder: 'חיפוש טקסט...',
+      style: 'width:140px;height:24px;font-size:12px;padding:0 6px;'
+    }) as HTMLInputElement;
+
+    this.replaceInput = el('input', 'tok-input', {
+      type: 'text',
+      placeholder: 'החלפה ב...',
+      style: 'width:130px;height:24px;font-size:12px;padding:0 6px;'
+    }) as HTMLInputElement;
+
+    let ignoreNiqqud = true;
+    const niqqudBtn = el('button', 'tok-btn tok-btn-xs tok-btn-primary', {
+      type: 'button',
+      title: 'התעלם מניקוד ומטעמים בחיפוש',
+      style: 'height:24px;padding:0 6px;'
+    }, 'ללא ניקוד');
+    niqqudBtn.addEventListener('click', () => {
+      ignoreNiqqud = !ignoreNiqqud;
+      if (ignoreNiqqud) {
+        niqqudBtn.classList.add('tok-btn-primary');
+        niqqudBtn.classList.remove('tok-btn-ghost');
+      } else {
+        niqqudBtn.classList.remove('tok-btn-primary');
+        niqqudBtn.classList.add('tok-btn-ghost');
+      }
+    });
+
+    const prevBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
+      type: 'button',
+      title: 'הקודם',
+      style: 'height:24px;padding:0 6px;'
+    }, '↑ הקודם');
+    prevBtn.addEventListener('click', () => {
+      const q = this.findInput?.value;
+      if (q) this.storyEditor.findPrev({ query: q, ignoreNiqqud });
+    });
+
+    const nextBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
+      type: 'button',
+      title: 'הבא',
+      style: 'height:24px;padding:0 6px;'
+    }, '↓ הבא');
+    nextBtn.addEventListener('click', () => {
+      const q = this.findInput?.value;
+      if (q) this.storyEditor.findNext({ query: q, ignoreNiqqud });
+    });
+
+    this.findInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const q = this.findInput?.value;
+        if (!q) return;
+        if (e.shiftKey) {
+          this.storyEditor.findPrev({ query: q, ignoreNiqqud });
+        } else {
+          this.storyEditor.findNext({ query: q, ignoreNiqqud });
+        }
+      } else if (e.key === 'Escape') {
+        this.toggleFindReplaceBar(false);
+      }
+    });
+
+    const replaceBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
+      type: 'button',
+      title: 'החלף מופע נוכחי',
+      style: 'height:24px;padding:0 6px;'
+    }, 'החלף');
+    replaceBtn.addEventListener('click', () => {
+      const q = this.findInput?.value;
+      if (q && this.replaceInput) {
+        this.storyEditor.replaceNext(this.replaceInput.value, { query: q, ignoreNiqqud });
+      }
+    });
+
+    const replaceAllBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
+      type: 'button',
+      title: 'החלף את כל המופעים',
+      style: 'height:24px;padding:0 6px;'
+    }, 'החלף הכל');
+    replaceAllBtn.addEventListener('click', () => {
+      const q = this.findInput?.value;
+      if (q && this.replaceInput) {
+        const count = this.storyEditor.replaceAll(this.replaceInput.value, { query: q, ignoreNiqqud });
+        this.showToast(`הוחלפו ${count} מופעים`);
+      }
+    });
+
+    const closeBtn = iconButton('close', 'סגור (Esc)', () => {
+      this.toggleFindReplaceBar(false);
+    }, { size: 12, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
+
+    this.findBar.appendChild(this.findInput);
+    this.findBar.appendChild(niqqudBtn);
+    this.findBar.appendChild(prevBtn);
+    this.findBar.appendChild(nextBtn);
+    this.findBar.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:16px' }));
+    this.findBar.appendChild(this.replaceInput);
+    this.findBar.appendChild(replaceBtn);
+    this.findBar.appendChild(replaceAllBtn);
+    this.findBar.appendChild(el('span', 'tok-grow'));
+    this.findBar.appendChild(closeBtn);
+
+    return this.findBar;
+  }
+
+  private toggleFindReplaceBar(force?: boolean): void {
+    if (!this.findBar) return;
+    const isVisible = this.findBar.style.display !== 'none';
+    const show = force !== undefined ? force : !isVisible;
+    this.findBar.style.display = show ? 'flex' : 'none';
+    if (show) {
+      this.findInput?.focus();
+      this.findInput?.select();
+    }
+  }
+
+  private updateFormattingToolbarState(): void {
+    if (!this.storyBoldBtn || !this.storyItalicBtn || !this.storyUnderlineBtn || !this.storyEditor) return;
+    const fmt = this.storyEditor.getSelectionFormat();
+    const isBold = (fmt.fontWeight || 400) >= 600;
+    const isItalic = Boolean(fmt.italic);
+    const isUnderline = Boolean(fmt.underline);
+
+    this.storyBoldBtn.style.background = isBold ? 'var(--tok-surface-hover)' : '';
+    this.storyItalicBtn.style.background = isItalic ? 'var(--tok-surface-hover)' : '';
+    this.storyUnderlineBtn.style.background = isUnderline ? 'var(--tok-surface-hover)' : '';
+  }
+
 
   private updateStoryToolbar(): void {
     if (!this.storyFlowChip) return;
