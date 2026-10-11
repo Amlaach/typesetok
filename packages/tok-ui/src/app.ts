@@ -269,13 +269,17 @@ export class TypesetOkApp {
     this.storyHeader = el('h2', 'tok-visually-hidden', { id: 'tok-story-title' }, t('appStoryEditorTitle'));
     const storyScroll = el('div', 'tok-story-scroll');
     this.storyEditor = new StoryEditor(storyScroll);
-    this.storyEditor.onTextChange(() => {
+    const syncStoryToDocument = (paragraphs?: StoryParagraph[]) => {
       if (this.activeFlowId) {
-        this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+        const story = paragraphs || this.storyEditor.getStory();
+        this.documentState.flows[this.activeFlowId] = story;
+        this.documentState.isDirty = true;
       }
       this.scheduleWordCountUpdate();
       this.scheduleRepaginate();
-    });
+    };
+    this.storyEditor.onTextChange(() => syncStoryToDocument());
+    this.storyEditor.onStoryChange((paras) => syncStoryToDocument(paras));
 
     this.storyEditor.getElement().addEventListener('keydown', (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
@@ -1175,7 +1179,23 @@ export class TypesetOkApp {
   /** Loads paragraphs into the continuous Story Editor panel. */
   public loadStory(paragraphs: StoryParagraph[]): void {
     this.storyEditor.loadStory(paragraphs);
+    if (this.activeFlowId) {
+      this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+    }
     this.updateStoryToolbar();
+    this.scheduleWordCountUpdate();
+    this.scheduleRepaginate();
+  }
+
+  public getDocumentState(): MultiFlowDocumentState {
+    if (this.storyEditor && this.activeFlowId) {
+      this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+    }
+    return this.documentState;
+  }
+
+  public getStoryEditor(): StoryEditor {
+    return this.storyEditor;
   }
 
   private refreshThumbnails(): void {
@@ -1193,10 +1213,14 @@ export class TypesetOkApp {
   /** Switches active flow, syncing the story editor and structure bar. */
   public switchActiveFlow(flowId: string, scrollToParaId?: string): void {
     if (this.storyEditor && this.activeFlowId) {
+      this.storyEditor.flush();
       this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
     }
     this.activeFlowId = flowId;
-    const targetFlowParas = this.documentState.flows[flowId] || [];
+    if (!this.documentState.flows[flowId]) {
+      this.documentState.flows[flowId] = [];
+    }
+    const targetFlowParas = this.documentState.flows[flowId];
     this.storyEditor.loadStory(targetFlowParas);
 
     const name = this.flowDisplayName(flowId);
