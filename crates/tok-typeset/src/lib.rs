@@ -13,6 +13,7 @@ pub mod layout_features;
 pub mod layout_template;
 pub mod multi_flow;
 pub mod shaper;
+pub mod solver;
 pub mod template_synthesizer;
 
 pub use bidi::{BidiEngine, BidiRun};
