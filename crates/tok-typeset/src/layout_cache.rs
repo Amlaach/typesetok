@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use tok_core::id::NodeId;
 use tok_core::model::ParagraphNode;
 use tok_core::styles::ParagraphStyle;
@@ -56,6 +57,17 @@ impl CacheMetrics {
             h as f64 / total as f64
         }
     }
+}
+
+/// Snapshot of cache performance metrics.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CacheMetricsSnapshot {
+    pub hits: usize,
+    pub misses: usize,
+    pub evictions: usize,
+    pub hit_ratio: f64,
+    pub entry_count: usize,
+    pub approx_memory_bytes: usize,
 }
 
 /// In-memory cache for paragraph layout results (shaped & justified lines).
@@ -184,9 +196,30 @@ impl ParagraphLayoutCache {
         self.entries.is_empty()
     }
 
-    /// Returns reference to cache metrics.
-    pub fn metrics(&self) -> &CacheMetrics {
-        &self.metrics
+    /// Returns approximate memory consumed by cache entries in bytes.
+    pub fn approx_memory_bytes(&self) -> usize {
+        let entry_base = std::mem::size_of::<(NodeId, (ParagraphCacheKey, CachedParagraphLayout))>();
+        let mut total = self.entries.len() * entry_base;
+        for (_, layout) in self.entries.values() {
+            total += layout.lines.len() * std::mem::size_of::<crate::geometry::LineBox>();
+            for line in &layout.lines {
+                total += line.text.len();
+                total += line.glyphs.len() * std::mem::size_of::<crate::geometry::GlyphBox>();
+            }
+        }
+        total
+    }
+
+    /// Returns snapshot of cache metrics.
+    pub fn snapshot(&self) -> CacheMetricsSnapshot {
+        CacheMetricsSnapshot {
+            hits: self.metrics.hit_count(),
+            misses: self.metrics.miss_count(),
+            evictions: self.metrics.eviction_count(),
+            hit_ratio: self.metrics.hit_ratio(),
+            entry_count: self.entries.len(),
+            approx_memory_bytes: self.approx_memory_bytes(),
+        }
     }
 }
 

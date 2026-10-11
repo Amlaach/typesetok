@@ -63,7 +63,9 @@ pub use incremental::{
     IncrementalBreakDiagnostics, IncrementalPageBreaker, IncrementalTypesetDiagnostics,
 };
 pub use knuth_plass::{BrokenLine, KnuthPlassBreaker, LayoutItem, LineSpan, MeasureProfile};
-pub use layout_cache::{CachedParagraphLayout, ParagraphCacheKey, ParagraphLayoutCache};
+pub use layout_cache::{
+    CacheMetricsSnapshot, CachedParagraphLayout, ParagraphCacheKey, ParagraphLayoutCache,
+};
 pub use layout_classifier::{ClassificationConfidence, ClassificationResult, DocumentClassifier};
 pub use layout_family::LayoutFamily;
 pub use layout_features::{DocumentLayoutFeatures, FlowFeature};

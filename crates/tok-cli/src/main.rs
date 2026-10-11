@@ -24,6 +24,8 @@ COMMANDS:
     render-pdf <INPUT> <OUTPUT>     Render a .tok, .json, or demo document to ISO PDF/X-1a
     render-html <INPUT> <OUTPUT>    Render a .tok, .json, or demo document to pre-paginated HTML
     typeset-document <INPUT> <OUT>  Typeset document into PageLayoutBox JSON array
+    incremental-typeset <IN> <OUT>  Incrementally typeset document with recompute diagnostics
+    diagnose-recompute <INPUT>      Run 3-position invalidation & cache diagnostic report
     save-package <INPUT> <OUTPUT>   Save document JSON into an atomic .tok package
     open-package <INPUT> <OUTPUT>   Open and extract a .tok package into document JSON
     benchmark-typeset [--pages N]   Run 1,000-page stress test and cascade latency benchmark
@@ -34,6 +36,8 @@ COMMANDS:
 EXAMPLES:
     tok-cli render-pdf --demo output.pdf
     tok-cli render-html --demo output.html
+    tok-cli incremental-typeset --demo output.json
+    tok-cli diagnose-recompute --demo
     tok-cli benchmark-typeset --pages 1000
     tok-cli verify-determinism
 "#
@@ -586,6 +590,123 @@ fn handle_typeset_document(input: &str, output: &str) -> Result<(), Box<dyn std:
     Ok(())
 }
 
+fn handle_incremental_typeset(
+    input: &str,
+    output: &str,
+    modified_node_id_str: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("[TOK-CLI] Running incremental typesetting & recomputation diagnostic...");
+    let (model, _manifest) = load_document_input(input, 60)?;
+    let doc = model.root();
+
+    let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
+    let initial_start = Instant::now();
+    let initial_pages = engine.typeset_document(doc);
+    let initial_dur = initial_start.elapsed();
+    println!(
+        "  - Initial layout produced: {} pages in {:.2?}",
+        initial_pages.len(),
+        initial_dur
+    );
+
+    // Pick target node
+    let target_node_id = if let Some(id_str) = modified_node_id_str {
+        tok_core::id::NodeId::from_string(id_str).ok()
+    } else {
+        doc.sections
+            .first()
+            .and_then(|s| s.main_flow())
+            .and_then(|f| f.paragraphs.first())
+            .map(|p| p.id)
+    };
+
+    println!("  - Incrementally invalidating node: {:?}", target_node_id);
+    let inc_start = Instant::now();
+    let (inc_pages, diag) =
+        engine.typeset_document_incremental(doc, &initial_pages, target_node_id);
+    let _inc_dur = inc_start.elapsed();
+
+    let report =
+        tok_typeset::diagnostics::RecomputeReport::from_diagnostics(&diag, inc_pages.len());
+    println!("\n{}", report.summary());
+
+    if let Some(parent) = Path::new(output).parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+
+    let json_bytes = serde_json::to_vec_pretty(&inc_pages)?;
+    fs::write(output, json_bytes)?;
+    println!("  [SUCCESS] Written incremental PageLayoutBox array to: {}", output);
+    Ok(())
+}
+
+fn handle_diagnose_recompute(input: &str) -> Result<(), Box<dyn std::error::Error>> {
+    println!("[TOK-CLI] Running comprehensive recomputation diagnostics on: {}", input);
+    let (model, _manifest) = load_document_input(input, 80)?;
+    let mut doc = model.root().clone();
+
+    let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
+    let pages1 = engine.typeset_document(&doc);
+    println!("  - Baseline document: {} pages", pages1.len());
+
+    // 1. Beginning edit
+    println!("\n[Scenario 1: Beginning Edit (Page 0)]");
+    let p0_id = doc.sections[0]
+        .main_flow()
+        .and_then(|f| f.paragraphs.first())
+        .map(|p| p.id);
+    if let Some(id) = p0_id {
+        if let Some(p) = doc.find_paragraph_mut(id) {
+            p.text.push_str(" תוספת מלל בתחילת הספר לבדיקת גלישת עמודים.");
+        }
+        let (_p, diag1) = engine.typeset_document_incremental(&doc, &pages1, Some(id));
+        let r1 = tok_typeset::diagnostics::RecomputeReport::from_diagnostics(&diag1, pages1.len());
+        println!("{}", r1.summary());
+    }
+
+    // 2. Middle edit
+    println!("\n[Scenario 2: Middle Edit]");
+    let mid_idx = doc.sections[0]
+        .main_flow()
+        .map_or(0, |f| f.paragraphs.len() / 2);
+    let mid_id = doc.sections[0]
+        .main_flow()
+        .and_then(|f| f.paragraphs.get(mid_idx))
+        .map(|p| p.id);
+    if let Some(id) = mid_id {
+        if let Some(p) = doc.find_paragraph_mut(id) {
+            p.text.push_str(" עריכה באמצע המסמך.");
+        }
+        let (_p, diag2) = engine.typeset_document_incremental(&doc, &pages1, Some(id));
+        let r2 = tok_typeset::diagnostics::RecomputeReport::from_diagnostics(&diag2, pages1.len());
+        println!("{}", r2.summary());
+    }
+
+    // 3. End edit
+    println!("\n[Scenario 3: End Edit]");
+    let last_id = doc.sections[0]
+        .main_flow()
+        .and_then(|f| f.paragraphs.last())
+        .map(|p| p.id);
+    if let Some(id) = last_id {
+        let (_p, diag3) = engine.typeset_document_incremental(&doc, &pages1, Some(id));
+        let r3 = tok_typeset::diagnostics::RecomputeReport::from_diagnostics(&diag3, pages1.len());
+        println!("{}", r3.summary());
+    }
+
+    println!("\n[CACHE METRICS]");
+    let metrics = engine.cache_metrics();
+    println!(
+        "  - Hits: {}, Misses: {}, Entries: {}, Memory: {} bytes",
+        metrics.hits, metrics.misses, metrics.entry_count, metrics.approx_memory_bytes
+    );
+
+    println!("\n  [DIAGNOSTICS COMPLETED SUCCESSFULLY]");
+    Ok(())
+}
+
 fn main() {
     if let Err(e) = run() {
         eprintln!("Error: {}", e);
@@ -621,6 +742,25 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(1);
             }
             handle_typeset_document(&args[2], &args[3])?;
+        }
+        "incremental-typeset" => {
+            if args.len() < 4 {
+                eprintln!("Usage: tok-cli incremental-typeset <INPUT.json | --demo> <OUTPUT.json> [--node-id <ID>]");
+                std::process::exit(1);
+            }
+            let node_id_arg = if args.len() >= 6 && args[4] == "--node-id" {
+                Some(args[5].as_str())
+            } else {
+                None
+            };
+            handle_incremental_typeset(&args[2], &args[3], node_id_arg)?;
+        }
+        "diagnose-recompute" => {
+            if args.len() < 3 {
+                eprintln!("Usage: tok-cli diagnose-recompute <INPUT.json | INPUT.tok | --demo>");
+                std::process::exit(1);
+            }
+            handle_diagnose_recompute(&args[2])?;
         }
         "save-package" => {
             if args.len() < 4 {

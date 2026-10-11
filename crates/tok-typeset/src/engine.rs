@@ -157,6 +157,11 @@ impl TypesettingEngine {
         self.paragraph_cache.write().unwrap().clear();
     }
 
+    /// Returns layout cache metrics (hits, misses, entry count, memory bytes).
+    pub fn cache_metrics(&self) -> crate::layout_cache::CacheMetricsSnapshot {
+        self.paragraph_cache.read().unwrap().snapshot()
+    }
+
     /// Typesets a single paragraph into formatted, justified LineBoxes using default font.
     pub fn typeset_paragraph(
         &self,

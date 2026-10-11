@@ -21,6 +21,11 @@ pub struct RecomputeReport {
 
 impl RecomputeReport {
     /// Formats a human-readable telemetry summary for diagnostic logs and testing.
+    pub fn summary(&self) -> String {
+        self.summary_string()
+    }
+
+    /// Formats a human-readable telemetry summary for diagnostic logs and testing.
     pub fn summary_string(&self) -> String {
         format!(
             "[RecomputeReport] Pages: {} -> {} (Recomputed: {}, Reused: {} | ZeroCascade: {}, Converged: {:?}) | Paragraphs: Recomputed {}, Cached {} (HitRatio: {:.1}%) | Latency: {:.3}ms",
@@ -34,6 +39,26 @@ impl RecomputeReport {
             self.cached_paragraphs_count,
             self.cache_hit_ratio * 100.0,
             self.latency_ms,
+        )
+    }
+
+    /// Creates a report from IncrementalTypesetDiagnostics and page count before edit.
+    pub fn from_diagnostics(
+        diag: &crate::incremental::IncrementalTypesetDiagnostics,
+        pages_before: usize,
+    ) -> Self {
+        Self::from_metrics(
+            pages_before,
+            diag.total_pages,
+            diag.first_affected_page,
+            diag.recomputed_pages,
+            diag.reused_pages,
+            Vec::new(),
+            diag.recomputed_paragraphs,
+            diag.reused_paragraphs,
+            diag.zero_cascade,
+            diag.converged_at_page,
+            diag.duration,
         )
     }
 
