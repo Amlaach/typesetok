@@ -3022,4 +3022,127 @@ describe('Stage 11: End-to-End Story Editor, Document Model & .tok Storage Round
   });
 });
 
+describe('Phase 2 UI Integration: Hebrew Typography, Fallback Stacks, and Lifecycle Actions', () => {
+  test('fonts.ts provides safe font stack fallbacks and system Hebrew fonts', async () => {
+    const { getSafeFontStack, getAvailableFonts, DOCUMENT_FONTS } = await loadTs('packages/tok-ui/src/fonts.ts');
+    
+    assert.equal(DOCUMENT_FONTS.length, 4, 'Four embedded OFL fonts must be defined');
+    const all = getAvailableFonts();
+    assert.ok(all.some((f) => f.family === 'Frank Ruhl Libre'));
+    assert.ok(all.some((f) => f.family === 'Keter YG'));
+    assert.ok(all.some((f) => f.family === 'SBL Hebrew'));
+    assert.ok(all.some((f) => f.family === 'Ezra SIL'));
+
+    assert.equal(getSafeFontStack('Frank Ruhl Libre'), '"Frank Ruhl Libre", \'Frank Ruhl Libre\', \'David Libre\', \'Times New Roman\', serif');
+    assert.equal(getSafeFontStack(''), '\'Frank Ruhl Libre\', \'David Libre\', \'Times New Roman\', serif');
+  });
+
+  test('textStats.ts word counter achieves high speed zero-allocation accuracy and caching', async () => {
+    const { countWords, getParagraphWordCount, clearWordCountCache } = await loadTs('packages/tok-ui/src/textStats.ts');
+
+    assert.equal(countWords(''), 0);
+    assert.equal(countWords('   '), 0);
+    assert.equal(countWords('שלום עולם ומלואו'), 3);
+    assert.equal(countWords('בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם וְאֵ֥ת הָאָֽרֶץ׃'), 7);
+    assert.equal(countWords('מילה\nשורה\tרווח\u00A0קשיח'), 4);
+
+    // Paragraph caching
+    clearWordCountCache();
+    const pId = 'test-para-1';
+    const text = 'אמר רבי יוחנן כל האומר שירה בעולם הזה';
+    assert.equal(getParagraphWordCount(pId, text), 8);
+    // Cached retrieval returns identical count
+    assert.equal(getParagraphWordCount(pId, text), 8);
+    // Modified text recalculates count
+    assert.equal(getParagraphWordCount(pId, text + ' זוכה'), 9);
+  });
+
+  test('Hebrew actions (normalize, shield divine names, gematria) execute cleanly', async () => {
+    const { hebrewUtils } = await loadTs('packages/tok-ui/src/plugins/hebrew-utils.ts');
+    
+    // Normalization of quotes
+    const raw = 'ר"ת וכו\'';
+    const normalized = hebrewUtils.normalizeQuotes(raw);
+    assert.equal(normalized, 'ר״ת וכו׳');
+
+    // Divine names detection and shielding
+    const holy = 'ברוך יהוה לעולם אמן ואמן אלהים צבאות';
+    const matches = hebrewUtils.findHolyNames(holy);
+    assert.ok(matches.length >= 2);
+    assert.equal(matches[0].name, 'יהוה');
+
+    // Replacement/shielding token
+    const shielded = holy.replace(/יהוה/g, 'ה׳');
+    assert.ok(!shielded.includes('יהוה'));
+    assert.ok(shielded.includes('ה׳'));
+  });
+
+  test('Document state bridge preserves all layout flows, page formats, and inspector metadata', async () => {
+    const bridge = await loadTs('packages/tok-ui/src/engine/documentBridge.ts');
+    
+    const initialDoc = {
+      title: 'בדיקת סנכרון רכיבים',
+      templateType: 'prose',
+      flows: {
+        main: [
+          {
+            id: 'p-sync-1',
+            styleId: 'style-heading-1',
+            text: 'כותרת ראשית',
+            spans: [{ start: 0, end: 11, format: { fontWeight: 700, fontSizePt: 22 } }]
+          },
+          {
+            id: 'p-sync-2',
+            styleId: 'style-body',
+            text: 'פסקה ראשונה עם ניקוד: שָׁלוֹם עֲלֵיכֶם.',
+            spans: [{ start: 20, end: 36, format: { italic: true } }]
+          }
+        ]
+      },
+      settings: {
+        pageSize: 'A4',
+        pageWidthPt: 595,
+        pageHeightPt: 842,
+        marginTopPt: 54,
+        marginBottomPt: 54,
+        marginLeftPt: 54,
+        marginRightPt: 54,
+        primaryFontFamily: 'Frank Ruhl Libre',
+        baseFontSizePt: 12,
+        baseLineHeightPt: 16
+      },
+      styles: {
+        'style-custom-accent': {
+          fontFamily: 'Noto Serif Hebrew',
+          fontSizePt: 14,
+          lineHeightPt: 18,
+          align: 'center',
+          color: '#1a365d'
+        }
+      }
+    };
+
+    const docRoot = bridge.documentStateToDocumentRoot(initialDoc);
+    assert.ok(bridge.isValidUlid(docRoot.id), 'Root ID must be valid ULID');
+    assert.equal(docRoot.metadata.title, 'בדיקת סנכרון רכיבים');
+    assert.equal(docRoot.metadata.schema_version, '1.0');
+    assert.ok(docRoot.sections[0]);
+    assert.equal(docRoot.sections[0].flows[0].id, 'main');
+    assert.equal(docRoot.sections[0].flows[0].paragraphs.length, 2);
+    assert.ok(docRoot.paragraph_styles.some((s) => s.id === 'style-custom-accent'));
+
+    const restoredDoc = bridge.documentRootToDocumentState(docRoot);
+    assert.equal(restoredDoc.title, 'בדיקת סנכרון רכיבים');
+    assert.equal(restoredDoc.templateType, 'prose');
+    assert.ok(restoredDoc.flows.main || restoredDoc.flows.gemara);
+    const mainParas = restoredDoc.flows.main || restoredDoc.flows.gemara;
+    assert.equal(mainParas.length, 2);
+    assert.equal(mainParas[0].text, 'כותרת ראשית');
+    assert.equal(mainParas[0].spans?.[0]?.format?.fontWeight, 700);
+    assert.equal(mainParas[1].spans?.[0]?.format?.italic, true);
+    assert.equal(restoredDoc.settings?.primaryFontFamily, 'Frank Ruhl Libre');
+  });
+});
+
+
 
