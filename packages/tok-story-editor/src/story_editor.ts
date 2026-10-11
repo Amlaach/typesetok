@@ -6,6 +6,7 @@
  */
 
 import { StoryParagraph } from './types';
+import { renderParagraphDom, parseParagraphDom } from './dom_converter';
 export { StoryParagraph };
 
 export class StoryEditor {
@@ -73,22 +74,23 @@ export class StoryEditor {
   public loadStory(paragraphs: StoryParagraph[]): void {
     const frag = document.createDocumentFragment();
     for (const p of paragraphs) {
-      const pEl = document.createElement('p');
-      pEl.dataset.paraId = p.id;
-      pEl.dataset.styleId = p.styleId;
-      pEl.textContent = p.text;
+      const pEl = renderParagraphDom(p);
       frag.appendChild(pEl);
     }
     this.editorEl.replaceChildren(frag);
   }
 
-  /** Current paragraphs as edited (ids, style ids and plain text). */
+  /** Current paragraphs as edited with semantic spans and style patches. */
   public getStory(): StoryParagraph[] {
-    return Array.from(this.editorEl.querySelectorAll<HTMLElement>('p[data-para-id]')).map((p) => ({
-      id: p.dataset.paraId as string,
-      styleId: p.dataset.styleId || '',
-      text: p.textContent || '',
-    }));
+    return Array.from(this.editorEl.querySelectorAll<HTMLElement>('p[data-para-id]')).map((p) =>
+      parseParagraphDom(p)
+    );
+  }
+
+  /** Retrieve a single paragraph by ID */
+  public getParagraph(paraId: string): StoryParagraph | null {
+    const el = this.editorEl.querySelector<HTMLElement>(`p[data-para-id="${CSS.escape(paraId)}"]`);
+    return el ? parseParagraphDom(el) : null;
   }
 
   public onTextChange(cb: (paraId: string, newText: string) => void): void {
