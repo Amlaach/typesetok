@@ -710,6 +710,351 @@ impl TypesettingEngine {
         pages
     }
 
+    /// Incrementally typesets a document given the previous layout outcome.
+    ///
+    /// Exploits:
+    /// 1. `ParagraphLayoutCache`: re-breaks only paragraphs whose text, styles, or width changed.
+    /// 2. Zero-Cascade Optimization: when an edit does not alter paragraph line count and heights,
+    ///    only the containing page is updated, completing in sub-millisecond latency.
+    /// 3. Incremental Page Breaking with Convergence: repaginates downstream only until
+    ///    break tokens converge with the previous page boundaries.
+    pub fn typeset_document_incremental(
+        &self,
+        doc: &DocumentRoot,
+        previous_pages: &[PageLayoutBox],
+        modified_node_id: Option<tok_core::id::NodeId>,
+    ) -> (Vec<PageLayoutBox>, crate::incremental::IncrementalTypesetDiagnostics) {
+        let start_time = std::time::Instant::now();
+
+        // If no previous pages exist, perform full typeset
+        if previous_pages.is_empty() {
+            let pages = self.typeset_document(doc);
+            let total = pages.len();
+            let total_paras: usize = doc.sections.iter().flat_map(|s| &s.flows).map(|f| f.paragraphs.len()).sum();
+            let diag = crate::incremental::IncrementalTypesetDiagnostics {
+                total_pages: total,
+                first_affected_page: 0,
+                recomputed_pages: total,
+                reused_pages: 0,
+                recomputed_paragraphs: total_paras,
+                reused_paragraphs: 0,
+                zero_cascade: false,
+                converged_at_page: None,
+                duration: start_time.elapsed(),
+            };
+            return (pages, diag);
+        }
+
+        let content = self.content_rect_for_side(SpreadSide::Recto);
+        let content_width = content.width;
+        let content_height = content.height;
+        let flow_id = doc
+            .sections
+            .first()
+            .and_then(|s| s.main_flow().or_else(|| s.flows.first()))
+            .map(|f| f.id.0.as_str())
+            .unwrap_or("gemara");
+
+        // Collect all paragraphs and check cache
+        let jobs: Vec<(usize, usize, &ParagraphNode)> = doc
+            .sections
+            .iter()
+            .enumerate()
+            .filter_map(|(sec_idx, sec)| sec.main_flow().map(|flow| (sec_idx, flow)))
+            .flat_map(|(sec_idx, flow)| {
+                flow.paragraphs
+                    .iter()
+                    .enumerate()
+                    .map(move |(p_idx, p)| (sec_idx, p_idx, p))
+            })
+            .collect();
+
+        let default_style = tok_core::styles::ParagraphStyle::default();
+        let cached_lookup: Vec<(crate::layout_cache::ParagraphCacheKey, Option<Vec<LineBox>>)> = {
+            let cache = self.paragraph_cache.read().unwrap();
+            jobs.iter()
+                .map(|&(_, _, p)| {
+                    let style = doc
+                        .paragraph_styles
+                        .iter()
+                        .find(|s| s.id == p.style_id)
+                        .unwrap_or(&default_style);
+                    let key = crate::layout_cache::ParagraphLayoutCache::make_key(p, style, content_width);
+                    let hit = cache.get(&key).map(|c| c.lines.clone());
+                    (key, hit)
+                })
+                .collect()
+        };
+
+        let misses: Vec<(usize, &ParagraphNode, crate::layout_cache::ParagraphCacheKey)> = jobs
+            .iter()
+            .zip(&cached_lookup)
+            .enumerate()
+            .filter_map(|(idx, (&(_, _, p), (key, cached)))| {
+                if cached.is_none() {
+                    Some((idx, p, key.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let recomputed_paras_count = misses.len();
+        let reused_paras_count = jobs.len().saturating_sub(recomputed_paras_count);
+
+        let computed: Vec<(usize, crate::layout_cache::ParagraphCacheKey, Vec<LineBox>)> = misses
+            .par_iter()
+            .map_init(
+                HashMap::<String, ShapingSession<'_>>::new,
+                |sessions, &(idx, p, ref key)| {
+                    let (font_family, font_size, line_height) = doc
+                        .paragraph_styles
+                        .iter()
+                        .find(|s| s.id == p.style_id)
+                        .map(|style| {
+                            (
+                                self.font_manager
+                                    .face_for(&style.font_family, style.font_weight),
+                                style.font_size_pt,
+                                style.line_height_pt,
+                            )
+                        })
+                        .unwrap_or((
+                            DEFAULT_FONT_FAMILY.to_string(),
+                            DEFAULT_FONT_SIZE_PT,
+                            DEFAULT_LINE_HEIGHT_PT,
+                        ));
+                    let session = sessions
+                        .entry(font_family)
+                        .or_insert_with_key(|family| self.font_manager.session(family));
+                    let lines = Self::typeset_with_session(session, p, content_width, font_size, line_height);
+                    (idx, key.clone(), lines)
+                },
+            )
+            .collect();
+
+        if !computed.is_empty() {
+            let mut cache = self.paragraph_cache.write().unwrap();
+            for (_, key, lines) in &computed {
+                cache.insert(key.clone(), lines.clone());
+            }
+        }
+
+        let mut computed_map: HashMap<usize, Vec<LineBox>> = computed
+            .into_iter()
+            .map(|(idx, _, lines)| (idx, lines))
+            .collect();
+
+        let laid_out: Vec<Vec<LineBox>> = cached_lookup
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (_, hit))| {
+                hit.unwrap_or_else(|| computed_map.remove(&idx).unwrap_or_default())
+            })
+            .collect();
+
+        // Check Zero-Cascade condition:
+        // If exactly 1 paragraph was modified, and it is located completely within 1 page in previous_pages,
+        // and its new line count equals its old line count on that page, and line heights match:
+        if recomputed_paras_count == 1 {
+            let target_node_id = modified_node_id.or_else(|| {
+                misses.first().map(|(_, p, _)| p.id)
+            });
+
+            if let Some(target_id) = target_node_id {
+                let pages_containing: Vec<usize> = previous_pages
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, page)| {
+                        page.frames.iter().any(|f| {
+                            f.lines.iter().any(|l| l.paragraph_id == Some(target_id))
+                        })
+                    })
+                    .map(|(idx, _)| idx)
+                    .collect();
+
+                if pages_containing.len() == 1 {
+                    let page_idx = pages_containing[0];
+                    let old_page = &previous_pages[page_idx];
+                    let old_lines_count = old_page.frames.iter()
+                        .flat_map(|f| &f.lines)
+                        .filter(|l| l.paragraph_id == Some(target_id))
+                        .count();
+
+                    if let Some((job_idx, _)) = jobs.iter().enumerate().find(|(_, (_, _, p))| p.id == target_id) {
+                        let new_lines = &laid_out[job_idx];
+                        if new_lines.len() == old_lines_count {
+                            // Check line heights match
+                            let old_lines: Vec<&LineBox> = old_page.frames.iter()
+                                .flat_map(|f| &f.lines)
+                                .filter(|l| l.paragraph_id == Some(target_id))
+                                .collect();
+
+                            let heights_match = new_lines.iter().zip(&old_lines).all(|(n, o)| (n.height - o.height).abs() < 1e-3);
+
+                            if heights_match {
+                                // ZERO-CASCADE TRIGGERED!
+                                let mut new_pages = previous_pages.to_vec();
+                                let page = &mut new_pages[page_idx];
+                                for frame in &mut page.frames {
+                                    let mut new_frame_lines = Vec::with_capacity(frame.lines.len());
+                                    let mut curr_y = 0.0;
+                                    let mut new_lines_iter = new_lines.iter().cloned();
+
+                                    for old_line in &frame.lines {
+                                        let mut line = if old_line.paragraph_id == Some(target_id) {
+                                            new_lines_iter.next().unwrap_or_else(|| old_line.clone())
+                                        } else {
+                                            old_line.clone()
+                                        };
+                                        line.baseline_y = curr_y + line.height;
+                                        curr_y += line.height;
+                                        new_frame_lines.push(line);
+                                    }
+                                    frame.lines = new_frame_lines;
+                                }
+
+                                let total = new_pages.len();
+                                return (
+                                    new_pages,
+                                    crate::incremental::IncrementalTypesetDiagnostics {
+                                        total_pages: total,
+                                        first_affected_page: page_idx,
+                                        recomputed_pages: 1,
+                                        reused_pages: total - 1,
+                                        recomputed_paragraphs: 1,
+                                        reused_paragraphs: reused_paras_count,
+                                        zero_cascade: true,
+                                        converged_at_page: Some(page_idx),
+                                        duration: start_time.elapsed(),
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Otherwise, build pagination inputs and run IncrementalPageBreaker
+        let mut pagination_inputs = Vec::new();
+        let mut prev_space_after: f32 = 0.0;
+        let mut prev_section_idx: Option<usize> = None;
+        let mut first_affected_line_idx: Option<usize> = None;
+
+        for (job_idx, (&(sec_idx, p_idx, p), p_lines)) in jobs.iter().zip(&laid_out).enumerate() {
+            let is_modified = misses.iter().any(|(m_idx, _, _)| *m_idx == job_idx);
+            if is_modified && first_affected_line_idx.is_none() {
+                first_affected_line_idx = Some(pagination_inputs.len());
+            }
+
+            if prev_section_idx != Some(sec_idx) {
+                prev_section_idx = Some(sec_idx);
+                prev_space_after = 0.0;
+            }
+
+            let (keep_with_next, orphan_control, widow_control, space_before, space_after) = doc
+                .paragraph_styles
+                .iter()
+                .find(|s| s.id == p.style_id)
+                .map(|style| {
+                    (
+                        style.keep_with_next,
+                        style.orphan_control,
+                        style.widow_control,
+                        style.space_before_pt.max(0.0),
+                        style.space_after_pt.max(0.0),
+                    )
+                })
+                .unwrap_or((false, 2, 2, 0.0, 0.0));
+
+            if p_lines.is_empty() {
+                prev_space_after = prev_space_after.max(space_before).max(space_after);
+                continue;
+            }
+
+            let effective_space_before = prev_space_after.max(space_before);
+            let total_lines = p_lines.len();
+            for (l_idx, line) in p_lines.iter().enumerate() {
+                let char_offset = line
+                    .glyphs
+                    .iter()
+                    .map(|g| g.cluster as usize)
+                    .min()
+                    .and_then(|byte| p.text.get(..byte))
+                    .map_or(0, |s| s.chars().count());
+
+                pagination_inputs.push(PaginationLineInput {
+                    line: line.clone(),
+                    section_idx: sec_idx,
+                    paragraph_idx: p_idx,
+                    paragraph_id: Some(p.id),
+                    line_in_paragraph: l_idx,
+                    total_lines_in_paragraph: total_lines,
+                    keep_with_next,
+                    orphan_control,
+                    widow_control,
+                    space_before: if l_idx == 0 {
+                        effective_space_before
+                    } else {
+                        0.0
+                    },
+                    space_after,
+                    char_offset,
+                });
+            }
+            prev_space_after = space_after;
+        }
+
+        let previous_slices: Vec<crate::page_break::PageSlice> = previous_pages
+            .iter()
+            .map(|p| crate::page_break::PageSlice {
+                lines: p.frames.iter().flat_map(|f| f.lines.clone()).collect(),
+                total_height: p.frames.iter().map(|f| f.rect.height).sum(),
+                break_token: p.break_token.clone(),
+            })
+            .collect();
+
+        let inc_breaker = crate::incremental::IncrementalPageBreaker::new(content_height);
+        let (slices, break_diag) = inc_breaker.break_pages_incremental(
+            &pagination_inputs,
+            &previous_slices,
+            first_affected_line_idx.unwrap_or(0),
+        );
+
+        let mut pages = Vec::new();
+        for (page_idx, slice) in slices.into_iter().enumerate() {
+            let page = self.new_page(
+                page_idx + 1,
+                content_width,
+                slice.total_height,
+                slice.lines,
+                slice.break_token,
+                flow_id,
+            );
+            pages.push(page);
+        }
+
+        if pages.is_empty() {
+            pages.push(self.new_page(1, content_width, content_height, Vec::new(), None, flow_id));
+        }
+
+        let total = pages.len();
+        let diag = crate::incremental::IncrementalTypesetDiagnostics {
+            total_pages: total,
+            first_affected_page: break_diag.first_affected_page,
+            recomputed_pages: break_diag.recomputed_pages_count,
+            reused_pages: total.saturating_sub(break_diag.recomputed_pages_count),
+            recomputed_paragraphs: recomputed_paras_count,
+            reused_paragraphs: reused_paras_count,
+            zero_cascade: break_diag.zero_cascade,
+            converged_at_page: break_diag.converged_at_page,
+            duration: start_time.elapsed(),
+        };
+
+        (pages, diag)
+    }
+
     /// Typesets a multi-flow document (Talmud / Mikraot / commentaries) using MultiFlowSolver.
     pub fn typeset_document_multi_flow(&self, doc: &DocumentRoot) -> Vec<PageLayoutBox> {
         let content = self.content_rect_for_side(SpreadSide::Recto);
@@ -2368,5 +2713,46 @@ mod tests {
         let misses3 = eng.paragraph_cache.read().unwrap().metrics().miss_count();
         assert_eq!(hits3, 3);
         assert_eq!(misses3, 3);
+    }
+
+    #[test]
+    fn test_zero_cascade_incremental_typesetting() {
+        let mut doc = DocumentRoot::new("מבחן Zero-Cascade");
+        let p1_id = {
+            let flow = doc.sections[0].main_flow_mut().unwrap();
+            for i in 0..100 {
+                let p = ParagraphNode::new(
+                    tok_core::id::FractionalIndex::new(format!("k{:03}", i)),
+                    "default-body",
+                    "זֶהוּ טֶקְסְט עִבְרִי שֶׁל פִּסְקָה תִּקְנִית לְצֹרֶךְ עִמּוּד מְדֻיָּק וּבְדִיקַת הִתְכַּנְּסוּת שֶׁל עִמּוּד אִינְקְרֶמֶנְטָלִי בְּלִי גְּלִישָׁה מְיֻתֶּרֶת.",
+                );
+                flow.add_paragraph(p);
+            }
+            flow.paragraphs[1].id
+        };
+
+        let eng = engine();
+        let pages1 = eng.typeset_document(&doc);
+        assert!(pages1.len() >= 2, "Must produce multiple pages");
+
+        // Edit paragraph 1 with minor typo fix that preserves line count
+        doc.sections[0].main_flow_mut().unwrap().paragraphs[1].text =
+            "זֶהוּ טֶקְסְט עִבְרִי שֶׁל פִּסְקָה תִּקְנִית לְצֹרֶךְ עִמּוּד מְדֻיָּק וּבְדִיקַת הִתְכַּנְּסוּת שֶׁל עִמּוּד אִינְקְרֶמֶנְטָלִי בְּלִי שׁוּם גְּלִישָׁה.".to_string();
+
+        let (pages2, diag) = eng.typeset_document_incremental(&doc, &pages1, Some(p1_id));
+
+        assert_eq!(pages1.len(), pages2.len());
+        assert!(diag.zero_cascade, "Must trigger zero-cascade optimization");
+        assert_eq!(diag.recomputed_pages, 1);
+        assert_eq!(diag.reused_pages, pages1.len() - 1);
+
+        // Verify trailing pages are identical
+        for page_idx in 1..pages1.len() {
+            assert_eq!(pages1[page_idx].frames[0].lines.len(), pages2[page_idx].frames[0].lines.len());
+            for (l1, l2) in pages1[page_idx].frames[0].lines.iter().zip(&pages2[page_idx].frames[0].lines) {
+                assert_eq!(l1.text, l2.text);
+                assert_eq!(l1.baseline_y, l2.baseline_y);
+            }
+        }
     }
 }

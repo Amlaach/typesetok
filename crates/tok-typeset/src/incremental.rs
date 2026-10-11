@@ -13,6 +13,20 @@ pub struct IncrementalBreakDiagnostics {
     pub zero_cascade: bool,
 }
 
+/// Overall performance and convergence metrics for full document incremental typesetting.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IncrementalTypesetDiagnostics {
+    pub total_pages: usize,
+    pub first_affected_page: usize,
+    pub recomputed_pages: usize,
+    pub reused_pages: usize,
+    pub recomputed_paragraphs: usize,
+    pub reused_paragraphs: usize,
+    pub zero_cascade: bool,
+    pub converged_at_page: Option<usize>,
+    pub duration: std::time::Duration,
+}
+
 /// Incremental Page Breaker with break-token convergence detection.
 ///
 /// Instead of re-breaking an entire multi-hundred page book from page 1,
