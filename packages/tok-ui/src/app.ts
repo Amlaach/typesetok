@@ -33,6 +33,7 @@ import {
 import { layoutToPageDescriptors } from './engine/typesetBridge';
 
 import { toHebrewGematria } from './gematria';
+import { normalizeHebrew, normalizeQuotes, findHolyNames } from './plugins/hebrew-utils';
 export { toHebrewGematria };
 
 /** Runs `fn` after the next paint, when the renderer is idle (max ~1s later). */
@@ -520,6 +521,20 @@ export class TypesetOkApp {
       if (!e.shiftKey && (code === 'KeyS' || key === 's' || key === 'ד')) {
         e.preventDefault();
         this.handleSystemAction('save-document');
+        return;
+      }
+
+      // Ctrl+Shift+N: Normalize Hebrew Niqqud & Cantillation
+      if (e.shiftKey && (code === 'KeyN' || key === 'n' || key === 'מ')) {
+        e.preventDefault();
+        this.handleSystemAction('normalize-hebrew');
+        return;
+      }
+
+      // Ctrl+Alt+J: Full Hebrew Justification
+      if (e.altKey && (code === 'KeyJ' || key === 'j' || key === 'ח')) {
+        e.preventDefault();
+        this.handleSystemAction('apply-justification');
         return;
       }
 
@@ -1979,18 +1994,91 @@ export class TypesetOkApp {
       case 'export-pdf':
         this.openExportDialog();
         break;
-      case 'normalize-hebrew':
+      case 'normalize-hebrew': {
+        const activeKey = this.activeFlowId || 'gemara';
+        const flowParas = this.documentState.flows[activeKey] || [];
+        let modified = false;
+        for (const p of flowParas) {
+          const norm = normalizeQuotes(normalizeHebrew(p.text));
+          if (norm !== p.text) {
+            p.text = norm;
+            modified = true;
+          }
+        }
+        if (modified) {
+          if (this.storyEditor) {
+            this.storyEditor.loadStory(flowParas);
+          }
+          this.setDirty(true);
+          this.scheduleWordCountUpdate();
+          this.scheduleRepaginate();
+        }
         this.showToast(t('toastNormalized'));
         break;
-      case 'shield-divine-names':
+      }
+      case 'shield-divine-names': {
+        const activeKey = this.activeFlowId || 'gemara';
+        const flowParas = this.documentState.flows[activeKey] || [];
+        let modified = false;
+        for (const p of flowParas) {
+          let nextText = p.text.replace(/יהוה/g, 'ה׳');
+          const matches = findHolyNames(nextText);
+          if (matches.length > 0) {
+            let offset = 0;
+            for (const m of matches) {
+              const start = m.offset + offset;
+              const end = start + m.len;
+              const before = nextText.slice(0, start);
+              const inside = nextText.slice(start, end);
+              const after = nextText.slice(end);
+              if (!inside.includes('\u2060')) {
+                nextText = `${before}\u2060${inside}\u2060${after}`;
+                offset += 2;
+              }
+            }
+          }
+          if (nextText !== p.text) {
+            p.text = nextText;
+            modified = true;
+          }
+        }
+        if (modified) {
+          if (this.storyEditor) {
+            this.storyEditor.loadStory(flowParas);
+          }
+          this.setDirty(true);
+          this.scheduleWordCountUpdate();
+          this.scheduleRepaginate();
+        }
         this.showToast(t('toastShieldOn'));
         break;
-      case 'recalculate-gematria':
+      }
+      case 'recalculate-gematria': {
+        for (let idx = 0; idx < this.pages.length; idx++) {
+          this.pages[idx].gematriaNumber = toHebrewGematria(idx + 1);
+        }
+        this.canvas.setPages(this.pages, this.activePageIndex);
+        this.refreshThumbnails();
+        this.updatePageStats(this.activePageIndex);
+        this.setDirty(true);
         this.showToast(t('toastGematriaSynced'));
         break;
-      case 'apply-justification':
+      }
+      case 'apply-justification': {
+        const activeKey = this.activeFlowId || 'gemara';
+        const flowParas = this.documentState.flows[activeKey] || [];
+        for (const p of flowParas) {
+          p.patch = { ...(p.patch || {}), alignment: 'Justified' };
+        }
+        if (this.storyEditor) {
+          this.storyEditor.loadStory(flowParas);
+        }
+        this.setDirty(true);
+        this.scheduleRepaginate();
+        this.updateFormattingToolbarState();
         this.showToast(t('toastJustified'));
         break;
+      }
       default:
         console.log('[TOK] Action:', action);
     }
