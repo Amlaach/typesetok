@@ -249,8 +249,9 @@ impl TypesettingEngine {
         let space_gid = session.space_glyph_id().unwrap_or(3);
         let base_space = font_size * SPACE_EM;
 
-        let mut items: Vec<LayoutItem> = Vec::new();
-        let mut meta: Vec<ItemMeta> = Vec::new();
+        let est_items = (text.len() / 5).max(8) * 2;
+        let mut items: Vec<LayoutItem> = Vec::with_capacity(est_items);
+        let mut meta: Vec<ItemMeta> = Vec::with_capacity(est_items);
         let mut word_start: Option<usize> = None;
         let mut gap_offset: Option<usize> = None;
 
@@ -714,6 +715,8 @@ impl TypesettingEngine {
         // Layout lines for each flow
         let mut flow_lines_map: std::collections::BTreeMap<String, Vec<LineBox>> =
             std::collections::BTreeMap::new();
+        let mut sessions: HashMap<String, ShapingSession<'_>> = HashMap::new();
+
         for flow in &first_sec.flows {
             let flow_width = nominal_allocations
                 .iter()
@@ -751,9 +754,13 @@ impl TypesettingEngine {
                         (font.to_string(), sz, sz * 1.45)
                     });
 
-                let p_lines = self.typeset_paragraph_with_font(
+                let session = sessions
+                    .entry(font_family.clone())
+                    .or_insert_with(|| self.font_manager.session(&font_family));
+
+                let p_lines = Self::typeset_with_session(
+                    session,
                     p,
-                    &font_family,
                     flow_width,
                     font_size,
                     line_height,
@@ -2173,6 +2180,17 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_multi_flow_shaping_cache_performance() {
+        let doc = crate::fixtures::create_realistic_talmud_document();
+        let eng = engine();
+        let start = std::time::Instant::now();
+        let pages = eng.typeset_document_multi_flow(&doc);
+        let elapsed = start.elapsed();
+        assert!(!pages.is_empty(), "Must produce pages");
+        assert!(elapsed.as_millis() < 1500, "Multi-flow typesetting took too long: {:?}", elapsed);
     }
 }
 
