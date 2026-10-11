@@ -100,6 +100,75 @@ impl HebrewNormalizer {
         flush_marks(&mut current_marks, &mut result);
         result
     }
+
+    /// Returns true if character is a Hebrew letter (Alef .. Tav, final forms).
+    pub fn is_hebrew_letter(c: char) -> bool {
+        matches!(c as u32, 0x05D0..=0x05EA)
+    }
+
+    /// Returns true if character is a Unicode BiDi directional control.
+    pub fn is_bidi_control(c: char) -> bool {
+        matches!(
+            c as u32,
+            0x200E | 0x200F | // LRM, RLM
+            0x202A..=0x202E | // LRE, RLE, PDF, LRO, RLO
+            0x2066..=0x2069   // LRI, RLI, FSI, PDI
+        )
+    }
+
+    /// Strips Hebrew vowel points and dots (Niqqud & Dagesh) while preserving consonants and cantillation.
+    pub fn strip_niqqud(input: &str) -> String {
+        input
+            .chars()
+            .filter(|&c| {
+                let code = c as u32;
+                !matches!(code, 0x05B0..=0x05BC | 0x05BF | 0x05C1 | 0x05C2 | 0x05C7)
+            })
+            .collect()
+    }
+
+    /// Strips Hebrew cantillation marks (Te'amim).
+    pub fn strip_teamim(input: &str) -> String {
+        input
+            .chars()
+            .filter(|&c| {
+                let code = c as u32;
+                !matches!(code, 0x0591..=0x05AF)
+            })
+            .collect()
+    }
+
+    /// Strips all combining marks (Niqqud + Te'amim + Meteg + dots).
+    pub fn strip_all_marks(input: &str) -> String {
+        input
+            .chars()
+            .filter(|&c| Self::mark_category(c).is_none())
+            .collect()
+    }
+
+    /// Cleans pasted text: removes non-printable C0 control characters (except \n and \t)
+    /// and BOM (U+FEFF), standardizes CRLF to LF, while strictly preserving
+    /// BiDi controls, Hebrew letters, niqqud, te'amim, and punctuation.
+    pub fn sanitize_plain_text(input: &str) -> String {
+        let mut out = String::with_capacity(input.len());
+        for c in input.chars() {
+            let code = c as u32;
+            if code == 0xFEFF || code == 0x00AD {
+                // Strip BOM and soft hyphen
+                continue;
+            }
+            if c == '\r' {
+                // Handled / stripped in CRLF normalization
+                continue;
+            }
+            if c < ' ' && c != '\n' && c != '\t' {
+                // Strip C0 control characters (e.g. ASCII 0..31 except \n and \t)
+                continue;
+            }
+            out.push(c);
+        }
+        Self::normalize(&out)
+    }
 }
 
 #[cfg(test)]
@@ -205,5 +274,51 @@ mod tests {
         let input = "Hello World 123";
         let result = HebrewNormalizer::normalize(input);
         assert_eq!(result, input, "ASCII text must pass through unchanged");
+    }
+
+    #[test]
+    fn test_strip_niqqud_preserves_consonants_and_cantillation() {
+        // "בְּרֵאשִׁ֖ית" with niqqud and cantillation (Tipha \u{0596})
+        let input = "בְּרֵאשִׁ֖ית";
+        let stripped = HebrewNormalizer::strip_niqqud(input);
+        // Niqqud stripped, letters and cantillation preserved
+        assert_eq!(stripped, "בראש֖ית");
+
+        // Strip teamim
+        let no_teamim = HebrewNormalizer::strip_teamim(input);
+        assert_eq!(no_teamim, "בְּרֵאשִׁית");
+
+        // Strip all marks
+        let bare = HebrewNormalizer::strip_all_marks(input);
+        assert_eq!(bare, "בראשית");
+    }
+
+    #[test]
+    fn test_sanitize_plain_text_cleans_c0_and_bom_while_preserving_bidi_and_niqqud() {
+        // Text with BOM (\u{FEFF}), CRLF, Tab, LRM (\u{200E}), and Hebrew with niqqud
+        let dirty = "\u{FEFF}\u{200E}שָׁלוֹם\r\n\tWorld 123\u{0007}\u{00AD}";
+        let cleaned = HebrewNormalizer::sanitize_plain_text(dirty);
+
+        // BOM and bell char \u{0007} stripped, soft hyphen stripped, \r stripped, \n and \t preserved
+        assert!(!cleaned.contains('\u{FEFF}'));
+        assert!(!cleaned.contains('\u{0007}'));
+        assert!(!cleaned.contains('\u{00AD}'));
+        assert!(!cleaned.contains('\r'));
+        assert!(cleaned.contains('\u{200E}')); // LRM preserved
+        assert!(cleaned.contains('\t'));
+        assert!(cleaned.contains('\n'));
+        let expected_hebrew = HebrewNormalizer::normalize("שָׁלוֹם");
+        assert!(cleaned.contains(&expected_hebrew));
+    }
+
+    #[test]
+    fn test_is_bidi_control() {
+        assert!(HebrewNormalizer::is_bidi_control('\u{200E}')); // LRM
+        assert!(HebrewNormalizer::is_bidi_control('\u{200F}')); // RLM
+        assert!(HebrewNormalizer::is_bidi_control('\u{2066}')); // LRI
+        assert!(HebrewNormalizer::is_bidi_control('\u{2067}')); // RLI
+        assert!(HebrewNormalizer::is_bidi_control('\u{2069}')); // PDI
+        assert!(!HebrewNormalizer::is_bidi_control('א'));
+        assert!(!HebrewNormalizer::is_bidi_control('A'));
     }
 }
