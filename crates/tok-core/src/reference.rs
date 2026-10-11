@@ -50,6 +50,8 @@ pub struct CrossReferenceNode {
     pub target_key: String,
     pub kind: ReferenceKind,
     pub fallback_text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cached_resolved_text: Option<String>,
 }
 
 impl CrossReferenceNode {
@@ -65,7 +67,18 @@ impl CrossReferenceNode {
             target_key: target_key.into(),
             kind,
             fallback_text: fallback_text.into(),
+            cached_resolved_text: None,
         }
+    }
+
+    pub fn resolve_text(&mut self, text: impl Into<String>) {
+        self.cached_resolved_text = Some(text.into());
+    }
+
+    pub fn resolved_or_fallback(&self) -> &str {
+        self.cached_resolved_text
+            .as_deref()
+            .unwrap_or(&self.fallback_text)
     }
 
     /// Formats the resolved reference text given layout output metrics.

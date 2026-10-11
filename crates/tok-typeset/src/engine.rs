@@ -1055,6 +1055,88 @@ impl TypesettingEngine {
         (pages, diag)
     }
 
+    /// Synchronizes bidirectional dependency tracking between document nodes and physical pages,
+    /// and resolves cross-references to their target physical pages.
+    /// Returns the number of updated cross-references.
+    pub fn update_cross_references_and_dependencies(
+        &self,
+        doc: &mut DocumentRoot,
+        pages: &[PageLayoutBox],
+    ) -> usize {
+        let mut updated_refs = 0;
+
+        // 1. Update DocumentDependencyTracker if present
+        if let Some(tracker) = &mut doc.dependency_tracker {
+            tracker.node_to_pages.clear();
+            tracker.page_to_nodes.clear();
+            tracker.anchor_to_page.clear();
+
+            for (page_idx, page) in pages.iter().enumerate() {
+                for frame in &page.frames {
+                    for line in &frame.lines {
+                        if let Some(node_id) = line.paragraph_id {
+                            tracker.record_placement(node_id, page_idx);
+                        }
+                    }
+                }
+            }
+
+            // Record anchors
+            if let Some(registry) = &doc.cross_references {
+                for (key, target) in &registry.targets {
+                    if let Some(pages) = tracker.pages_for_node(target.anchor.node_id) {
+                        if let Some(&first_page) = pages.iter().next() {
+                            tracker.record_anchor_page(key, first_page);
+                        }
+                    }
+                }
+            }
+
+            tracker.clean_after_recompute();
+            tracker.advance_revision();
+        }
+
+        // 2. Resolve cross-references if present
+        let mut target_pages: HashMap<String, usize> = HashMap::new();
+        for (page_idx, page) in pages.iter().enumerate() {
+            for frame in &page.frames {
+                for line in &frame.lines {
+                    if let Some(node_id) = line.paragraph_id {
+                        if let Some(registry) = &doc.cross_references {
+                            for (key, target) in &registry.targets {
+                                if target.anchor.node_id == node_id && !target_pages.contains_key(key) {
+                                    target_pages.insert(key.clone(), page_idx);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(registry) = &mut doc.cross_references {
+            for xref in &mut registry.references {
+                if let Some(&page_idx) = target_pages.get(&xref.target_key) {
+                    let page_num = page_idx + 1;
+                    let gematria = GematriaEngine::to_hebrew_numeral(page_num);
+                    let target_label = registry.targets.get(&xref.target_key).and_then(|t| t.label.as_deref());
+                    let resolved = xref.format_resolved(
+                        Some(page_num),
+                        Some(&gematria),
+                        target_label,
+                        None,
+                    );
+                    if xref.cached_resolved_text.as_deref() != Some(&resolved) {
+                        xref.resolve_text(resolved);
+                        updated_refs += 1;
+                    }
+                }
+            }
+        }
+
+        updated_refs
+    }
+
     /// Typesets a multi-flow document (Talmud / Mikraot / commentaries) using MultiFlowSolver.
     pub fn typeset_document_multi_flow(&self, doc: &DocumentRoot) -> Vec<PageLayoutBox> {
         let content = self.content_rect_for_side(SpreadSide::Recto);
@@ -2807,5 +2889,105 @@ mod tests {
                 "Gematria folio must match 1-based page index"
             );
         }
+    }
+
+    #[test]
+    fn test_anchor_and_cross_reference_consistency_across_incremental_reflow() {
+        let mut doc = DocumentRoot::new("מבחן עוגנים והפניות צולבות בעימוד אינקרמנטלי");
+        doc.dependency_tracker = Some(tok_core::dependency::DocumentDependencyTracker::new());
+        let mut registry = tok_core::reference::CrossReferenceRegistry::new();
+
+        let target_node_id;
+        let source_node_id;
+
+        {
+            let flow = doc.sections[0].main_flow_mut().unwrap();
+
+            let p_source = ParagraphNode::new(
+                tok_core::id::FractionalIndex::new("a01"),
+                "default-body",
+                "פסקת הפניה מקורית המפנה לעוגן המטרה לקמן.",
+            );
+            source_node_id = p_source.id;
+            flow.add_paragraph(p_source);
+
+            let p_target = ParagraphNode::new(
+                tok_core::id::FractionalIndex::new("b01"),
+                "default-body",
+                "פסקת יעד המכילה את עוגן המטרה שאליו מפנים.",
+            );
+            target_node_id = p_target.id;
+            flow.add_paragraph(p_target);
+        }
+
+        // Register target anchor and reference
+        let target = tok_core::reference::ReferenceTarget::new(
+            "anchor-target-topic",
+            tok_core::anchor::TextAnchor::start_of(target_node_id),
+        ).with_label("סוגיא בפרק ראשון");
+        registry.register_target(target);
+
+        let xref = tok_core::reference::CrossReferenceNode::new(
+            tok_core::anchor::TextAnchor::start_of(source_node_id),
+            "anchor-target-topic",
+            tok_core::reference::ReferenceKind::PageGematria,
+            "??",
+        );
+        registry.register_reference(xref);
+        doc.cross_references = Some(registry);
+
+        let eng = engine();
+        let pages1 = eng.typeset_document(&doc);
+        eng.update_cross_references_and_dependencies(&mut doc, &pages1);
+
+        // Initially both are on page 1 (Gematria א׳)
+        let resolved_init = doc.cross_references.as_ref().unwrap().references[0]
+            .resolved_or_fallback()
+            .to_string();
+        assert_eq!(
+            resolved_init,
+            GematriaEngine::to_hebrew_numeral(1),
+            "Initial target should resolve to page 1 gematria"
+        );
+        assert_eq!(
+            doc.dependency_tracker.as_ref().unwrap().page_for_anchor("anchor-target-topic"),
+            Some(0)
+        );
+
+        // Now push target downstream by inserting many paragraphs between source and target
+        {
+            let flow = doc.sections[0].main_flow_mut().unwrap();
+            for i in 0..70 {
+                let p = ParagraphNode::new(
+                    tok_core::id::FractionalIndex::new(format!("am{:03}", i)),
+                    "default-body",
+                    "טקסט מילוי המרחיב את המסמך ודוחף את עוגן היעד לעמודים הבאים.",
+                );
+                flow.add_paragraph(p);
+            }
+        }
+
+        let (pages2, _diag) = eng.typeset_document_incremental(&doc, &pages1, None);
+        assert!(pages2.len() >= 2);
+
+        let updated_count = eng.update_cross_references_and_dependencies(&mut doc, &pages2);
+        assert!(updated_count > 0, "Cross-reference should update due to page shift");
+
+        let target_page_idx = doc
+            .dependency_tracker
+            .as_ref()
+            .unwrap()
+            .page_for_anchor("anchor-target-topic")
+            .unwrap();
+        assert!(target_page_idx >= 1, "Target node must have shifted to downstream page");
+
+        let resolved_after = doc.cross_references.as_ref().unwrap().references[0]
+            .resolved_or_fallback()
+            .to_string();
+        let expected_gematria = GematriaEngine::to_hebrew_numeral(target_page_idx + 1);
+        assert_eq!(
+            resolved_after, expected_gematria,
+            "Cross reference must consistently reflect new target page in gematria"
+        );
     }
 }
