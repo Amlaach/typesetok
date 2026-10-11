@@ -295,23 +295,9 @@ export class WelcomeModal {
     head.appendChild(el('p', 'tok-lead', undefined, t('welcomeSubtitle')));
     main.appendChild(head);
 
-    const grid = el('div', 'tok-template-grid', { role: 'list', 'aria-label': t('newProject') });
-    for (const tmpl of TEMPLATES) {
-      const b = el('button', 'tok-template-card', { type: 'button', role: 'listitem', 'data-focus-key': `template-${tmpl.id}` });
-      const art = el('span', 'tok-template-art');
-      art.appendChild(pageArt(tmpl.art, 84, 118));
-      b.appendChild(art);
-      const text = el('span', 'tok-template-text');
-      text.appendChild(el('span', 'tok-template-title', undefined, t(tmpl.titleKey)));
-      text.appendChild(el('span', 'tok-template-desc', undefined, t(tmpl.descKey)));
-      text.appendChild(el('span', 'tok-template-meta', undefined, t(tmpl.metaKey)));
-      b.appendChild(text);
-      b.addEventListener('click', () => {
-        this.hide();
-        this.callbacks.onSelectTemplate(tmpl.id);
-      });
-      grid.appendChild(b);
-    }
+    // 1. Primary actions: Blank Document & Import Document
+    const primaryGrid = el('div', 'tok-template-grid', { role: 'list', 'aria-label': t('welcomeNewDocSection'), style: 'margin-bottom:20px;' });
+
     const blank = el('button', 'tok-template-card tok-template-blank', { type: 'button', role: 'listitem', 'data-focus-key': 'template-blank' });
     const plus = el('span', 'tok-plus', { 'aria-hidden': 'true' });
     plus.appendChild(icon('plus', 20));
@@ -322,7 +308,7 @@ export class WelcomeModal {
       this.hide();
       this.callbacks.onSelectTemplate('blank');
     });
-    grid.appendChild(blank);
+    primaryGrid.appendChild(blank);
 
     const importCard = el('button', 'tok-template-card tok-template-import', { type: 'button', role: 'listitem', 'data-focus-key': 'template-import' });
     const importIconWrap = el('span', 'tok-plus', { 'aria-hidden': 'true', style: 'background:rgba(59,130,246,0.15);color:#60A5FA;' });
@@ -334,9 +320,39 @@ export class WelcomeModal {
       this.hide();
       this.callbacks.onImportDocument?.();
     });
-    grid.appendChild(importCard);
+    primaryGrid.appendChild(importCard);
+    main.appendChild(primaryGrid);
 
-    main.appendChild(grid);
+    // 2. Demo Samples section (explicitly marked as demo only)
+    const demoHead = el('div', 'tok-demo-head', { style: 'margin-top:12px;margin-bottom:8px;' });
+    const demoH2 = el('h2', undefined, { style: 'font-size:14px;font-weight:700;color:var(--tok-text-primary);margin:0 0 2px 0;' }, t('welcomeDemoSection'));
+    const demoSub = el('p', undefined, { style: 'font-size:12px;color:var(--tok-text-muted);margin:0;' }, t('welcomeDemoSub'));
+    demoHead.appendChild(demoH2);
+    demoHead.appendChild(demoSub);
+    main.appendChild(demoHead);
+
+    const demoGrid = el('div', 'tok-template-grid', { role: 'list', 'aria-label': t('welcomeDemoSection') });
+    for (const tmpl of TEMPLATES) {
+      const b = el('button', 'tok-template-card tok-template-demo-card', { type: 'button', role: 'listitem', 'data-focus-key': `template-${tmpl.id}` });
+      const art = el('span', 'tok-template-art');
+      art.appendChild(pageArt(tmpl.art, 84, 118));
+      b.appendChild(art);
+      const text = el('span', 'tok-template-text');
+      const badge = el('span', 'tok-demo-badge', {
+        style: 'font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(234,179,8,0.15);color:#EAB308;align-self:flex-start;margin-bottom:2px;'
+      }, t('demoBadgeText'));
+      text.appendChild(badge);
+      text.appendChild(el('span', 'tok-template-title', undefined, t(tmpl.titleKey)));
+      text.appendChild(el('span', 'tok-template-desc', undefined, t(tmpl.descKey)));
+      text.appendChild(el('span', 'tok-template-meta', undefined, t(tmpl.metaKey)));
+      b.appendChild(text);
+      b.addEventListener('click', () => {
+        this.hide();
+        this.callbacks.onSelectTemplate(tmpl.id);
+      });
+      demoGrid.appendChild(b);
+    }
+    main.appendChild(demoGrid);
     card.appendChild(main);
 
     // Recent projects section (with delete, rename, view all)

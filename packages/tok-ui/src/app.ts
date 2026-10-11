@@ -58,11 +58,11 @@ const FLOW_NAME_KEYS: Record<string, string> = {
 
 /** Template id → document title shown in the top bar (document names, not UI text). */
 const TEMPLATE_TITLES: Record<string, string> = {
-  gemara: 'פרויקט דף גמרא.tok',
-  mikraot: 'פרויקט מקראות גדולות.tok',
-  prose: 'ספר קריאה וטקסט רציף.tok',
-  notes: 'ספר עם הערות שוליים.tok',
-  bulletin: 'עלון וקונטרס.tok'
+  gemara: 'דמו — מסכת ברכות.tok',
+  mikraot: 'דמו — מקראות גדולות.tok',
+  prose: 'דמו — ספר קריאה וטקסט רציף.tok',
+  notes: 'דמו — ספר עם הערות שוליים.tok',
+  bulletin: 'דמו — עלון וקונטרס.tok'
 };
 const BLANK_TEMPLATE_TITLE = 'מסמך ריק.tok';
 import { countWords, getParagraphWordCount, clearWordCountCache } from './textStats';
@@ -1838,16 +1838,18 @@ export class TypesetOkApp {
 
   private handleTemplateSelect(templateId: string): void {
     this.resetDocumentSession();
+    const isBlank = templateId === 'blank';
+    const isDemo = !isBlank;
     const name = TEMPLATE_TITLES[templateId] || BLANK_TEMPLATE_TITLE;
     this.documentTitle = name;
     this.documentState.title = name;
     this.documentState.templateType = (templateId in TEMPLATE_TITLES ? templateId : 'gemara') as TemplateType;
     this.currentFilePath = '';
 
-    if (templateId === 'prose') {
-      this.documentState.flows = JSON.parse(JSON.stringify(DEFAULT_PROSE_FLOWS));
-    } else if (templateId === 'blank') {
+    if (isBlank) {
       this.documentState.flows = { gemara: [], rashi: [], tosafot: [], notes: [] };
+    } else if (templateId === 'prose') {
+      this.documentState.flows = JSON.parse(JSON.stringify(DEFAULT_PROSE_FLOWS));
     } else {
       this.documentState.flows = JSON.parse(JSON.stringify(DEFAULT_TALMUD_FLOWS));
     }
@@ -1863,7 +1865,12 @@ export class TypesetOkApp {
     this.topBar.setDocumentTitle(name, false);
     addRecentProject({ name, pages: this.pages.length, lastSavedAt: new Date().toISOString() });
     this.welcomeModal.setHasOpenDocument(true);
-    this.showToast(tf('toastProjectCreated', { name }));
+
+    if (isDemo) {
+      this.showToast(t('toastDemoLoaded'));
+    } else {
+      this.showToast(tf('toastProjectCreated', { name }));
+    }
   }
 
   private async saveDocumentToFile(filePath: string): Promise<boolean> {
