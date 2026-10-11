@@ -5,7 +5,16 @@
  * Allows authors to write and edit long texts with Niqqud without the overhead of page pagination.
  */
 
-import { StoryParagraph, StorySelection } from './types';
+import {
+  CharacterFormat,
+  ParagraphStylePatch,
+  StoryParagraph,
+  StorySelection,
+  clearRangeInSpans,
+  formatRangeInSpans,
+  mergeParagraphs,
+  splitParagraph
+} from './types';
 import { renderParagraphDom, parseParagraphDom } from './dom_converter';
 import { StoryHistory } from './history';
 export { StoryParagraph, StorySelection };
@@ -48,18 +57,65 @@ export class StoryEditor {
     });
 
     this.editorEl.addEventListener('keydown', (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+      if (isCtrlOrCmd && !e.altKey) {
         if (e.key === 'z' || e.key === 'Z') {
+          e.preventDefault();
           if (e.shiftKey) {
-            e.preventDefault();
             this.redo();
           } else {
-            e.preventDefault();
             this.undo();
           }
+          return;
         } else if (e.key === 'y' || e.key === 'Y') {
           e.preventDefault();
           this.redo();
+          return;
+        } else if (e.key === 'b' || e.key === 'B') {
+          e.preventDefault();
+          this.toggleFormatSelection('bold');
+          return;
+        } else if (e.key === 'i' || e.key === 'I') {
+          e.preventDefault();
+          this.toggleFormatSelection('italic');
+          return;
+        } else if (e.key === 'u' || e.key === 'U') {
+          e.preventDefault();
+          this.toggleFormatSelection('underline');
+          return;
+        }
+      }
+
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const sel = this.getStorySelection();
+        if (sel) {
+          if (e.shiftKey) {
+            this.outdentParagraph(sel.paraId);
+          } else {
+            this.indentParagraph(sel.paraId);
+          }
+        }
+        return;
+      }
+
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.splitParagraphAtCaret();
+        return;
+      }
+
+      if (e.key === 'Backspace') {
+        const sel = this.getStorySelection();
+        if (sel && sel.isCollapsed && sel.start === 0) {
+          const pEl = this.editorEl.querySelector<HTMLElement>(`p[data-para-id="${CSS.escape(sel.paraId)}"]`);
+          const prevEl = pEl?.previousElementSibling as HTMLElement | null;
+          if (prevEl && prevEl.dataset.paraId) {
+            e.preventDefault();
+            this.mergeParagraphWithPrevious(sel.paraId);
+            return;
+          }
         }
       }
     });
@@ -239,6 +295,242 @@ export class StoryEditor {
       this.onStoryChangeCallback(after);
     }
   }
+
+  public getSelectionFormat(): CharacterFormat {
+    const sel = this.getStorySelection();
+    if (!sel) return {};
+    const p = this.getParagraph(sel.paraId);
+    if (!p || !p.spans || p.spans.length === 0) return {};
+
+    const offset = sel.start;
+    const match =
+      p.spans.find((s) => s.start <= offset && s.end > offset) ||
+      (offset > 0 ? p.spans.find((s) => s.end === offset) : undefined);
+    return match ? { ...match.format } : {};
+  }
+
+  public toggleFormatSelection(style: 'bold' | 'italic' | 'underline'): void {
+    const currentFmt = this.getSelectionFormat();
+    const nextFmt: Partial<CharacterFormat> = {};
+
+    if (style === 'bold') {
+      const isBold = (currentFmt.fontWeight || 400) >= 600;
+      nextFmt.fontWeight = isBold ? 400 : 700;
+    } else if (style === 'italic') {
+      nextFmt.italic = !currentFmt.italic;
+    } else if (style === 'underline') {
+      nextFmt.underline = !currentFmt.underline;
+    }
+
+    this.formatSelection(nextFmt);
+  }
+
+  public formatSelection(format: Partial<CharacterFormat>): void {
+    const sel = this.getStorySelection();
+    if (!sel || sel.isCollapsed) return;
+
+    this.executeTransaction('החלת עיצוב תווים', () => {
+      const allParas = Array.from(this.editorEl.querySelectorAll<HTMLElement>('p[data-para-id]'));
+      const aId = sel.anchorParaId || sel.paraId;
+      const fId = sel.focusParaId || sel.paraId;
+
+      let inRange = false;
+      for (const pEl of allParas) {
+        const pid = pEl.dataset.paraId!;
+        const isStart = pid === aId;
+        const isEnd = pid === fId;
+
+        if (aId === fId && isStart) {
+          const p = parseParagraphDom(pEl);
+          const charsLen = Array.from(p.text).length;
+          const start = Math.min(sel.start, sel.end);
+          const end = Math.max(sel.start, sel.end);
+          p.spans = formatRangeInSpans(p.spans || [], start, end, format as CharacterFormat, charsLen);
+          const newEl = renderParagraphDom(p);
+          pEl.replaceWith(newEl);
+          break;
+        }
+
+        if (isStart || isEnd) {
+          const p = parseParagraphDom(pEl);
+          const charsLen = Array.from(p.text).length;
+          if (!inRange) {
+            inRange = true;
+            const start = isStart ? sel.anchorOffset ?? sel.start : sel.focusOffset ?? sel.start;
+            p.spans = formatRangeInSpans(p.spans || [], start, charsLen, format as CharacterFormat, charsLen);
+          } else {
+            const end = isEnd ? sel.focusOffset ?? sel.end : sel.anchorOffset ?? sel.end;
+            p.spans = formatRangeInSpans(p.spans || [], 0, end, format as CharacterFormat, charsLen);
+            inRange = false;
+          }
+          const newEl = renderParagraphDom(p);
+          pEl.replaceWith(newEl);
+        } else if (inRange) {
+          const p = parseParagraphDom(pEl);
+          const charsLen = Array.from(p.text).length;
+          p.spans = formatRangeInSpans(p.spans || [], 0, charsLen, format as CharacterFormat, charsLen);
+          const newEl = renderParagraphDom(p);
+          pEl.replaceWith(newEl);
+        }
+      }
+    });
+
+    this.setStorySelection(sel);
+  }
+
+  public clearFormattingSelection(): void {
+    const sel = this.getStorySelection();
+    if (!sel || sel.isCollapsed) return;
+
+    this.executeTransaction('ניקוי עיצוב', () => {
+      const allParas = Array.from(this.editorEl.querySelectorAll<HTMLElement>('p[data-para-id]'));
+      const aId = sel.anchorParaId || sel.paraId;
+      const fId = sel.focusParaId || sel.paraId;
+
+      let inRange = false;
+      for (const pEl of allParas) {
+        const pid = pEl.dataset.paraId!;
+        const isStart = pid === aId;
+        const isEnd = pid === fId;
+
+        if (aId === fId && isStart) {
+          const p = parseParagraphDom(pEl);
+          const charsLen = Array.from(p.text).length;
+          const start = Math.min(sel.start, sel.end);
+          const end = Math.max(sel.start, sel.end);
+          p.spans = clearRangeInSpans(p.spans || [], start, end, charsLen);
+          const newEl = renderParagraphDom(p);
+          pEl.replaceWith(newEl);
+          break;
+        }
+
+        if (isStart || isEnd) {
+          const p = parseParagraphDom(pEl);
+          const charsLen = Array.from(p.text).length;
+          if (!inRange) {
+            inRange = true;
+            const start = isStart ? sel.anchorOffset ?? sel.start : sel.focusOffset ?? sel.start;
+            p.spans = clearRangeInSpans(p.spans || [], start, charsLen, charsLen);
+          } else {
+            const end = isEnd ? sel.focusOffset ?? sel.end : sel.anchorOffset ?? sel.end;
+            p.spans = clearRangeInSpans(p.spans || [], 0, end, charsLen);
+            inRange = false;
+          }
+          const newEl = renderParagraphDom(p);
+          pEl.replaceWith(newEl);
+        } else if (inRange) {
+          const p = parseParagraphDom(pEl);
+          p.spans = [];
+          const newEl = renderParagraphDom(p);
+          pEl.replaceWith(newEl);
+        }
+      }
+    });
+
+    this.setStorySelection(sel);
+  }
+
+  public setParagraphPatch(paraId: string, patch: Partial<ParagraphStylePatch>): void {
+    const pEl = this.editorEl.querySelector<HTMLElement>(`p[data-para-id="${CSS.escape(paraId)}"]`);
+    if (!pEl) return;
+
+    this.executeTransaction('עיצוב פסקה', () => {
+      const p = parseParagraphDom(pEl);
+      p.patch = { ...(p.patch || {}), ...patch };
+      const newEl = renderParagraphDom(p);
+      pEl.replaceWith(newEl);
+    });
+  }
+
+  public setParagraphStyle(paraId: string, styleId: string): void {
+    const pEl = this.editorEl.querySelector<HTMLElement>(`p[data-para-id="${CSS.escape(paraId)}"]`);
+    if (!pEl) return;
+
+    this.executeTransaction('סגנון פסקה', () => {
+      const p = parseParagraphDom(pEl);
+      p.styleId = styleId;
+      const newEl = renderParagraphDom(p);
+      pEl.replaceWith(newEl);
+    });
+  }
+
+  public indentParagraph(paraId: string, deltaPt = 14.17): void {
+    const p = this.getParagraph(paraId);
+    if (!p) return;
+    const currentIndent = p.patch?.firstLineIndentPt ?? 0;
+    this.setParagraphPatch(paraId, { firstLineIndentPt: Math.max(0, currentIndent + deltaPt) });
+  }
+
+  public outdentParagraph(paraId: string, deltaPt = 14.17): void {
+    const p = this.getParagraph(paraId);
+    if (!p) return;
+    const currentIndent = p.patch?.firstLineIndentPt ?? 0;
+    this.setParagraphPatch(paraId, { firstLineIndentPt: Math.max(0, currentIndent - deltaPt) });
+  }
+
+  public splitParagraphAtCaret(): void {
+    const sel = this.getStorySelection();
+    if (!sel) return;
+
+    const p = this.getParagraph(sel.paraId);
+    if (!p) return;
+
+    const currentOffset = Math.min(sel.start, Array.from(p.text).length);
+    const newId = `${p.id}_${Math.random().toString(36).substring(2, 7)}`;
+
+    this.executeTransaction('פיצול פסקה', () => {
+      const [p1, p2] = splitParagraph(p, currentOffset, newId);
+      const pEl = this.editorEl.querySelector<HTMLElement>(`p[data-para-id="${CSS.escape(p.id)}"]`);
+      if (pEl) {
+        const newP1 = renderParagraphDom(p1);
+        const newP2 = renderParagraphDom(p2);
+        pEl.replaceWith(newP1, newP2);
+      }
+    });
+
+    this.setStorySelection({
+      paraId: newId,
+      start: 0,
+      end: 0,
+      isCollapsed: true,
+      anchorParaId: newId,
+      anchorOffset: 0,
+      focusParaId: newId,
+      focusOffset: 0
+    });
+  }
+
+  public mergeParagraphWithPrevious(paraId: string): void {
+    const pEl = this.editorEl.querySelector<HTMLElement>(`p[data-para-id="${CSS.escape(paraId)}"]`);
+    if (!pEl) return;
+    const prevEl = pEl.previousElementSibling as HTMLElement | null;
+    if (!prevEl || !prevEl.dataset.paraId) return;
+
+    const prevId = prevEl.dataset.paraId;
+    const prevPara = parseParagraphDom(prevEl);
+    const currPara = parseParagraphDom(pEl);
+
+    const prevLen = Array.from(prevPara.text).length;
+
+    this.executeTransaction('מיזוג פסקאות', () => {
+      const merged = mergeParagraphs(prevPara, currPara);
+      const newPrevEl = renderParagraphDom(merged);
+      prevEl.replaceWith(newPrevEl);
+      pEl.remove();
+    });
+
+    this.setStorySelection({
+      paraId: prevId,
+      start: prevLen,
+      end: prevLen,
+      isCollapsed: true,
+      anchorParaId: prevId,
+      anchorOffset: prevLen,
+      focusParaId: prevId,
+      focusOffset: prevLen
+    });
+  }
+
 
   private notifyHistoryChange(): void {
     const u = this.canUndo();

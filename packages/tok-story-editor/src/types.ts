@@ -233,3 +233,81 @@ export function clearRangeInSpans(
   }
   return normalizeSpans(out, textLen);
 }
+
+/** Splits a paragraph at char offset into two paragraphs */
+export function splitParagraph(p: StoryParagraph, offset: number, newId: string): [StoryParagraph, StoryParagraph] {
+  const chars = Array.from(p.text);
+  const leftChars = chars.slice(0, offset);
+  const rightChars = chars.slice(offset);
+  const leftText = leftChars.join('');
+  const rightText = rightChars.join('');
+
+  const leftSpans: TextSpan[] = [];
+  const rightSpans: TextSpan[] = [];
+
+  for (const span of p.spans || []) {
+    if (span.end <= offset) {
+      leftSpans.push({ ...span });
+    } else if (span.start >= offset) {
+      rightSpans.push({
+        start: span.start - offset,
+        end: span.end - offset,
+        format: { ...span.format }
+      });
+    } else {
+      leftSpans.push({
+        start: span.start,
+        end: offset,
+        format: { ...span.format }
+      });
+      rightSpans.push({
+        start: 0,
+        end: span.end - offset,
+        format: { ...span.format }
+      });
+    }
+  }
+
+  const p1: StoryParagraph = {
+    id: p.id,
+    styleId: p.styleId,
+    text: leftText,
+    spans: normalizeSpans(leftSpans, leftChars.length),
+    patch: p.patch ? { ...p.patch } : undefined
+  };
+
+  const p2: StoryParagraph = {
+    id: newId,
+    styleId: p.styleId,
+    text: rightText,
+    spans: normalizeSpans(rightSpans, rightChars.length),
+    patch: p.patch ? { ...p.patch } : undefined
+  };
+
+  return [p1, p2];
+}
+
+/** Merges two adjacent paragraphs into one */
+export function mergeParagraphs(p1: StoryParagraph, p2: StoryParagraph): StoryParagraph {
+  const p1CharsLen = Array.from(p1.text).length;
+  const p2CharsLen = Array.from(p2.text).length;
+  const mergedText = p1.text + p2.text;
+
+  const mergedSpans: TextSpan[] = [...(p1.spans || [])];
+  for (const span of p2.spans || []) {
+    mergedSpans.push({
+      start: span.start + p1CharsLen,
+      end: span.end + p1CharsLen,
+      format: { ...span.format }
+    });
+  }
+
+  return {
+    id: p1.id,
+    styleId: p1.styleId,
+    text: mergedText,
+    spans: normalizeSpans(mergedSpans, p1CharsLen + p2CharsLen),
+    patch: p1.patch ? { ...p1.patch } : undefined
+  };
+}
+
