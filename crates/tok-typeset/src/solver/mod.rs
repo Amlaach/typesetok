@@ -5,6 +5,7 @@
 
 pub mod footnote_model;
 pub mod frame_model;
+pub mod l_shape_model;
 pub mod model;
 pub mod page_model;
 pub mod proportions;
@@ -14,6 +15,7 @@ pub use footnote_model::{FootnoteBandConfig, FootnoteBandVariables};
 pub use frame_model::{
     ColumnFrameVariables, ColumnSpec, MultiColumnConstraintModel, SolvedColumnAllocation,
 };
+pub use l_shape_model::{LShapeConfig, LShapeExpansionVariables};
 pub use model::{
     ConstraintRelation, ConstraintStrength, ConstraintVariable, GeometricConstraint,
     LinearExpression, LinearTerm, RectVariables, SolvedRect,
