@@ -313,15 +313,49 @@ export class TypesetOkApp {
     // 3d. Left Side (Trailing in RTL): Contextual Inspector
     this.inspector = new ContextualInspector({
       onDocumentChange: (settings) => {
-        console.log('[TOK] Document settings changed:', settings);
+        this.documentState.settings = { ...(this.documentState.settings || this.inspector.getDocumentSettings()), ...settings };
+        this.documentState.isDirty = true;
+        this.scheduleRepaginate();
       },
       onFrameChange: (geometry) => {
-        console.log('[TOK] Frame geometry changed:', geometry);
+        this.documentState.isDirty = true;
+        this.scheduleRepaginate();
       },
       onTypographyChange: (typo) => {
-        console.log('[TOK] Typography changed:', typo);
+        const sel = this.storyEditor?.getStorySelection();
+        if (sel) {
+          const fmt: any = {};
+          if (typo.fontFamily) fmt.fontFamily = typo.fontFamily;
+          if (typo.fontSizePt) fmt.fontSizePt = typo.fontSizePt;
+          if (typo.fontWeight) fmt.fontWeight = typo.fontWeight;
+          if (Object.keys(fmt).length > 0 && !sel.isCollapsed) {
+            this.storyEditor.formatSelection(fmt);
+          }
+
+          const patch: any = {};
+          if (typo.fontFamily) patch.fontFamily = typo.fontFamily;
+          if (typo.fontSizePt) patch.fontSizePt = typo.fontSizePt;
+          if (typo.fontWeight) patch.fontWeight = typo.fontWeight;
+          if (typo.lineHeightPt) patch.lineHeightPt = typo.lineHeightPt;
+          if (typo.alignment) {
+            patch.alignment = typo.alignment === 'justify' ? 'Justified' : typo.alignment === 'center' ? 'Center' : typo.alignment === 'left' ? 'Left' : 'Right';
+          }
+          if (Object.keys(patch).length > 0) {
+            this.storyEditor.setParagraphPatch(sel.paraId, patch);
+          }
+          this.updateFormattingToolbarState();
+        }
+        this.documentState.isDirty = true;
+        this.scheduleRepaginate();
       },
       onSyncStyleToken: () => {
+        const sel = this.storyEditor?.getStorySelection();
+        if (sel) {
+          this.storyEditor.setParagraphPatch(sel.paraId, {});
+          this.updateFormattingToolbarState();
+          this.documentState.isDirty = true;
+          this.scheduleRepaginate();
+        }
         this.showToast(t('toastGlobalStyleSynced'));
       },
       onNormalizeNiqqud: () => {
