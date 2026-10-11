@@ -762,7 +762,7 @@ impl TypesettingEngine {
             flow_lines_map.insert(flow.id.0.clone(), lines);
         }
 
-        let has_notes = flow_specs.iter().any(|s| s.role == FlowPlacementRole::BottomBand);
+        let _has_notes = flow_specs.iter().any(|s| s.role == FlowPlacementRole::BottomBand);
 
         let mut pages = Vec::new();
         let mut current_page_num = 1;
@@ -985,7 +985,6 @@ impl TypesettingEngine {
                 let lines_pool = flow_lines_map.get(&notes_id);
                 let cursor = flow_cursors.get(&notes_id).copied().unwrap_or(0);
                 let mut frame_lines = Vec::new();
-                let mut current_h = 0.0;
 
                 if let Some(pool) = lines_pool {
                     let remaining = &pool[cursor..];

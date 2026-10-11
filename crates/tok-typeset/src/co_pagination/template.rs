@@ -10,6 +10,11 @@
 
 use crate::knuth_plass::MeasureProfile;
 use crate::multi_flow::SpreadSide;
+use crate::solver::{
+    ColumnSpec, ColumnWidthDistribution, ConstraintStrength, GeometricConstraintSolver,
+    MultiColumnConstraintModel, PageConstraintModel, PageGeometryConfig,
+};
+use tok_core::FlowId;
 
 /// Layout template presets for Jewish and academic multi-stream books.
 #[derive(Debug, Clone, PartialEq)]
@@ -106,7 +111,7 @@ impl SpreadMathematics {
         }
     }
 
-    /// Solves the exact geometry and column coordinates for a given page number.
+    /// Solves the exact geometry and column coordinates for a given page number using GeometricConstraintSolver.
     pub fn for_page(config: &TemplateConfig, page_number: usize) -> Self {
         let side = Self::side_for_page(page_number);
 
@@ -122,7 +127,6 @@ impl SpreadMathematics {
         let content_height = (config.page_height_pt - config.margin_top_pt - config.margin_bottom_pt).max(0.0);
 
         let gutter = config.gutter_pt.min(content_width * 0.05).max(0.0);
-        let available_cols_width = (content_width - 2.0 * gutter).max(0.0);
 
         let (main_ratio, inner_ratio, outer_ratio) = match &config.kind {
             TemplateKind::TalmudClassic => (0.40, 0.28, 0.32),
@@ -135,55 +139,132 @@ impl SpreadMathematics {
             } => (*main_ratio, *inner_commentary_ratio, *outer_commentary_ratio),
         };
 
-        let main_width = available_cols_width * main_ratio;
-        let inner_width = available_cols_width * inner_ratio;
-        let outer_width = available_cols_width * outer_ratio;
+        let mut solver = GeometricConstraintSolver::new();
+        let page_geom = PageGeometryConfig::new(
+            config.page_width_pt,
+            config.page_height_pt,
+            config.margin_inner_pt,
+            config.margin_outer_pt,
+            config.margin_top_pt,
+            config.margin_bottom_pt,
+            side,
+        );
+        let page_model = PageConstraintModel::new();
 
         let mut columns = Vec::new();
+        let mut main_width = 0.0;
+        let mut inner_width = 0.0;
+        let mut outer_width = 0.0;
 
-        // Position columns left to right across physical page width:
-        // Recto: Left is Inner Spine (Rashi), Center is Gemara, Right is Outer Margin (Tosafot).
-        // Verso: Left is Outer Margin (Tosafot), Center is Gemara, Right is Inner Spine (Rashi).
-        let (col1_name, col1_w, col1_inner) = match side {
-            SpreadSide::Recto => ("rashi", inner_width, true),
-            SpreadSide::Verso => ("tosafot", outer_width, false),
-        };
-        let (col3_name, col3_w, col3_inner) = match side {
-            SpreadSide::Recto => ("tosafot", outer_width, false),
-            SpreadSide::Verso => ("rashi", inner_width, true),
-        };
+        let solver_result = (|| -> Result<(), crate::solver::SolverError> {
+            page_model.apply(&mut solver, &page_geom)?;
 
-        let x1 = margin_left;
-        let x2 = x1 + col1_w + gutter;
-        let x3 = x2 + main_width + gutter;
+            let (flow_ids, col_specs, proportions) = if outer_ratio > 0.0 {
+                let (col1, col3) = match side {
+                    SpreadSide::Recto => ("rashi", "tosafot"),
+                    SpreadSide::Verso => ("tosafot", "rashi"),
+                };
+                let props = match side {
+                    SpreadSide::Recto => vec![inner_ratio, main_ratio, outer_ratio],
+                    SpreadSide::Verso => vec![outer_ratio, main_ratio, inner_ratio],
+                };
+                let ids = vec![FlowId::new(col1), FlowId::new("main"), FlowId::new(col3)];
+                let specs = vec![
+                    ColumnSpec::new(FlowId::new(col1)),
+                    ColumnSpec::new(FlowId::new("main")),
+                    ColumnSpec::new(FlowId::new(col3)),
+                ];
+                (ids, specs, props)
+            } else {
+                let ids = vec![FlowId::new("main"), FlowId::new("rashi")];
+                let specs = vec![
+                    ColumnSpec::new(FlowId::new("main")),
+                    ColumnSpec::new(FlowId::new("rashi")),
+                ];
+                (ids, specs, vec![main_ratio, inner_ratio])
+            };
 
-        columns.push(ColumnAllocation {
-            stream_id: col1_name.to_string(),
-            x_pt: x1,
-            y_pt: config.margin_top_pt,
-            width_pt: col1_w,
-            max_height_pt: content_height,
-            is_inner_spine: col1_inner,
-        });
+            let multi_model = MultiColumnConstraintModel::new(&flow_ids);
+            multi_model.apply(&mut solver, &page_model, gutter, &col_specs)?;
+            ColumnWidthDistribution::Proportional(proportions).apply(
+                &mut solver,
+                &multi_model.columns,
+                ConstraintStrength::Required,
+            )?;
 
-        columns.push(ColumnAllocation {
-            stream_id: "main".to_string(),
-            x_pt: x2,
-            y_pt: config.margin_top_pt,
-            width_pt: main_width,
-            max_height_pt: content_height,
-            is_inner_spine: false,
-        });
+            let allocations = multi_model.get_allocations(&solver);
+            for alloc in &allocations {
+                let is_inner = alloc.flow_id.0 == "rashi";
+                if alloc.flow_id.0 == "main" {
+                    main_width = alloc.rect.width;
+                } else if alloc.flow_id.0 == "rashi" {
+                    inner_width = alloc.rect.width;
+                } else if alloc.flow_id.0 == "tosafot" {
+                    outer_width = alloc.rect.width;
+                }
 
-        if outer_ratio > 0.0 {
+                columns.push(ColumnAllocation {
+                    stream_id: alloc.flow_id.0.clone(),
+                    x_pt: alloc.rect.x,
+                    y_pt: alloc.rect.y,
+                    width_pt: alloc.rect.width,
+                    max_height_pt: alloc.rect.height,
+                    is_inner_spine: is_inner,
+                });
+            }
+
+            Ok(())
+        })();
+
+        if solver_result.is_err() || columns.is_empty() {
+            // Safe fallback arithmetic if page is degenerate
+            columns.clear();
+            let available_cols_width = (content_width - 2.0 * gutter).max(0.0);
+            main_width = available_cols_width * main_ratio;
+            inner_width = available_cols_width * inner_ratio;
+            outer_width = available_cols_width * outer_ratio;
+
+            let (col1_name, col1_w, col1_inner) = match side {
+                SpreadSide::Recto => ("rashi", inner_width, true),
+                SpreadSide::Verso => ("tosafot", outer_width, false),
+            };
+            let (col3_name, col3_w, col3_inner) = match side {
+                SpreadSide::Recto => ("tosafot", outer_width, false),
+                SpreadSide::Verso => ("rashi", inner_width, true),
+            };
+
+            let x1 = margin_left;
+            let x2 = x1 + col1_w + gutter;
+            let x3 = x2 + main_width + gutter;
+
             columns.push(ColumnAllocation {
-                stream_id: col3_name.to_string(),
-                x_pt: x3,
+                stream_id: col1_name.to_string(),
+                x_pt: x1,
                 y_pt: config.margin_top_pt,
-                width_pt: col3_w,
+                width_pt: col1_w,
                 max_height_pt: content_height,
-                is_inner_spine: col3_inner,
+                is_inner_spine: col1_inner,
             });
+
+            columns.push(ColumnAllocation {
+                stream_id: "main".to_string(),
+                x_pt: x2,
+                y_pt: config.margin_top_pt,
+                width_pt: main_width,
+                max_height_pt: content_height,
+                is_inner_spine: false,
+            });
+
+            if outer_ratio > 0.0 {
+                columns.push(ColumnAllocation {
+                    stream_id: col3_name.to_string(),
+                    x_pt: x3,
+                    y_pt: config.margin_top_pt,
+                    width_pt: col3_w,
+                    max_height_pt: content_height,
+                    is_inner_spine: col3_inner,
+                });
+            }
         }
 
         Self {
