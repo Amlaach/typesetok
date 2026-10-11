@@ -7,6 +7,10 @@
 //! - Dynamic L-Shaped commentary expansion below early-terminating Gemara text ("צורת הדף").
 //! - Floating Footnotes with bottom-page height reservation and gutter separation.
 
+use crate::solver::{
+    ColumnSpec, ColumnWidthDistribution, ConstraintStrength, GeometricConstraintSolver,
+    MultiColumnConstraintModel, PageConstraintModel, PageGeometryConfig,
+};
 use tok_core::FlowId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,6 +203,75 @@ impl MultiFlowSolver {
         )
     }
 
+    /// Determines geometric ordering and proportions for column streams.
+    fn order_flows_and_proportions<'a>(
+        flows: &'a [FlowGeometrySpec],
+        side: SpreadSide,
+        _content_width: f32,
+    ) -> (Vec<&'a FlowGeometrySpec>, ColumnWidthDistribution) {
+        let num_cols = flows.len();
+
+        // Check for custom width ratios
+        if flows.iter().any(|f| f.width_ratio.is_some()) {
+            let ratios: Vec<f32> = flows
+                .iter()
+                .map(|f| f.width_ratio.unwrap_or(1.0 / num_cols as f32))
+                .collect();
+            return (flows.iter().collect(), ColumnWidthDistribution::Proportional(ratios));
+        }
+
+        // 2-stream: (Primary 60%, Secondary 40%)
+        if num_cols == 2 {
+            let primary_idx = flows
+                .iter()
+                .position(|f| f.role == FlowPlacementRole::Primary || f.priority == 1)
+                .unwrap_or(0);
+            let secondary_idx = if primary_idx == 0 { 1 } else { 0 };
+
+            let is_inner_secondary = flows[secondary_idx].role == FlowPlacementRole::InnerSpine
+                || flows[secondary_idx].priority == 2;
+
+            let (left_idx, right_idx, left_ratio, right_ratio) = match (side, is_inner_secondary) {
+                (SpreadSide::Recto, true) | (SpreadSide::Verso, false) => {
+                    (secondary_idx, primary_idx, 0.40, 0.60)
+                }
+                _ => (primary_idx, secondary_idx, 0.60, 0.40),
+            };
+
+            let ordered = vec![&flows[left_idx], &flows[right_idx]];
+            let dist = ColumnWidthDistribution::Proportional(vec![left_ratio, right_ratio]);
+            return (ordered, dist);
+        }
+
+        // 3-stream: Talmud layout (Main 40%, Inner 28%, Outer 32%)
+        if num_cols == 3 {
+            let main_idx = flows.iter().position(|f| FlowRole::of(f) == FlowRole::Main).unwrap_or(0);
+            let rashi_idx = flows.iter().position(|f| FlowRole::of(f) == FlowRole::Rashi).unwrap_or(1);
+            let tosafot_idx = flows.iter().position(|f| FlowRole::of(f) == FlowRole::Tosafot).unwrap_or(2);
+
+            let (left_idx, right_idx, left_ratio, right_ratio) = match side {
+                SpreadSide::Verso => (tosafot_idx, rashi_idx, 0.32, 0.28),
+                SpreadSide::Recto => (rashi_idx, tosafot_idx, 0.28, 0.32),
+            };
+
+            let ordered = vec![&flows[left_idx], &flows[main_idx], &flows[right_idx]];
+            let dist = ColumnWidthDistribution::Proportional(vec![left_ratio, 0.40, right_ratio]);
+            return (ordered, dist);
+        }
+
+        // 4-stream: Mikraot Gedolot / 4 columns
+        if num_cols == 4 {
+            let ratios = match side {
+                SpreadSide::Recto => vec![0.24, 0.36, 0.22, 0.18],
+                SpreadSide::Verso => vec![0.18, 0.22, 0.36, 0.24],
+            };
+            return (flows.iter().collect(), ColumnWidthDistribution::Proportional(ratios));
+        }
+
+        // Generic N columns: equal distribution
+        (flows.iter().collect(), ColumnWidthDistribution::Equal)
+    }
+
     /// Solves layout allocation across a spread for an arbitrary number of flows (1, 2, 3, 4, N)
     /// using constraint specifications, roles, and width ratios.
     pub fn solve_generic_spread(
@@ -218,138 +291,109 @@ impl MultiFlowSolver {
         let content_width = non_negative(page_width_pt - margin_left - margin_right);
         let content_height = non_negative(page_height_pt - 2.0 * margin_y_pt);
 
-        let alloc = |flow_id: &FlowId, x: f32, w: f32| SolvedFlowAllocation {
-            flow_id: flow_id.clone(),
-            allocated_x_pt: x,
-            allocated_y_pt: margin_y_pt,
-            allocated_width_pt: w,
-            allocated_height_pt: content_height,
-        };
-
-        if flows.len() == 1 {
-            return vec![alloc(&flows[0].flow_id, margin_left, content_width)];
-        }
-
-        let gutter = Self::gutter_for(content_width);
-        let num_cols = flows.len();
-        let total_gutters = (num_cols - 1) as f32 * gutter;
-        let available_cols_width = non_negative(content_width - total_gutters);
-
-        // Check if flows specify custom width ratios
-        let has_custom_ratios = flows.iter().any(|f| f.width_ratio.is_some());
-        if has_custom_ratios {
-            let total_ratio: f32 = flows
-                .iter()
-                .map(|f| f.width_ratio.unwrap_or(1.0 / num_cols as f32))
-                .sum();
-            let norm_factor = if total_ratio > 0.0 {
-                1.0 / total_ratio
-            } else {
-                1.0
-            };
-
-            let mut allocations = Vec::new();
-            let mut current_x = margin_left;
-            for f in flows {
-                let ratio = f.width_ratio.unwrap_or(1.0 / num_cols as f32) * norm_factor;
-                let col_w = available_cols_width * ratio;
-                allocations.push(alloc(&f.flow_id, current_x, col_w));
-                current_x += col_w + gutter;
-            }
-            return allocations;
-        }
-
-        // Standard 2-stream: (Primary 60%, Secondary 40%)
-        if num_cols == 2 {
-            let primary_idx = flows
-                .iter()
-                .position(|f| f.role == FlowPlacementRole::Primary || f.priority == 1)
-                .unwrap_or(0);
-            let secondary_idx = if primary_idx == 0 { 1 } else { 0 };
-
-            let primary_w = available_cols_width * 0.60;
-            let secondary_w = available_cols_width * 0.40;
-
-            let is_inner_secondary = flows[secondary_idx].role == FlowPlacementRole::InnerSpine
-                || flows[secondary_idx].priority == 2;
-            let (left_idx, left_w, right_idx, right_w) = match (side, is_inner_secondary) {
-                (SpreadSide::Recto, true) | (SpreadSide::Verso, false) => {
-                    (secondary_idx, secondary_w, primary_idx, primary_w)
-                }
-                _ => (primary_idx, primary_w, secondary_idx, secondary_w),
-            };
-
-            let x_left = margin_left;
-            let x_right = x_left + left_w + gutter;
-
-            let mut result = vec![
-                alloc(&flows[0].flow_id, 0.0, 0.0),
-                alloc(&flows[1].flow_id, 0.0, 0.0),
-            ];
-            result[left_idx] = alloc(&flows[left_idx].flow_id, x_left, left_w);
-            result[right_idx] = alloc(&flows[right_idx].flow_id, x_right, right_w);
-            return result;
-        }
-
-        // Standard 3-stream: Talmud layout (Main 40%, Inner 28%, Outer 32%)
-        if num_cols == 3 {
-            let rashi_width = available_cols_width * 0.28;
-            let main_width = available_cols_width * 0.40;
-            let tosafot_width = available_cols_width * 0.32;
-
-            let (left_w, right_w) = match side {
-                SpreadSide::Verso => (tosafot_width, rashi_width),
-                SpreadSide::Recto => (rashi_width, tosafot_width),
-            };
-            let x_left = margin_left;
-            let x_center = x_left + left_w + gutter;
-            let x_right = x_center + main_width + gutter;
-
+        if content_width <= 0.0 || content_height <= 0.0 || !content_width.is_finite() || !content_height.is_finite() {
             return flows
                 .iter()
-                .map(|f| {
-                    let (x, w) = match (FlowRole::of(f), side) {
-                        (FlowRole::Main, _) => (x_center, main_width),
-                        (FlowRole::Rashi, SpreadSide::Recto)
-                        | (FlowRole::Tosafot, SpreadSide::Verso) => (x_left, left_w),
-                        (FlowRole::Rashi, SpreadSide::Verso)
-                        | (FlowRole::Tosafot, SpreadSide::Recto) => (x_right, right_w),
-                    };
-                    alloc(&f.flow_id, x, w)
+                .map(|f| SolvedFlowAllocation {
+                    flow_id: f.flow_id.clone(),
+                    allocated_x_pt: margin_left.max(0.0),
+                    allocated_y_pt: margin_y_pt.max(0.0),
+                    allocated_width_pt: 0.0,
+                    allocated_height_pt: 0.0,
                 })
                 .collect();
         }
 
-        // 4-stream: Mikraot Gedolot / 4 columns (Primary 36%, Inner 24%, Outer1 22%, Outer2 18%)
-        if num_cols == 4 {
-            let primary_w = available_cols_width * 0.36;
-            let inner_w = available_cols_width * 0.24;
-            let outer1_w = available_cols_width * 0.22;
-            let outer2_w = available_cols_width * 0.18;
+        let gutter = Self::gutter_for(content_width);
+        let num_cols = flows.len();
 
-            let widths = match side {
-                SpreadSide::Recto => [inner_w, primary_w, outer1_w, outer2_w],
-                SpreadSide::Verso => [outer2_w, outer1_w, primary_w, inner_w],
-            };
+        if num_cols == 1 {
+            return vec![SolvedFlowAllocation {
+                flow_id: flows[0].flow_id.clone(),
+                allocated_x_pt: margin_left,
+                allocated_y_pt: margin_y_pt,
+                allocated_width_pt: content_width,
+                allocated_height_pt: content_height,
+            }];
+        }
 
-            let mut allocations = Vec::new();
-            let mut curr_x = margin_left;
-            for (i, f) in flows.iter().enumerate() {
-                let w = widths[i];
-                allocations.push(alloc(&f.flow_id, curr_x, w));
-                curr_x += w + gutter;
+        let (ordered_flows, proportions) = Self::order_flows_and_proportions(flows, side, content_width);
+
+        let mut solver = GeometricConstraintSolver::new();
+        let page_model = PageConstraintModel::new();
+        let config = PageGeometryConfig::new(
+            page_width_pt,
+            page_height_pt,
+            margin_inner_pt,
+            margin_outer_pt,
+            margin_y_pt,
+            margin_y_pt,
+            side,
+        );
+
+        if page_model.apply(&mut solver, &config).is_err() {
+            return flows
+                .iter()
+                .map(|f| SolvedFlowAllocation {
+                    flow_id: f.flow_id.clone(),
+                    allocated_x_pt: margin_left.max(0.0),
+                    allocated_y_pt: margin_y_pt.max(0.0),
+                    allocated_width_pt: 0.0,
+                    allocated_height_pt: 0.0,
+                })
+                .collect();
+        }
+
+        let flow_ids: Vec<FlowId> = ordered_flows.iter().map(|f| f.flow_id.clone()).collect();
+        let col_model = MultiColumnConstraintModel::new(&flow_ids);
+        let col_specs: Vec<ColumnSpec> = ordered_flows
+            .iter()
+            .map(|f| {
+                ColumnSpec::new(f.flow_id.clone())
+                    .with_min_width(f.min_width_pt.min(content_width / num_cols as f32))
+                    .with_max_width(f.max_width_pt)
+            })
+            .collect();
+
+        if col_model.apply(&mut solver, &page_model, gutter, &col_specs).is_err() {
+            return flows
+                .iter()
+                .map(|f| SolvedFlowAllocation {
+                    flow_id: f.flow_id.clone(),
+                    allocated_x_pt: margin_left.max(0.0),
+                    allocated_y_pt: margin_y_pt.max(0.0),
+                    allocated_width_pt: 0.0,
+                    allocated_height_pt: 0.0,
+                })
+                .collect();
+        }
+
+        let _ = proportions.apply(&mut solver, &col_model.columns, ConstraintStrength::Required);
+
+        let solved_cols = col_model.get_allocations(&solver);
+        let allocations: Vec<SolvedFlowAllocation> = solved_cols
+            .into_iter()
+            .map(|sc| SolvedFlowAllocation {
+                flow_id: sc.flow_id,
+                allocated_x_pt: sc.rect.x,
+                allocated_y_pt: sc.rect.y,
+                allocated_width_pt: sc.rect.width,
+                allocated_height_pt: sc.rect.height,
+            })
+            .collect();
+
+        if num_cols == 2 {
+            let mut matched = vec![allocations[0].clone(), allocations[1].clone()];
+            for a in allocations {
+                if a.flow_id == flows[0].flow_id {
+                    matched[0] = a;
+                } else if a.flow_id == flows[1].flow_id {
+                    matched[1] = a;
+                }
             }
-            return allocations;
+            return matched;
         }
 
-        // Generic N columns (>= 5): distribute evenly across available width
-        let col_w = available_cols_width / num_cols as f32;
-        let mut allocations = Vec::new();
-        let mut curr_x = margin_left;
-        for f in flows {
-            allocations.push(alloc(&f.flow_id, curr_x, col_w));
-            curr_x += col_w + gutter;
-        }
         allocations
     }
 
@@ -412,7 +456,7 @@ impl MultiFlowSolver {
         });
 
         let footnote_allocation = match footnote_target.map(non_negative) {
-            Some(fn_height) if fn_height > 0.0 => {
+            Some(fn_height) if fn_height > 0.0 && available_height > 0.0 => {
                 let actual_fn_height = fn_height.min(available_height * 0.40);
                 let fn_y = margin_y_pt + available_height - actual_fn_height;
                 available_height = non_negative(available_height - actual_fn_height - gutter);
@@ -480,30 +524,32 @@ impl MultiFlowSolver {
                 let actual_primary_h = non_negative(target_h).min(available_height);
                 if actual_primary_h < available_height - Self::L_SHAPE_MIN_GAP_PT && has_commentary {
                     if let (Some(primary_idx), Some(comm_spec)) = (primary_index, commentary_spec) {
-                        let primary_alloc = &mut allocations[primary_idx];
-                        primary_alloc.allocated_height_pt = actual_primary_h;
-                        let (gx, gw) = (
-                            primary_alloc.allocated_x_pt,
-                            primary_alloc.allocated_width_pt,
-                        );
+                        let primary_flow_id = &column_flows[primary_idx].flow_id;
+                        if let Some(primary_alloc) = allocations.iter_mut().find(|a| &a.flow_id == primary_flow_id) {
+                            primary_alloc.allocated_height_pt = actual_primary_h;
+                            let (gx, gw) = (
+                                primary_alloc.allocated_x_pt,
+                                primary_alloc.allocated_width_pt,
+                            );
 
-                        let expansion_y = margin_y_pt + actual_primary_h + gutter;
-                        let expansion_h = non_negative(available_height - actual_primary_h - gutter);
+                            let expansion_y = margin_y_pt + actual_primary_h + gutter;
+                            let expansion_h = non_negative(available_height - actual_primary_h - gutter);
 
-                        let exp_id = if comm_spec.flow_id.0 == "rashi" {
-                            FlowId::new("rashi_expansion")
-                        } else {
-                            FlowId::new(format!("{}_expansion", comm_spec.flow_id.0))
-                        };
+                            let exp_id = if comm_spec.flow_id.0 == "rashi" {
+                                FlowId::new("rashi_expansion")
+                            } else {
+                                FlowId::new(format!("{}_expansion", comm_spec.flow_id.0))
+                            };
 
-                        allocations.push(SolvedFlowAllocation {
-                            flow_id: exp_id,
-                            allocated_x_pt: gx,
-                            allocated_y_pt: expansion_y,
-                            allocated_width_pt: gw,
-                            allocated_height_pt: expansion_h,
-                        });
-                        has_l_shape = true;
+                            allocations.push(SolvedFlowAllocation {
+                                flow_id: exp_id,
+                                allocated_x_pt: gx,
+                                allocated_y_pt: expansion_y,
+                                allocated_width_pt: gw,
+                                allocated_height_pt: expansion_h,
+                            });
+                            has_l_shape = true;
+                        }
                     }
                 }
                 actual_primary_h
