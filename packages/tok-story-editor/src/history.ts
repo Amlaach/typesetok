@@ -6,7 +6,8 @@
  * on browser execCommand.
  */
 
-import { StoryParagraph, StorySelection } from './types';
+import { StoryParagraph, StorySelection } from './types.js';
+
 
 export interface HistoryRecord {
   description: string;

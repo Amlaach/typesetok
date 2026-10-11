@@ -12,7 +12,7 @@ import {
   TextSpan,
   isFormatEmpty,
   normalizeSpans
-} from './types';
+} from './types.js';
 
 /** Converts points to CSS px string (1 pt = 1.333 px) */
 export function ptToPx(pt: number): number {
@@ -23,7 +23,7 @@ export function ptToPx(pt: number): number {
 export function applyPatchToElement(pEl: HTMLElement, patch?: ParagraphStylePatch): void {
   if (!patch) return;
   if (patch.alignment) {
-    pEl.style.textAlign = patch.alignment.toLowerCase();
+    pEl.style.textAlign = patch.alignment === 'Justified' ? 'justify' : patch.alignment.toLowerCase();
   }
   if (patch.direction) {
     pEl.dir = patch.direction.toLowerCase();

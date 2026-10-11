@@ -16,16 +16,17 @@ import {
   mergeParagraphs,
   removeSpanRange,
   splitParagraph
-} from './types';
-import { renderParagraphDom, parseParagraphDom } from './dom_converter';
-import { StoryHistory } from './history';
+} from './types.js';
+import { renderParagraphDom, parseParagraphDom } from './dom_converter.js';
+import { StoryHistory } from './history.js';
 import {
   FindOptions,
   FindResult,
   findAllInParagraphs,
   findNextInParagraphs,
   findPrevInParagraphs
-} from './find_replace';
+} from './find_replace.js';
+
 export { StoryParagraph, StorySelection, FindOptions, FindResult };
 
 

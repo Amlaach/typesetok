@@ -5,7 +5,8 @@
  * search with exact character boundary mapping and span preservation.
  */
 
-import { StoryParagraph } from './types';
+import { StoryParagraph } from './types.js';
+
 
 export interface FindOptions {
   query: string;
