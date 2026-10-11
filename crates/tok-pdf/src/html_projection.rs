@@ -122,8 +122,8 @@ div.tok-line {{
 
             for frame in &p.frames {
                 writeln!(html,
-                    "  <div class=\"tok-frame\" style=\"position: absolute; left: {:.2}pt; top: {:.2}pt; width: {:.2}pt;\">",
-                    frame.rect.x, frame.rect.y, frame.rect.width
+                    "  <div class=\"tok-frame\" style=\"position: absolute; left: {:.2}pt; top: {:.2}pt; width: {:.2}pt; height: {:.2}pt; overflow: hidden;\">",
+                    frame.rect.x, frame.rect.y, frame.rect.width, frame.rect.height
                 ).unwrap();
 
                 for line in &frame.lines {
@@ -132,9 +132,10 @@ div.tok-line {{
                     let dir = if line.is_rtl { "" } else { " dir=\"ltr\"" };
                     // Draw the line in the font the engine measured it with.
                     let font = line.fonts.first().map(|f| css_font(f)).unwrap_or_default();
+                    let top_offset = (line.baseline_y - line.height).max(0.0);
                     writeln!(html,
-                        "    <div class=\"tok-line\"{} style=\"height: {:.2}pt; line-height: {:.2}pt;{}\">{}</div>",
-                        dir, line.height, line.height, font, html_escape(&line.text)
+                        "    <div class=\"tok-line\"{} style=\"position: absolute; top: {:.2}pt; left: 0; right: 0; height: {:.2}pt; line-height: {:.2}pt;{}\">{}</div>",
+                        dir, top_offset, line.height, line.height, font, html_escape(&line.text)
                     ).unwrap();
                 }
 
@@ -223,6 +224,58 @@ mod tests {
         assert!(html.contains("dir=\"rtl\""));
         assert!(html.contains("tok-page"));
         assert!(html.contains("tok-line"));
+    }
+
+    #[test]
+    fn test_html_projection_exact_frame_and_line_geometry() {
+        let frame = TextFrameBox {
+            frame_id: "f1".to_string(),
+            flow_id: "main".to_string(),
+            rect: PhysicalRect::new(60.0, 40.0, 350.0, 520.0),
+            lines: vec![
+                LineBox {
+                    line_index: 0,
+                    paragraph_id: None,
+                    baseline_y: 16.0,
+                    height: 16.0,
+                    width: 320.0,
+                    glyphs: Vec::new(),
+                    text: "שורה ראשונה".to_string(),
+                    is_rtl: true,
+                    fonts: Vec::new(),
+                },
+                LineBox {
+                    line_index: 1,
+                    paragraph_id: None,
+                    baseline_y: 46.0,
+                    height: 16.0,
+                    width: 310.0,
+                    glyphs: Vec::new(),
+                    text: "שורה שנייה עם ריווח פסקה".to_string(),
+                    is_rtl: true,
+                    fonts: Vec::new(),
+                },
+            ],
+        };
+
+        let page = PageLayoutBox {
+            page_index: 0,
+            page_number_gematria: "א׳".to_string(),
+            dimensions: PhysicalRect::a4_portrait(),
+            frames: vec![frame],
+            break_token: None,
+        };
+
+        let html = HtmlProjectionCompiler::compile_to_html(&[page], 210.0, 297.0);
+
+        // Frame must have exact geometry
+        assert!(html.contains("left: 60.00pt; top: 40.00pt; width: 350.00pt; height: 520.00pt; overflow: hidden;"));
+
+        // First line: top = baseline (16) - height (16) = 0.00pt
+        assert!(html.contains("position: absolute; top: 0.00pt; left: 0; right: 0; height: 16.00pt;"));
+
+        // Second line: top = baseline (46) - height (16) = 30.00pt
+        assert!(html.contains("position: absolute; top: 30.00pt; left: 0; right: 0; height: 16.00pt;"));
     }
 
     #[test]
