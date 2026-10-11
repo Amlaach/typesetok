@@ -23,7 +23,8 @@ import {
   MultiFlowDocumentState,
   DEFAULT_TALMUD_FLOWS,
   DEFAULT_PROSE_FLOWS,
-  TemplateType
+  TemplateType,
+  FlowPaginator
 } from './engine/FlowPaginator';
 import {
   documentStateToDocumentRoot,
@@ -1544,17 +1545,7 @@ export class TypesetOkApp {
 
     if (newPages.length === 0) {
       const minPages = Math.max(1, this.pages.length);
-      newPages = Array.from({ length: minPages }, (_, idx) => ({
-        pageIndex: idx,
-        gematriaNumber: toHebrewGematria(idx + 1),
-        widthPt: 595.28,
-        heightPt: 841.89,
-        htmlContent: `<div class="tok-page-layout-rust" data-page-index="${idx}" style="position: relative; width: 100%; height: 100%; overflow: hidden;">
-          <div class="tok-interactive-frame tok-frame-rust tok-frame-gemara" data-frame-id="frame_${idx}_main" data-flow-id="main" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%;">
-            <div class="tok-frame-empty" style="font-size: 10px; color: var(--tok-text-muted); font-style: italic; text-align: center; padding-top: 15px;">[אין טקסט בעמוד זה]</div>
-          </div>
-        </div>`
-      }));
+      newPages = FlowPaginator.paginateDocument(this.documentState, minPages);
     }
 
     this.pages = newPages;

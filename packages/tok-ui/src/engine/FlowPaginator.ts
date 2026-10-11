@@ -226,6 +226,16 @@ function partitionParagraphs(paragraphs: StoryParagraph[], targetWordsPerPage: n
  * @deprecated Use Rust typesetting engine via `tok:typeset-document` and `typesetBridge.ts`
  * instead of simulated JavaScript word-count splitting. Kept for backwards-compatible test fixtures.
  */
+function getDocDimensionsPt(doc?: MultiFlowDocumentState): { widthPt: number; heightPt: number } {
+  if (doc?.settings?.pageWidthMm && doc?.settings?.pageHeightMm) {
+    return {
+      widthPt: Math.round(doc.settings.pageWidthMm * 72 / 25.4),
+      heightPt: Math.round(doc.settings.pageHeightMm * 72 / 25.4)
+    };
+  }
+  return { widthPt: 480, heightPt: 678 };
+}
+
 export class FlowPaginator {
   /**
    * Paginates a multi-flow document into a list of full PageDescriptors for SpreadCanvas.
@@ -240,11 +250,11 @@ export class FlowPaginator {
     const isNotes = doc.templateType === 'notes';
 
     if (isProse) {
-      return this.paginateProse(doc.flows.gemara || [], minPages);
+      return this.paginateProse(doc, minPages);
     }
 
     if (isNotes) {
-      return this.paginateWithFootnotes(doc.flows.gemara || [], doc.flows.notes || [], minPages);
+      return this.paginateWithFootnotes(doc, minPages);
     }
 
     // Default: Full Talmudic Multi-flow layout (Gemara + Rashi + Tosafot + Notes)
@@ -325,11 +335,12 @@ export class FlowPaginator {
         lShapeCommentary
       });
 
+      const { widthPt, heightPt } = getDocDimensionsPt(doc);
       pages.push({
         pageIndex: pageIdx,
         gematriaNumber: gematria,
-        widthPt: 480,
-        heightPt: 678,
+        widthPt,
+        heightPt,
         htmlContent: html
       });
     }
@@ -340,10 +351,12 @@ export class FlowPaginator {
   /**
    * Paginates a single-flow prose document across multiple pages.
    */
-  private static paginateProse(paragraphs: StoryParagraph[], minPages: number): PageDescriptor[] {
+  private static paginateProse(doc: MultiFlowDocumentState, minPages: number): PageDescriptor[] {
+    const paragraphs = doc.flows.gemara || [];
     const chunks = partitionParagraphs(paragraphs, CAPACITY.proseWordsPerPage);
     const totalPages = Math.max(minPages, chunks.length, 1);
     const pages: PageDescriptor[] = [];
+    const { widthPt, heightPt } = getDocDimensionsPt(doc);
 
     for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
       const paras = chunks[pageIdx] || [];
@@ -362,8 +375,8 @@ export class FlowPaginator {
       pages.push({
         pageIndex: pageIdx,
         gematriaNumber: gematria,
-        widthPt: 480,
-        heightPt: 678,
+        widthPt,
+        heightPt,
         htmlContent: html
       });
     }
@@ -375,14 +388,16 @@ export class FlowPaginator {
    * Paginates a book with main text and bottom running footnotes.
    */
   private static paginateWithFootnotes(
-    mainParas: StoryParagraph[],
-    noteParas: StoryParagraph[],
+    doc: MultiFlowDocumentState,
     minPages: number
   ): PageDescriptor[] {
+    const mainParas = doc.flows.gemara || [];
+    const noteParas = doc.flows.notes || [];
     const mainChunks = partitionParagraphs(mainParas, 160);
     const noteChunks = partitionParagraphs(noteParas, 45);
     const totalPages = Math.max(minPages, Math.max(mainChunks.length, noteChunks.length, 1));
     const pages: PageDescriptor[] = [];
+    const { widthPt, heightPt } = getDocDimensionsPt(doc);
 
     for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
       const pMain = mainChunks[pageIdx] || [];
@@ -409,8 +424,8 @@ export class FlowPaginator {
       pages.push({
         pageIndex: pageIdx,
         gematriaNumber: gematria,
-        widthPt: 480,
-        heightPt: 678,
+        widthPt,
+        heightPt,
         htmlContent: html
       });
     }
