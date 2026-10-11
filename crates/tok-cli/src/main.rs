@@ -404,6 +404,44 @@ fn handle_benchmark(pages_target: usize) -> Result<(), Box<dyn std::error::Error
         }
     );
 
+    // 3. Full Document Incremental Reflow & Cache Validation
+    println!("\n[Benchmark 3: Incremental Document Reflow & Invalidation Engine]");
+    let mut modified_doc = doc.root().clone();
+    let mod_id = target_para.id;
+    if let Some(p) = modified_doc.find_paragraph_mut(mod_id) {
+        p.text.push_str(" הֶסְבֵּר נוֹסָף לְפֵרוּשׁ רַשִׁ\"י הַקָּדוֹשׁ.");
+    }
+    let inc_start = Instant::now();
+    let (_inc_pages, inc_diag) =
+        engine.typeset_document_incremental(&modified_doc, &pages, Some(mod_id));
+    let inc_dur = inc_start.elapsed();
+
+    println!("  - Incremental Pipeline Latency:    {:.3?}", inc_dur);
+    println!(
+        "  - Pages Recomputed / Reused:       {} / {}",
+        inc_diag.recomputed_pages, inc_diag.reused_pages
+    );
+    println!(
+        "  - Paragraphs Recomputed / Cached:  {} / {}",
+        inc_diag.recomputed_paragraphs, inc_diag.reused_paragraphs
+    );
+    println!(
+        "  - Convergence Page:                {:?}",
+        inc_diag.converged_at_page
+    );
+    println!(
+        "  - Zero-Cascade Fast Path:          {}",
+        inc_diag.zero_cascade
+    );
+
+    let cache = engine.cache_metrics();
+    println!(
+        "  - Layout Cache Hit Ratio:          {:.1}% ({} entries, {} bytes)",
+        cache.hit_ratio * 100.0,
+        cache.entry_count,
+        cache.approx_memory_bytes
+    );
+
     println!("\n================================================================================");
     println!("  [GATE 1 VERIFICATION COMPLETED SUCCESSFULLY]");
     println!("================================================================================");

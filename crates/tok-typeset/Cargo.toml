@@ -17,3 +17,7 @@ rayon = { workspace = true }
 log = { workspace = true }
 ttf-parser = "0.24"
 cassowary = { workspace = true }
+
+[[bench]]
+name = "incremental_benchmark"
+harness = false
