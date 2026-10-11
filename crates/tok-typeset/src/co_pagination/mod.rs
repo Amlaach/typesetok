@@ -10,8 +10,8 @@ pub mod template;
 pub mod worker;
 
 pub use engine::{
-    CoPaginatedChunk, CoPaginatedCommentary, CoPaginatedPage, CoPaginationDocument,
-    CoPaginationEngine, CoPaginationResult,
+    calculate_typographic_split, CoPaginatedChunk, CoPaginatedCommentary, CoPaginatedPage,
+    CoPaginationDocument, CoPaginationEngine, CoPaginationResult,
 };
 pub use sync::{
     ActiveSyncResult, ActiveSynchronizer, AnchorKey, AnchorPoint, SyncRemedy, SynchronizerConfig,

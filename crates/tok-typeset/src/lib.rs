@@ -1,3 +1,18 @@
+//! # TypesetOK Typesetting Engine (`tok-typeset`)
+//!
+//! Core layout, geometric constraint solving, and global pagination engine for TypesetOK.
+//!
+//! ## Stages Architecture
+//! - **Stage 7 — Geometric Constraint Solver**: Uses Cassowary linear simplex solver to
+//!   model page boundaries, margins, columns, non-overlap, dynamic L-shapes, and footnote bands
+//!   as explicit linear constraints without hardcoded geometry percentages.
+//! - **Stage 8 — Global Pagination & Multi-Page Flow**: Implements lookahead page-breaking
+//!   with cubic badness and TeX-style penalty optimization (`PageBreakModel`, `GlobalPageBreaker`),
+//!   eliminating stranded headings (`keep_with_next`), orphan lines (`orphan_control`), and widow
+//!   lines (`widow_control`). Dynamically paginates multi-page footnote apparatus bands
+//!   (`DynamicFootnotePaginator`) and coordinates parallel commentary streams across facing spreads
+//!   (`CoPaginationEngine`, `SpreadMathematics`).
+
 pub mod bidi;
 pub mod co_pagination;
 pub mod engine;
@@ -25,11 +40,11 @@ pub use layout_features::{DocumentLayoutFeatures, FlowFeature};
 pub use layout_template::{LayoutTemplate, TemplateConstraintError};
 pub use template_synthesizer::TemplateSynthesizer;
 pub use co_pagination::{
-    ActiveSyncResult, ActiveSynchronizer, AnchorKey, AnchorPoint, CancellationToken,
-    CoPaginatedChunk, CoPaginatedCommentary, CoPaginatedPage, CoPaginationDocument,
-    CoPaginationEngine, CoPaginationResult, ColumnAllocation, NonBlockingPaginator,
-    PaginationEvent, SpreadMathematics, SyncRemedy, SynchronizerConfig, TemplateConfig,
-    TemplateKind,
+    calculate_typographic_split, ActiveSyncResult, ActiveSynchronizer, AnchorKey, AnchorPoint,
+    CancellationToken, CoPaginatedChunk, CoPaginatedCommentary, CoPaginatedPage,
+    CoPaginationDocument, CoPaginationEngine, CoPaginationResult, ColumnAllocation,
+    NonBlockingPaginator, PaginationEvent, SpreadMathematics, SyncRemedy, SynchronizerConfig,
+    TemplateConfig, TemplateKind,
 };
 pub use engine::{TypesettingEngine, TypesettingEngineConfig};
 pub use font::{FontData, FontManager, FontMetrics};
