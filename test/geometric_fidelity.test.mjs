@@ -250,4 +250,151 @@ describe('Geometric Fidelity: Canvas & Rust Layout Engine Parity', async () => {
     assert.ok(fallbackPages[0].htmlContent.includes('tok-fallback-warning-badge'), 'Must contain warning badge');
     assert.ok(fallbackPages[0].htmlContent.includes('תצוגה משוערת בלבד'), 'Must warn user layout is simulated');
   });
+
+  test('7. Exact coordinate parity between Canvas layout and PDF HtmlProjectionCompiler contract', () => {
+    const multiFlowBox = {
+      page_index: 0,
+      page_number_gematria: 'א׳',
+      dimensions: { x: 0, y: 0, width: 595.28, height: 841.89 },
+      frames: [
+        {
+          frame_id: 'frame-gemara-0',
+          flow_id: 'gemara',
+          rect: { x: 180.5, y: 55.0, width: 234.28, height: 600.0 },
+          lines: [
+            {
+              line_index: 0,
+              paragraph_id: 'p-gem-1',
+              baseline_y: 24.0,
+              height: 16.0,
+              width: 234.28,
+              text: 'מאימתי קורין את שמע בערבית',
+              is_rtl: true,
+              fonts: ['Frank Ruhl Libre']
+            }
+          ]
+        },
+        {
+          frame_id: 'frame-rashi-0',
+          flow_id: 'rashi',
+          rect: { x: 42.5, y: 55.0, width: 125.0, height: 700.0 },
+          lines: [
+            {
+              line_index: 0,
+              paragraph_id: 'p-rash-1',
+              baseline_y: 18.0,
+              height: 12.0,
+              width: 125.0,
+              text: 'מאמתי - משעה שהכהנים טובלים',
+              is_rtl: true,
+              fonts: ['Noto Rashi Hebrew']
+            }
+          ]
+        }
+      ]
+    };
+
+    const descriptors = layoutToPageDescriptors([multiFlowBox]);
+    const canvasHtml = descriptors[0].htmlContent;
+
+    // Verify each frame has 1:1 pt coordinates matching Rust
+    for (const frame of multiFlowBox.frames) {
+      const expectedLeft = `left: ${frame.rect.x.toFixed(2)}pt;`;
+      const expectedTop = `top: ${frame.rect.y.toFixed(2)}pt;`;
+      const expectedWidth = `width: ${frame.rect.width.toFixed(2)}pt;`;
+      const expectedHeight = `height: ${frame.rect.height.toFixed(2)}pt;`;
+
+      assert.ok(canvasHtml.includes(expectedLeft), `Canvas must match frame left pt: ${expectedLeft}`);
+      assert.ok(canvasHtml.includes(expectedTop), `Canvas must match frame top pt: ${expectedTop}`);
+      assert.ok(canvasHtml.includes(expectedWidth), `Canvas must match frame width pt: ${expectedWidth}`);
+      assert.ok(canvasHtml.includes(expectedHeight), `Canvas must match frame height pt: ${expectedHeight}`);
+
+      for (const line of frame.lines) {
+        const expectedLineTop = `top: ${Math.max(0, line.baseline_y - line.height).toFixed(2)}pt;`;
+        const expectedLineHeight = `height: ${line.height.toFixed(2)}pt;`;
+        assert.ok(canvasHtml.includes(expectedLineTop), `Canvas must match line top pt: ${expectedLineTop}`);
+        assert.ok(canvasHtml.includes(expectedLineHeight), `Canvas must match line height pt: ${expectedLineHeight}`);
+      }
+    }
+  });
+
+  test('8. Real tok-cli typeset-document layout maintains exact geometric parity into Canvas descriptors', async () => {
+    const { spawn } = await import('node:child_process');
+    const bridgeMod = await loadTs('packages/tok-ui/src/engine/documentBridge.ts');
+    const { documentStateToDocumentRoot } = bridgeMod;
+
+    // Find tok-cli binary
+    const candidates = [
+      path.join(rootDir, 'target', 'debug', 'tok-cli.exe'),
+      path.join(rootDir, 'target', 'release', 'tok-cli.exe'),
+      path.join(rootDir, 'crates', 'target', 'debug', 'tok-cli.exe'),
+      path.join(rootDir, 'crates', 'target', 'release', 'tok-cli.exe'),
+    ];
+    const tokCli = candidates.find((p) => fs.existsSync(p));
+    if (!tokCli) return; // Skip if engine binary is not built in environment
+
+    const testDocState = {
+      title: 'בדיקת נאמנות גאומטרית',
+      templateType: 'prose',
+      flows: {
+        gemara: [
+          {
+            id: 'p-geom-1',
+            styleId: 'normal',
+            text: 'וַיְהִי בִּימֵי אֲחַשְׁוֵרוֹשׁ הוּא אֲחַשְׁוֵרוֹשׁ הַמֹּלֵךְ מֵהֹדּוּ וְעַד כּוּשׁ שֶׁבַע וְעֶשְׂרִים וּמֵאָה מְדִינָה.'
+          },
+          {
+            id: 'p-geom-2',
+            styleId: 'normal',
+            text: 'בַּיָּמִים הָהֵם כְּשֶׁבֶת הַמֶּלֶךְ אֲחַשְׁוֵרוֹשׁ עַל כִּסֵּא מַלְכוּתוֹ אֲשֶׁר בְּשׁוּשַׁן הַבִּירָה.'
+          }
+        ],
+        rashi: [],
+        tosafot: [],
+        notes: []
+      }
+    };
+
+    const docRoot = documentStateToDocumentRoot(testDocState);
+    const tempIn = path.join(os.tmpdir(), `geom_parity_in_${Date.now()}.json`);
+    const tempOut = path.join(os.tmpdir(), `geom_parity_out_${Date.now()}.json`);
+
+    try {
+      fs.writeFileSync(tempIn, JSON.stringify(docRoot, null, 2), 'utf-8');
+      const exitCode = await new Promise((resolve) => {
+        const proc = spawn(tokCli, ['typeset-document', tempIn, tempOut], { windowsHide: true });
+        proc.on('close', resolve);
+      });
+      assert.equal(exitCode, 0, 'tok-cli typeset-document must succeed');
+
+      const rustPages = JSON.parse(fs.readFileSync(tempOut, 'utf-8'));
+      assert.ok(rustPages.length > 0, 'Must produce at least 1 page');
+
+      const descriptors = layoutToPageDescriptors(rustPages);
+      assert.equal(descriptors.length, rustPages.length);
+
+      for (let i = 0; i < rustPages.length; i++) {
+        const rPage = rustPages[i];
+        const desc = descriptors[i];
+        assert.equal(desc.widthPt, rPage.dimensions.width);
+        assert.equal(desc.heightPt, rPage.dimensions.height);
+
+        for (const frame of rPage.frames) {
+          assert.ok(desc.htmlContent.includes(`left: ${frame.rect.x.toFixed(2)}pt;`));
+          assert.ok(desc.htmlContent.includes(`top: ${frame.rect.y.toFixed(2)}pt;`));
+          assert.ok(desc.htmlContent.includes(`width: ${frame.rect.width.toFixed(2)}pt;`));
+          assert.ok(desc.htmlContent.includes(`height: ${frame.rect.height.toFixed(2)}pt;`));
+
+          for (const line of frame.lines) {
+            const expectedTop = `top: ${Math.max(0, line.baseline_y - line.height).toFixed(2)}pt;`;
+            assert.ok(desc.htmlContent.includes(expectedTop));
+            assert.ok(desc.htmlContent.includes(`data-baseline-y="${line.baseline_y}"`));
+          }
+        }
+      }
+    } finally {
+      if (fs.existsSync(tempIn)) fs.unlinkSync(tempIn);
+      if (fs.existsSync(tempOut)) fs.unlinkSync(tempOut);
+    }
+  });
 });
