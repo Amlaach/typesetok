@@ -762,8 +762,10 @@ export class TypesetOkApp {
       } else {
         this.storyEditor.redo();
       }
+      this.updateFormattingToolbarState();
+      this.scheduleWordCountUpdate();
+      this.scheduleRepaginate();
     }
-    this.scheduleWordCountUpdate();
   }
 
   private buildStoryToolbar(): HTMLElement {
@@ -794,6 +796,7 @@ export class TypesetOkApp {
       redoBtn.disabled = !canRedo;
       undoBtn.style.opacity = canUndo ? '1' : '0.4';
       redoBtn.style.opacity = canRedo ? '1' : '0.4';
+      this.topBar?.setHistoryState(canUndo, canRedo);
     });
     bar.appendChild(undoBtn);
     bar.appendChild(redoBtn);

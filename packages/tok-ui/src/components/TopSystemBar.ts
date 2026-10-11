@@ -48,6 +48,8 @@ export class TopSystemBar {
   private documentTitle = '';
   private pageLabel = '';
   private pageLabelEl: HTMLElement | null = null;
+  private undoBtn?: HTMLButtonElement;
+  private redoBtn?: HTMLButtonElement;
 
   constructor(callbacks: TopSystemBarCallbacks) {
     this.callbacks = callbacks;
@@ -95,6 +97,17 @@ export class TopSystemBar {
     this.element.querySelectorAll<HTMLElement>('.tok-seg-btn[data-view]').forEach((b) =>
       b.setAttribute('aria-pressed', String(b.dataset.view === mode))
     );
+  }
+
+  public setHistoryState(canUndo: boolean, canRedo: boolean): void {
+    if (this.undoBtn) {
+      this.undoBtn.disabled = !canUndo;
+      this.undoBtn.style.opacity = canUndo ? '1' : '0.4';
+    }
+    if (this.redoBtn) {
+      this.redoBtn.disabled = !canRedo;
+      this.redoBtn.style.opacity = canRedo ? '1' : '0.4';
+    }
   }
 
   private render(): void {
@@ -173,6 +186,12 @@ export class TopSystemBar {
 
     const undo = iconButton('undo', t('topBarUndo'), () => this.callbacks.onUndo?.(), { attrs: { 'aria-keyshortcuts': 'Control+Z' } });
     const redo = iconButton('redo', t('topBarRedo'), () => this.callbacks.onRedo?.(), { attrs: { 'aria-keyshortcuts': 'Control+Y' } });
+    undo.disabled = true;
+    undo.style.opacity = '0.4';
+    redo.disabled = true;
+    redo.style.opacity = '0.4';
+    this.undoBtn = undo;
+    this.redoBtn = redo;
     // In RTL the "back" arrow points right.
     if (i18n.getDirection() === 'rtl') {
       undo.replaceChildren(icon('redo', 18));
