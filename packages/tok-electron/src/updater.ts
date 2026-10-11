@@ -37,7 +37,7 @@ export function getAppVersion(): string {
       v = '';
     }
   }
-  cachedVersion = v || '0.10.6';
+  cachedVersion = v || '0.3.15';
   return cachedVersion;
 }
 

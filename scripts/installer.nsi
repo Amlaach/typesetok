@@ -6,7 +6,7 @@
 
 ; build-installer.mjs passes /DVERSION=<package.json version>
 !ifndef VERSION
-  !define VERSION "0.10.6"
+  !define VERSION "0.3.15"
 !endif
 
 Name "TypesetOK"
