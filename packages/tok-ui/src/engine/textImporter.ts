@@ -384,3 +384,264 @@ export function importMarkdown(
   };
 }
 
+/**
+ * Decodes standard XML entities.
+ */
+function decodeXmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#([0-9]+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
+}
+
+/**
+ * Extracts raw uncompressed word/document.xml from a DOCX zip archive buffer.
+ */
+export function extractDocxXml(raw: Uint8Array | ArrayBuffer): string {
+  const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+  if (bytes.length < 30) {
+    throw new DocumentImportError(
+      'CORRUPTED_FILE',
+      'The file is too small to be a valid DOCX package',
+      'קובץ ה-DOCX קטן מדי או פגום'
+    );
+  }
+
+  // Check PK\x03\x04 signature
+  if (bytes[0] !== 0x50 || bytes[1] !== 0x4B || bytes[2] !== 0x03 || bytes[3] !== 0x04) {
+    throw new DocumentImportError(
+      'CORRUPTED_FILE',
+      'Invalid ZIP signature in DOCX file',
+      'מבנה קובץ ה-DOCX פגום (חתימת ZIP שגויה)'
+    );
+  }
+
+  let offset = 0;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  while (offset + 30 <= bytes.length) {
+    const sig = view.getUint32(offset, true);
+    if (sig !== 0x04034b50) {
+      // End of local file headers or central directory reached
+      break;
+    }
+
+    const compressionMethod = view.getUint16(offset + 8, true);
+    const compressedSize = view.getUint32(offset + 18, true);
+    const uncompressedSize = view.getUint32(offset + 22, true);
+    const fileNameLen = view.getUint16(offset + 26, true);
+    const extraFieldLen = view.getUint16(offset + 28, true);
+
+    const fileNameBytes = bytes.subarray(offset + 30, offset + 30 + fileNameLen);
+    const entryName = new TextDecoder('utf-8').decode(fileNameBytes);
+    const dataStart = offset + 30 + fileNameLen + extraFieldLen;
+
+    if (entryName === 'word/document.xml') {
+      const entryBytes = bytes.subarray(dataStart, dataStart + compressedSize);
+      if (compressionMethod === 0) {
+        // Stored uncompressed
+        return new TextDecoder('utf-8').decode(entryBytes);
+      } else if (compressionMethod === 8) {
+        // Deflated
+        try {
+          // In Node.js / Electron
+          if (typeof process !== 'undefined' && (process as any).versions?.node) {
+            const zlib = require('zlib');
+            const inflated = zlib.inflateRawSync(entryBytes);
+            return new TextDecoder('utf-8').decode(inflated);
+          }
+        } catch (e: any) {
+          throw new DocumentImportError(
+            'CORRUPTED_FILE',
+            `Failed to decompress word/document.xml: ${e?.message}`,
+            'שגיאה בפריסת תוכן ה-DOCX'
+          );
+        }
+      } else {
+        throw new DocumentImportError(
+          'UNSUPPORTED_FORMAT',
+          `Unsupported ZIP compression method: ${compressionMethod}`,
+          'שיטת דחיסה לא נתמכת בקובץ DOCX'
+        );
+      }
+    }
+
+    offset = dataStart + compressedSize;
+  }
+
+  throw new DocumentImportError(
+    'INVALID_STRUCTURE',
+    'word/document.xml not found in DOCX package',
+    'לא נמצא תוכן מסמך תקין (word/document.xml) בתוך קובץ ה-DOCX'
+  );
+}
+
+/**
+ * Parses word/document.xml string into structured StoryParagraphs with formatting spans.
+ */
+export function parseDocxXml(xml: string, options?: ImportOptions): ImportResult {
+  const pRegex = /<w:p(?:[\s\S]*?)<\/w:p>/g;
+  const paragraphs: StoryParagraph[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = pRegex.exec(xml)) !== null) {
+    const pXml = match[0];
+
+    // Determine paragraph style from <w:pStyle w:val="..."/>
+    let styleId = options?.defaultStyleId || 'default-body';
+    const styleMatch = /<w:pStyle[^>]*?w:val="([^"]+)"/i.exec(pXml);
+    if (styleMatch) {
+      const val = styleMatch[1].toLowerCase();
+      if (val.includes('heading1') || val.includes('heading 1') || val === '1') {
+        styleId = 'heading-1';
+      } else if (val.includes('heading2') || val.includes('heading 2') || val === '2') {
+        styleId = 'heading-2';
+      } else if (val.includes('heading3') || val.includes('heading 3') || val === '3') {
+        styleId = 'heading-3';
+      } else if (val.includes('quote') || val.includes('ציטוט')) {
+        styleId = 'blockquote';
+      }
+    }
+
+    // Check for list item: <w:numPr>
+    if (/<w:numPr[\s>]/.test(pXml)) {
+      styleId = 'list-item';
+    }
+
+    // Parse runs <w:r>
+    const rRegex = /<w:r(?:[\s\S]*?)<\/w:r>/g;
+    let rMatch: RegExpExecArray | null;
+    let fullParaText = '';
+    const spans: TextSpan[] = [];
+
+    while ((rMatch = rRegex.exec(pXml)) !== null) {
+      const rXml = rMatch[0];
+
+      // Extract run properties <w:rPr>
+      const isBold = /<w:b(?:\s|\/|>)/.test(rXml) && !/<w:b\s+w:val="(?:0|false|none)"/i.test(rXml);
+      const isItalic = /<w:i(?:\s|\/|>)/.test(rXml) && !/<w:i\s+w:val="(?:0|false|none)"/i.test(rXml);
+      const isUnderline = /<w:u(?:\s|\/|>)/.test(rXml) && !/<w:u\s+w:val="(?:0|false|none)"/i.test(rXml);
+
+      // Extract text <w:t>
+      const tRegex = /<w:t(?:[^>]*)>([\s\S]*?)<\/w:t>/g;
+      let tMatch: RegExpExecArray | null;
+      let runText = '';
+      while ((tMatch = tRegex.exec(rXml)) !== null) {
+        runText += decodeXmlEntities(tMatch[1]);
+      }
+
+      if (runText) {
+        const start = fullParaText.length;
+        fullParaText += runText;
+        const end = fullParaText.length;
+
+        if (isBold || isItalic || isUnderline) {
+          spans.push({
+            start,
+            end,
+            format: {
+              fontWeight: isBold ? 700 : undefined,
+              italic: isItalic ? true : undefined,
+              underline: isUnderline ? true : undefined
+            }
+          });
+        }
+      }
+    }
+
+    const trimmed = fullParaText.replace(/[ \t]+/g, ' ').trim();
+    if (trimmed) {
+      paragraphs.push(createStoryParagraph(trimmed, styleId, spans));
+    }
+  }
+
+  if (paragraphs.length === 0) {
+    throw new DocumentImportError(
+      'EMPTY_DOCUMENT',
+      'The DOCX document contains no text paragraphs',
+      'קובץ ה-DOCX אינו מכיל פסקאות טקסט',
+      options?.fileName
+    );
+  }
+
+  const allText = paragraphs.map((p) => p.text).join('\n');
+  const title = cleanDocumentTitle(options?.fileName);
+  const detectedDirection = detectTextDirection(allText);
+  const detectedLanguage = detectTextLanguage(allText);
+  const wordCount = (allText.match(/\S+/g) || []).length;
+
+  return {
+    title,
+    paragraphs,
+    format: 'docx',
+    detectedLanguage,
+    detectedDirection,
+    wordCount,
+    paragraphCount: paragraphs.length
+  };
+}
+
+/**
+ * Imports DOCX document buffer.
+ */
+export function importDocx(
+  content: Uint8Array | ArrayBuffer,
+  options?: ImportOptions
+): ImportResult {
+  const xml = extractDocxXml(content);
+  return parseDocxXml(xml, options);
+}
+
+/**
+ * Unified entry point for importing any supported document file (TXT, Markdown, DOCX).
+ */
+export function importDocument(
+  content: string | Uint8Array | ArrayBuffer,
+  options?: ImportOptions
+): ImportResult {
+  const fileName = options?.fileName || '';
+  const ext = fileName.split('.').pop()?.toLowerCase();
+
+  // 1. Explicit format or filename match
+  if (options?.format === 'docx' || ext === 'docx') {
+    if (typeof content === 'string') {
+      throw new DocumentImportError(
+        'INVALID_STRUCTURE',
+        'DOCX format requires binary buffer input',
+        'קובץ DOCX דורש נתונים בינאריים'
+      );
+    }
+    return importDocx(content, options);
+  }
+
+  if (options?.format === 'md' || options?.format === 'markdown' || ext === 'md' || ext === 'markdown') {
+    return importMarkdown(content, options);
+  }
+
+  if (options?.format === 'txt' || ext === 'txt') {
+    return importPlainText(content, options);
+  }
+
+  // 2. Auto-detect from binary signature
+  if (typeof content !== 'string') {
+    const bytes = content instanceof Uint8Array ? content : new Uint8Array(content);
+    if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4B && bytes[2] === 0x03 && bytes[3] === 0x04) {
+      return importDocx(bytes, options);
+    }
+  }
+
+  // 3. Auto-detect Markdown vs Plain Text
+  const decoded = typeof content === 'string' ? content : decodeTextBuffer(content);
+  const hasMarkdownTokens = /^#\s+|\n#\s+|\*\*|__|\n[-*+]\s+/m.test(decoded);
+  if (hasMarkdownTokens) {
+    return importMarkdown(content, options);
+  }
+
+  return importPlainText(content, options);
+}
+
+
