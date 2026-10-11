@@ -1629,6 +1629,7 @@ export class TypesetOkApp {
     }
     const baseName = filePath.split(/[\\/]/).pop() || filePath;
     this.documentState.title = this.documentTitle || baseName.replace(/\.tok$/i, '');
+    this.documentState.filePath = filePath;
 
     const docRoot = documentStateToDocumentRoot(this.documentState);
 
@@ -1653,18 +1654,36 @@ export class TypesetOkApp {
         return false;
       }
     } else {
-      this.currentFilePath = filePath;
-      this.documentTitle = baseName;
-      this.setDirty(false);
-      this.topBar.setDocumentTitle(baseName, false);
-      addRecentProject({
-        name: baseName,
-        path: filePath,
-        pages: this.pages.length || 1,
-        lastSavedAt: new Date().toISOString()
-      });
-      this.showToast(t('toastSaved'));
-      return true;
+      try {
+        if (typeof document !== 'undefined' && typeof Blob !== 'undefined') {
+          const jsonStr = JSON.stringify(docRoot, null, 2);
+          const blob = new Blob([jsonStr], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = baseName.endsWith('.tok') || baseName.endsWith('.json') ? baseName : `${baseName}.tok`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        }
+        this.currentFilePath = filePath;
+        this.documentTitle = baseName;
+        this.setDirty(false);
+        this.topBar.setDocumentTitle(baseName, false);
+        addRecentProject({
+          name: baseName,
+          path: filePath,
+          pages: this.pages.length || 1,
+          lastSavedAt: new Date().toISOString()
+        });
+        this.showToast(t('toastSaved'));
+        return true;
+      } catch (err: any) {
+        console.error('[TOK] Failed to export/save file:', err);
+        this.showToast(tf('toastSaveError', { error: err?.message ?? String(err) }), true);
+        return false;
+      }
     }
   }
 
@@ -1879,11 +1898,14 @@ export class TypesetOkApp {
         if (win.tokIpc?.showSaveDialog) {
           win.tokIpc.showSaveDialog({
             defaultPath: defaultName,
-            filters: [{ name: 'TypesetOK Document', extensions: ['tok'] }]
+            filters: [{ name: 'TypesetOK Document', extensions: ['tok', 'json'] }]
           }).then((filePath: string | null) => {
             if (filePath) {
               this.saveDocumentToFile(filePath);
             }
+          }).catch((err: any) => {
+            console.error('[TOK] Save dialog error:', err);
+            this.showToast(tf('toastSaveError', { error: err?.message || String(err) }), true);
           });
         } else {
           this.saveDocumentToFile(defaultName);
