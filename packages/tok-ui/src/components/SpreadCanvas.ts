@@ -39,8 +39,8 @@ export const MIN_ZOOM = 25;
 export const MAX_ZOOM = 400;
 
 /** Zoom (percent) at which a full spread fits the visible canvas area. */
-export function fitZoom(viewportWidth: number, viewportHeight: number): number {
-  const z = Math.min((viewportWidth - 80) / (2 * PAGE_WIDTH_PX), (viewportHeight - 136) / PAGE_HEIGHT_PX) * 100;
+export function fitZoom(viewportWidth: number, viewportHeight: number, pageWidth = PAGE_WIDTH_PX, pageHeight = PAGE_HEIGHT_PX): number {
+  const z = Math.min((viewportWidth - 80) / (2 * pageWidth), (viewportHeight - 136) / pageHeight) * 100;
   if (!Number.isFinite(z)) return 100;
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.floor(z)));
 }
@@ -217,7 +217,10 @@ export class SpreadCanvas {
 
   /** Zooms so one full spread fits the visible area. */
   public fitToWindow(): void {
-    this.applyUserZoom(fitZoom(this.scroller.clientWidth, this.scroller.clientHeight));
+    const firstPage = this.pages[0];
+    const pageWidth = firstPage?.widthPt || PAGE_WIDTH_PX;
+    const pageHeight = firstPage?.heightPt || PAGE_HEIGHT_PX;
+    this.applyUserZoom(fitZoom(this.scroller.clientWidth, this.scroller.clientHeight, pageWidth, pageHeight));
   }
 
   private applyUserZoom(z: number): void {
@@ -363,8 +366,10 @@ export class SpreadCanvas {
       // The canvas is dir="rtl", so the first sheet appended lands on the right.
       // The lone first page is a recto and therefore belongs on the left.
       if (spread.length === 1 && isRectoPage(spread[0])) {
+        const firstPage = this.pages[spread[0]];
+        const pageWidth = firstPage?.widthPt || PAGE_WIDTH_PX;
         spreadRow.style.justifyContent = 'flex-end';
-        spreadRow.style.width = `${2 * PAGE_WIDTH_PX}px`;
+        spreadRow.style.width = `${2 * pageWidth}pt`;
       }
       for (const pos of spread) {
         spreadRow.appendChild(this.createPageSheet(this.pages[pos], pos));
@@ -381,6 +386,13 @@ export class SpreadCanvas {
     const isRightPage = isRightHandPage(position);
     const amud = isRecto ? 'ע״א' : 'ע״ב';
     const sheet = el('article', 'tok-page-sheet', { 'data-page-index': page.pageIndex, 'aria-label': `${tf('structurePageLabel', { g: page.gematriaNumber })} ${amud}` });
+
+    const pageWidthPt = page.widthPt || PAGE_WIDTH_PX;
+    const pageHeightPt = page.heightPt || PAGE_HEIGHT_PX;
+    sheet.style.width = `${pageWidthPt}pt`;
+    sheet.style.height = `${pageHeightPt}pt`;
+    sheet.dataset.widthPt = String(pageWidthPt);
+    sheet.dataset.heightPt = String(pageHeightPt);
 
     // Click on page background clears frame selection (zero selection).
     sheet.addEventListener('click', (e) => {
@@ -406,7 +418,22 @@ export class SpreadCanvas {
 
     // 2. Page body: rendered document content or clean interactive editable text frame.
     if (page.htmlContent && page.htmlContent.trim().length > 0) {
-      const content = el('div', 'tok-page-content', { style: 'flex: 1; min-height: 0; overflow: hidden;' });
+      const isEngineLayout = page.htmlContent.includes('tok-page-layout-rust');
+      if (isEngineLayout) {
+        sheet.style.padding = '0';
+        sheet.classList.add('tok-page-engine-layout');
+        head.style.position = 'absolute';
+        head.style.top = '14pt';
+        head.style.left = isRightPage ? 'auto' : '24pt';
+        head.style.right = isRightPage ? '24pt' : 'auto';
+        head.style.borderBottom = 'none';
+        head.style.zIndex = '5';
+      }
+      const content = el('div', 'tok-page-content', {
+        style: isEngineLayout
+          ? 'position: absolute; inset: 0; overflow: hidden;'
+          : 'flex: 1; min-height: 0; overflow: hidden;'
+      });
       content.innerHTML = page.htmlContent;
       sheet.appendChild(content);
 
