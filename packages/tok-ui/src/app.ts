@@ -63,7 +63,38 @@ const TEMPLATE_TITLES: Record<string, string> = {
 };
 const BLANK_TEMPLATE_TITLE = 'מסמך ריק.tok';
 
-const countWords = (text: string) => (text.match(/\S+/g) || []).length;
+/** High-speed zero-allocation Unicode whitespace word counter */
+export function countWords(text: string): number {
+  if (!text) return 0;
+  let count = 0;
+  let inWord = false;
+  const len = text.length;
+  for (let i = 0; i < len; i++) {
+    const code = text.charCodeAt(i);
+    const isWs = code <= 32 || code === 160 || code === 0x2000 || code === 0x2001 || code === 0x2002 || code === 0x2003 || code === 0x2028 || code === 0x2029;
+    if (!isWs) {
+      if (!inWord) {
+        count++;
+        inWord = true;
+      }
+    } else {
+      inWord = false;
+    }
+  }
+  return count;
+}
+
+const wordCountCache = new Map<string, { text: string; count: number }>();
+
+export function getParagraphWordCount(id: string, text: string): number {
+  const cached = wordCountCache.get(id);
+  if (cached && cached.text === text) {
+    return cached.count;
+  }
+  const count = countWords(text);
+  wordCountCache.set(id, { text, count });
+  return count;
+}
 
 export class TypesetOkApp {
   private root: HTMLElement;
@@ -1293,7 +1324,7 @@ export class TypesetOkApp {
     }
     this.storyFlowChip.setAttribute('aria-label', tf('storyFlowChip', { name }));
     this.storyFlowChip.title = t('structureFlowsTitle');
-    const words = this.storyEditor ? this.storyEditor.getStory().reduce((sum: number, p: StoryParagraph) => sum + countWords(p.text), 0) : 0;
+    const words = this.storyEditor ? this.storyEditor.getStory().reduce((sum: number, p: StoryParagraph) => sum + getParagraphWordCount(p.id, p.text), 0) : 0;
     this.storyWordCount.textContent = tf('storyWordsCount', { n: words.toLocaleString() });
   }
 
@@ -1664,7 +1695,7 @@ export class TypesetOkApp {
       const counts: Record<string, number> = {};
       let totalWords = 0;
       for (const [fid, paras] of Object.entries(this.documentState.flows)) {
-        const w = paras.reduce((sum, p) => sum + countWords(p.text), 0);
+        const w = paras.reduce((sum, p) => sum + getParagraphWordCount(p.id, p.text), 0);
         counts[fid] = w;
         totalWords += w;
       }
@@ -1686,7 +1717,7 @@ export class TypesetOkApp {
       this.wordCountTimer = null;
       let totalWords = 0;
       for (const paras of Object.values(this.documentState.flows)) {
-        totalWords += paras.reduce((sum, p) => sum + countWords(p.text), 0);
+        totalWords += paras.reduce((sum, p) => sum + getParagraphWordCount(p.id, p.text), 0);
       }
       this.statusBar.updateStats({ wordCount: totalWords });
       this.updateStoryToolbar();

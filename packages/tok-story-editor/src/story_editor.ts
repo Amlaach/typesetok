@@ -217,9 +217,19 @@ export class StoryEditor {
     this.editorEl.replaceChildren(frag);
   }
 
+  private cloneParagraphs(paragraphs: StoryParagraph[]): StoryParagraph[] {
+    return paragraphs.map((p) => ({
+      id: p.id,
+      styleId: p.styleId,
+      text: p.text,
+      spans: p.spans ? p.spans.map((s) => ({ start: s.start, end: s.end, format: { ...s.format } })) : undefined,
+      patch: p.patch ? { ...p.patch } : undefined
+    }));
+  }
+
   public loadStory(paragraphs: StoryParagraph[], resetHistory = true): void {
     this.renderParagraphs(paragraphs);
-    this.lastSavedParagraphs = JSON.parse(JSON.stringify(paragraphs));
+    this.lastSavedParagraphs = this.cloneParagraphs(paragraphs);
     if (resetHistory) {
       this.history.clear();
     }
@@ -231,7 +241,7 @@ export class StoryEditor {
     if (freshFromDom || this.lastSavedParagraphs.length === 0) {
       this.lastSavedParagraphs = this.parseAllParagraphsDom();
     }
-    return JSON.parse(JSON.stringify(this.lastSavedParagraphs));
+    return this.cloneParagraphs(this.lastSavedParagraphs);
   }
 
   public parseAllParagraphsDom(): StoryParagraph[] {
