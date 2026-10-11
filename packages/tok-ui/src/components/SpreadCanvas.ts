@@ -119,6 +119,18 @@ export class SpreadCanvas {
     });
   }
 
+  public destroy(): void {
+    if (this.scrollSettleTimer) {
+      clearTimeout(this.scrollSettleTimer);
+      this.scrollSettleTimer = 0;
+    }
+    if (this.scrollRaf) {
+      cancelAnimationFrame(this.scrollRaf);
+      this.scrollRaf = 0;
+    }
+    this.element.remove();
+  }
+
   public setPages(pages: PageDescriptor[], activeIndex = 0): void {
     this.pages = pages;
     this.activePageIndex = activeIndex;

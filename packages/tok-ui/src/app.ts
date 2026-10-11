@@ -149,6 +149,24 @@ export class TypesetOkApp {
     flows: JSON.parse(JSON.stringify(DEFAULT_TALMUD_FLOWS))
   };
 
+  private onBeforeUnload = (e: BeforeUnloadEvent): void => {
+    if (this.documentTitle) {
+      updateProjectClosedTime(this.documentTitle);
+    }
+    if (this.documentState?.isDirty) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  };
+
+  private onDocumentSelectionChange = (): void => {
+    this.updateFormattingToolbarState();
+  };
+
+  private onWindowKeyDown = (e: KeyboardEvent): void => {
+    this.handleGlobalKeyDown(e);
+  };
+
   constructor(root: HTMLElement) {
     this.root = root;
     this.root.className = 'tok-workbench-root';
@@ -169,12 +187,10 @@ export class TypesetOkApp {
 
     i18n.onChange(() => this.applyLanguage());
 
-    // Record exit/closing timestamp on window close
-    window.addEventListener('beforeunload', () => {
-      if (this.documentTitle) {
-        updateProjectClosedTime(this.documentTitle);
-      }
-    });
+    // Record exit/closing timestamp and warn on dirty state on window close
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', this.onBeforeUnload);
+    }
   }
 
   private initUI(): void {
@@ -329,9 +345,7 @@ export class TypesetOkApp {
       }
     });
 
-    document.addEventListener('selectionchange', () => {
-      this.updateFormattingToolbarState();
-    });
+    document.addEventListener('selectionchange', this.onDocumentSelectionChange);
 
     this.storyContainer.appendChild(this.storyHeader);
     this.storyContainer.appendChild(this.buildStoryToolbar());
@@ -478,7 +492,12 @@ export class TypesetOkApp {
 
   /** Standard keyboard shortcuts supporting both English and Hebrew layouts. */
   private bindKeyboardShortcuts(): void {
-    window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', this.onWindowKeyDown);
+    }
+  }
+
+  private handleGlobalKeyDown(e: KeyboardEvent): void {
       const target = e.target as HTMLElement | null;
       const isInput = Boolean(
         target && (
@@ -670,16 +689,26 @@ export class TypesetOkApp {
         this.addNewPage();
         return;
       }
-    });
+  }
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('beforeunload', (e) => {
-        if (this.documentState?.isDirty) {
-          e.preventDefault();
-          e.returnValue = '';
-        }
-      });
+  /**
+   * Cleans up all global event listeners, timers, abort controllers, and sub-components.
+   */
+  public destroy(): void {
+    this.cancelPendingRepaginate();
+    if (this.wordCountTimer) {
+      clearTimeout(this.wordCountTimer);
+      this.wordCountTimer = null;
     }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.onWindowKeyDown);
+      window.removeEventListener('beforeunload', this.onBeforeUnload);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('selectionchange', this.onDocumentSelectionChange);
+    }
+    this.storyEditor?.destroy();
+    this.canvas?.destroy();
   }
 
   /** Re-applies texts owned by the app shell after a language switch. */
