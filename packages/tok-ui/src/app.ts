@@ -1825,6 +1825,7 @@ export class TypesetOkApp {
     if (this.storyEditor) {
       this.storyEditor.loadStory(flowParas);
     }
+    this.setDirty(true);
     this.repaginateAndSync(false).then(() => {
       const newIdx = Math.max(0, this.pages.length - 1);
       this.canvas.scrollToPage(newIdx);
@@ -1835,14 +1836,16 @@ export class TypesetOkApp {
   }
 
   private updatePageStats(idx: number): void {
-    this.activePageIndex = idx;
-    const p = this.pages[idx];
-    const gematria = p ? p.gematriaNumber : toHebrewGematria(idx + 1);
+    const maxIdx = Math.max(0, this.pages.length - 1);
+    const validIdx = Math.min(Math.max(0, idx), maxIdx);
+    this.activePageIndex = validIdx;
+    const p = this.pages[validIdx];
+    const gematria = p ? p.gematriaNumber : toHebrewGematria(validIdx + 1);
     this.statusBar.updateStats({
-      pageLabel: tf('appPageStatus', { page: gematria, index: idx + 1, total: this.pages.length })
+      pageLabel: tf('appPageStatus', { page: gematria, index: validIdx + 1, total: this.pages.length })
     });
-    this.topBar.setPageLabel(`${tf('structurePageLabel', { g: gematria })} ${isRectoPage(idx) ? 'ע״א' : 'ע״ב'}`);
-    this.structureBar.setActivePage(idx);
+    this.topBar.setPageLabel(`${tf('structurePageLabel', { g: gematria })} ${isRectoPage(validIdx) ? 'ע״א' : 'ע״ב'}`);
+    this.structureBar.setActivePage(validIdx);
   }
 
   /**
