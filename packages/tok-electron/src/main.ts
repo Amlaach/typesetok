@@ -803,6 +803,12 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
+let isAppQuitting = false;
+
+app.on('before-quit', () => {
+  isAppQuitting = true;
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();

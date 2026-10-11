@@ -2266,24 +2266,32 @@ export class TypesetOkApp {
     return true;
   }
 
+  private isClosingInProgress = false;
+
   /**
    * Safe application close/exit coordination supporting save-before-exit, discard, and cancel.
    */
   public async requestCloseOrExit(action: 'close' | 'quit' = 'quit'): Promise<boolean> {
-    const win = typeof window !== 'undefined' ? (window as any) : null;
-    if (this.documentTitle) {
-      updateProjectClosedTime(this.documentTitle);
+    if (this.isClosingInProgress) return false;
+    this.isClosingInProgress = true;
+    try {
+      const win = typeof window !== 'undefined' ? (window as any) : null;
+      if (this.documentTitle) {
+        updateProjectClosedTime(this.documentTitle);
+      }
+      if (win?.tokIpc?.quitApp && action === 'quit') {
+        await win.tokIpc.quitApp();
+        return true;
+      }
+      if (win?.tokIpc?.closeWindow && action === 'close') {
+        await win.tokIpc.closeWindow();
+        return true;
+      }
+      // Web environment fallback
+      if (!this.confirmDiscardUnsaved()) return false;
+      return this.closeDocument();
+    } finally {
+      this.isClosingInProgress = false;
     }
-    if (win?.tokIpc?.quitApp && action === 'quit') {
-      await win.tokIpc.quitApp();
-      return true;
-    }
-    if (win?.tokIpc?.closeWindow && action === 'close') {
-      await win.tokIpc.closeWindow();
-      return true;
-    }
-    // Web environment fallback
-    if (!this.confirmDiscardUnsaved()) return false;
-    return this.closeDocument();
   }
 }
