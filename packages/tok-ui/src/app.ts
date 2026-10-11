@@ -1598,15 +1598,20 @@ export class TypesetOkApp {
     this.documentTitle = name;
     this.documentState.title = name;
     this.documentState.templateType = (templateId in TEMPLATE_TITLES ? templateId : 'gemara') as TemplateType;
+    this.currentFilePath = '';
 
     if (templateId === 'prose') {
       this.documentState.flows = JSON.parse(JSON.stringify(DEFAULT_PROSE_FLOWS));
+    } else if (templateId === 'blank') {
+      this.documentState.flows = { gemara: [], rashi: [], tosafot: [], notes: [] };
     } else {
       this.documentState.flows = JSON.parse(JSON.stringify(DEFAULT_TALMUD_FLOWS));
     }
 
     this.activeFlowId = 'gemara';
     this.storyEditor.loadStory(this.documentState.flows.gemara);
+    this.activePageIndex = 0;
+    this.structureBar.setActivePage(0);
     this.repaginateAndSync(true);
 
     this.hasOpenDocument = true;
@@ -1663,6 +1668,45 @@ export class TypesetOkApp {
     }
   }
 
+  private loadDocumentRoot(docRoot: any, filePath: string, title?: string): Promise<void> {
+    const baseName = filePath.split(/[\\/]/).pop() || filePath;
+    const newState = documentRootToDocumentState(docRoot);
+    this.documentState = newState;
+    this.currentFilePath = filePath;
+    const displayTitle = title || docRoot.metadata?.title || baseName;
+    this.documentTitle = displayTitle;
+    this.setDirty(false);
+    this.topBar.setDocumentTitle(displayTitle, false);
+
+    if (newState.settings) {
+      this.inspector.setDocumentSettings(newState.settings);
+    }
+
+    const flowKeys = Object.keys(newState.flows);
+    const activeKey = (this.activeFlowId && newState.flows[this.activeFlowId])
+      ? this.activeFlowId
+      : (flowKeys[0] || 'gemara');
+    this.activeFlowId = activeKey;
+    const activeStory = newState.flows[activeKey] || [];
+    this.storyEditor.loadStory(activeStory);
+
+    this.activePageIndex = 0;
+    this.structureBar.setActivePage(0);
+
+    return this.repaginateAndSync(true).then(() => {
+      this.hasOpenDocument = true;
+      this.welcomeModal.setHasOpenDocument(true);
+      this.canvas.scrollToPage(0);
+      addRecentProject({
+        name: displayTitle,
+        path: filePath,
+        pages: this.pages.length || 1,
+        lastSavedAt: new Date().toISOString()
+      });
+      this.showToast(tf('toastOpenFile', { path: displayTitle }));
+    });
+  }
+
   private openProjectFile(filePath: string): void {
     const win = window as any;
     const baseName = filePath.split(/[\\/]/).pop() || filePath;
@@ -1670,30 +1714,7 @@ export class TypesetOkApp {
     if (win.tokIpc?.openDocument) {
       win.tokIpc.openDocument(filePath)
         .then((docRoot: any) => {
-          const newState = documentRootToDocumentState(docRoot);
-          this.documentState = newState;
-          this.currentFilePath = filePath;
-          const displayTitle = docRoot.metadata?.title || baseName;
-          this.documentTitle = displayTitle;
-          this.setDirty(false);
-          this.topBar.setDocumentTitle(displayTitle, false);
-
-          const activeKey = this.activeFlowId || (newState.templateType === 'prose' ? 'gemara' : 'gemara');
-          this.activeFlowId = activeKey;
-          const activeStory = newState.flows[activeKey] || [];
-          this.storyEditor.loadStory(activeStory);
-
-          this.repaginateAndSync(true).then(() => {
-            this.hasOpenDocument = true;
-            this.welcomeModal.setHasOpenDocument(true);
-            addRecentProject({
-              name: displayTitle,
-              path: filePath,
-              pages: this.pages.length || 1,
-              lastSavedAt: new Date().toISOString()
-            });
-            this.showToast(tf('toastOpenFile', { path: displayTitle }));
-          });
+          return this.loadDocumentRoot(docRoot, filePath, docRoot.metadata?.title || baseName);
         })
         .catch((err: any) => {
           console.error('[TOK] Failed to open document:', err);
@@ -1812,10 +1833,33 @@ export class TypesetOkApp {
         if (typeof data === 'string' && data) {
           this.openProjectFile(data);
         } else if (win.tokIpc?.showOpenDialog) {
-          win.tokIpc.showOpenDialog({ filters: [{ name: 'TypesetOK Document', extensions: ['tok'] }] })
+          win.tokIpc.showOpenDialog({ filters: [{ name: 'TypesetOK Document', extensions: ['tok', 'json'] }] })
             .then((filePath: string | null) => {
               if (filePath) this.openProjectFile(filePath);
             });
+        } else if (typeof document !== 'undefined') {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.tok,.json';
+          input.style.display = 'none';
+          input.addEventListener('change', () => {
+            const file = input.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+              try {
+                const text = reader.result as string;
+                const docRoot = JSON.parse(text);
+                this.loadDocumentRoot(docRoot, file.name, file.name.replace(/\.(tok|json)$/i, ''));
+              } catch (e: any) {
+                this.showToast(tf('toastOpenError', { error: e?.message || 'Invalid format' }), true);
+              }
+            };
+            reader.readAsText(file);
+            input.remove();
+          });
+          document.body.appendChild(input);
+          input.click();
         } else {
           this.showToast(tf('toastOpenFile', { path: '' }));
         }

@@ -138,6 +138,13 @@ export class ContextualInspector {
     return { ...this.documentSettings };
   }
 
+  public setDocumentSettings(settings: Partial<DocumentSettings>): void {
+    Object.assign(this.documentSettings, settings);
+    if (this.mode === 'zero') {
+      this.render();
+    }
+  }
+
   private flowName(flowId: string): string {
     const keys: Record<string, string> = { gemara: 'inspFlowGemara', rashi: 'inspFlowRashi', tosafot: 'inspFlowTosafot', notes: 'inspFlowNotes' };
     return keys[flowId] ? t(keys[flowId]) : flowId;
