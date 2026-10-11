@@ -12,6 +12,7 @@ pub mod layout_family;
 pub mod layout_features;
 pub mod layout_template;
 pub mod multi_flow;
+pub mod page_break;
 pub mod shaper;
 pub mod solver;
 pub mod template_synthesizer;
@@ -42,6 +43,7 @@ pub use multi_flow::{
     DynamicPageResult, DynamicTalmudPageResult, FlowGeometrySpec, FlowPlacementRole,
     MultiFlowSolver, SolvedFlowAllocation, SpreadSide,
 };
+pub use page_break::{compute_badness, score_page_break, BreakOpportunity, PageBreakPenalty};
 pub use shaper::{PositionedGlyph, ShapedRun, TextShaper};
 pub use solver::{
     ColumnFrameVariables, ColumnSpec, ColumnWidthDistribution, ConstraintRelation,
