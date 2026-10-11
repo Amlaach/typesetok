@@ -233,6 +233,8 @@ pub struct DocumentRoot {
     pub running_header: Option<crate::header::RunningHeaderConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub footnote_apparatus: Option<crate::header::FootnoteApparatusConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dependency_tracker: Option<crate::dependency::DocumentDependencyTracker>,
 }
 
 impl DocumentRoot {
@@ -250,6 +252,7 @@ impl DocumentRoot {
             cross_references: None,
             running_header: None,
             footnote_apparatus: None,
+            dependency_tracker: None,
         };
 
         // Add a default first section
@@ -275,6 +278,11 @@ impl DocumentRoot {
 
     pub fn with_footnote_apparatus(mut self, apparatus: crate::header::FootnoteApparatusConfig) -> Self {
         self.footnote_apparatus = Some(apparatus);
+        self
+    }
+
+    pub fn with_dependency_tracker(mut self, tracker: crate::dependency::DocumentDependencyTracker) -> Self {
+        self.dependency_tracker = Some(tracker);
         self
     }
 

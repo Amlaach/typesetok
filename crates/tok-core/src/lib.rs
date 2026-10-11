@@ -1,4 +1,5 @@
 pub mod anchor;
+pub mod dependency;
 pub mod error;
 pub mod header;
 pub mod id;
@@ -12,6 +13,7 @@ pub mod styles;
 pub mod transaction;
 
 pub use anchor::{AnchorBias, SemanticRange, TextAnchor};
+pub use dependency::DocumentDependencyTracker;
 pub use error::ModelError;
 pub use header::{
     FootnoteApparatusConfig, HeaderExtractionRule, HeaderFolioPosition, HeaderSpreadSide,
