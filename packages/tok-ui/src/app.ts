@@ -1882,22 +1882,26 @@ export class TypesetOkApp {
       if (this.storyEditor && this.activeFlowId) {
         this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
       }
-      const baseName = filePath.split(/[\\/]/).pop() || filePath;
+      let targetPath = filePath;
+      if (!targetPath.toLowerCase().endsWith('.tok')) {
+        targetPath = targetPath.replace(/\.[^/\\.]+$/, '') + '.tok';
+      }
+      const baseName = targetPath.split(/[\\/]/).pop() || targetPath;
       this.documentState.title = this.documentTitle || baseName.replace(/\.tok$/i, '');
-      this.documentState.filePath = filePath;
+      this.documentState.filePath = targetPath;
 
       const docRoot = documentStateToDocumentRoot(this.documentState);
 
       if (win.tokIpc?.saveDocument) {
         try {
-          await win.tokIpc.saveDocument({ document: docRoot, filePath });
-          this.currentFilePath = filePath;
-          this.documentTitle = baseName;
+          await win.tokIpc.saveDocument({ document: docRoot, filePath: targetPath });
+          this.currentFilePath = targetPath;
+          this.documentTitle = baseName.replace(/\.tok$/i, '');
           this.setDirty(false);
-          this.topBar.setDocumentTitle(baseName, false);
+          this.topBar.setDocumentTitle(this.documentTitle, false);
           addRecentProject({
             name: baseName,
-            path: filePath,
+            path: targetPath,
             pages: this.pages.length || 1,
             lastSavedAt: new Date().toISOString()
           });
@@ -1916,19 +1920,19 @@ export class TypesetOkApp {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = baseName.endsWith('.tok') || baseName.endsWith('.json') ? baseName : `${baseName}.tok`;
+            a.download = baseName;
             document.body.appendChild(a);
             a.click();
             a.remove();
             URL.revokeObjectURL(url);
           }
-          this.currentFilePath = filePath;
-          this.documentTitle = baseName;
+          this.currentFilePath = targetPath;
+          this.documentTitle = baseName.replace(/\.tok$/i, '');
           this.setDirty(false);
-          this.topBar.setDocumentTitle(baseName, false);
+          this.topBar.setDocumentTitle(this.documentTitle, false);
           addRecentProject({
             name: baseName,
-            path: filePath,
+            path: targetPath,
             pages: this.pages.length || 1,
             lastSavedAt: new Date().toISOString()
           });
@@ -2284,7 +2288,7 @@ export class TypesetOkApp {
         break;
       }
       case 'save-document': {
-        if (this.currentFilePath) {
+        if (this.currentFilePath && this.currentFilePath.toLowerCase().endsWith('.tok')) {
           this.saveDocumentToFile(this.currentFilePath);
         } else {
           this.handleSystemAction('save-as');
