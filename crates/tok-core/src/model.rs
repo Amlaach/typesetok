@@ -209,6 +209,10 @@ pub struct DocumentRoot {
     pub outline: Option<crate::outline::DocumentOutline>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cross_references: Option<crate::reference::CrossReferenceRegistry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub running_header: Option<crate::header::RunningHeaderConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub footnote_apparatus: Option<crate::header::FootnoteApparatusConfig>,
 }
 
 impl DocumentRoot {
@@ -224,6 +228,8 @@ impl DocumentRoot {
             sections: Vec::new(),
             outline: None,
             cross_references: None,
+            running_header: None,
+            footnote_apparatus: None,
         };
 
         // Add a default first section
@@ -239,6 +245,16 @@ impl DocumentRoot {
 
     pub fn with_cross_references(mut self, refs: crate::reference::CrossReferenceRegistry) -> Self {
         self.cross_references = Some(refs);
+        self
+    }
+
+    pub fn with_running_header(mut self, header: crate::header::RunningHeaderConfig) -> Self {
+        self.running_header = Some(header);
+        self
+    }
+
+    pub fn with_footnote_apparatus(mut self, apparatus: crate::header::FootnoteApparatusConfig) -> Self {
+        self.footnote_apparatus = Some(apparatus);
         self
     }
 

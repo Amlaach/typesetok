@@ -1,5 +1,6 @@
 pub mod anchor;
 pub mod error;
+pub mod header;
 pub mod id;
 pub mod model;
 pub mod normalizer;
@@ -11,6 +12,10 @@ pub mod transaction;
 
 pub use anchor::{AnchorBias, SemanticRange, TextAnchor};
 pub use error::ModelError;
+pub use header::{
+    FootnoteApparatusConfig, HeaderExtractionRule, HeaderFolioPosition, HeaderSpreadSide,
+    RunningHeaderConfig,
+};
 pub use id::{FractionalIndex, NodeId, Ulid};
 pub use model::{
     DocumentMetadata, DocumentModel, DocumentRoot, Flow, FlowId, FlowType, ParagraphNode,
