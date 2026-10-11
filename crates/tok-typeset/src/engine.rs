@@ -421,20 +421,8 @@ impl TypesettingEngine {
         result_lines
     }
 
-    fn new_page(
-        &self,
-        page_num: usize,
-        content_width: f32,
-        content_height: f32,
-        lines: Vec<LineBox>,
-        break_token: Option<BreakToken>,
-        flow_id: &str,
-    ) -> PageLayoutBox {
-        let side = if page_num % 2 == 1 {
-            SpreadSide::Recto
-        } else {
-            SpreadSide::Verso
-        };
+    /// Solves or calculates the content rectangle for a given spread side (Recto / Verso).
+    pub fn content_rect_for_side(&self, side: SpreadSide) -> PhysicalRect {
         let page_config = PageGeometryConfig::new(
             self.config.page_width_pt,
             self.config.page_height_pt,
@@ -446,20 +434,46 @@ impl TypesettingEngine {
         );
         let mut solver = GeometricConstraintSolver::new();
         let page_model = PageConstraintModel::new();
-        let (frame_x, frame_y, frame_w) = if page_model.apply(&mut solver, &page_config).is_ok() {
-            let content = page_model.get_content_rect(&solver);
-            (content.x, content.y, content.width)
+        if page_model.apply(&mut solver, &page_config).is_ok() {
+            let r = page_model.get_content_rect(&solver);
+            PhysicalRect::new(r.x, r.y, r.width, r.height)
         } else {
-            (self.config.margin_inner_pt, self.config.margin_top_pt, content_width)
+            let (margin_left, margin_right) = match side {
+                SpreadSide::Recto => (self.config.margin_inner_pt, self.config.margin_outer_pt),
+                SpreadSide::Verso => (self.config.margin_outer_pt, self.config.margin_inner_pt),
+            };
+            PhysicalRect::new(
+                margin_left,
+                self.config.margin_top_pt,
+                (self.config.page_width_pt - margin_left - margin_right).max(0.0),
+                (self.config.page_height_pt - self.config.margin_top_pt - self.config.margin_bottom_pt).max(0.0),
+            )
+        }
+    }
+
+    fn new_page(
+        &self,
+        page_num: usize,
+        _content_width: f32,
+        content_height: f32,
+        lines: Vec<LineBox>,
+        break_token: Option<BreakToken>,
+        flow_id: &str,
+    ) -> PageLayoutBox {
+        let side = if page_num % 2 == 1 {
+            SpreadSide::Recto
+        } else {
+            SpreadSide::Verso
         };
+        let content = self.content_rect_for_side(side);
 
         let frame = TextFrameBox {
             frame_id: format!("frame_{}_{}", page_num, flow_id),
             flow_id: flow_id.to_string(),
             rect: PhysicalRect::new(
-                frame_x,
-                frame_y,
-                frame_w,
+                content.x,
+                content.y,
+                content.width,
                 content_height,
             ),
             lines,
@@ -485,26 +499,9 @@ impl TypesettingEngine {
             return self.typeset_document_multi_flow(doc);
         }
 
-        let page_config = PageGeometryConfig::new(
-            self.config.page_width_pt,
-            self.config.page_height_pt,
-            self.config.margin_inner_pt,
-            self.config.margin_outer_pt,
-            self.config.margin_top_pt,
-            self.config.margin_bottom_pt,
-            SpreadSide::Recto,
-        );
-        let mut solver = GeometricConstraintSolver::new();
-        let page_model = PageConstraintModel::new();
-        let (content_width, content_height) = if page_model.apply(&mut solver, &page_config).is_ok() {
-            let content = page_model.get_content_rect(&solver);
-            (content.width, content.height)
-        } else {
-            (
-                (self.config.page_width_pt - self.config.margin_inner_pt - self.config.margin_outer_pt).max(0.0),
-                (self.config.page_height_pt - self.config.margin_top_pt - self.config.margin_bottom_pt).max(0.0),
-            )
-        };
+        let content = self.content_rect_for_side(SpreadSide::Recto);
+        let content_width = content.width;
+        let content_height = content.height;
         let flow_id = doc
             .sections
             .first()
@@ -649,10 +646,9 @@ impl TypesettingEngine {
 
     /// Typesets a multi-flow document (Talmud / Mikraot / commentaries) using MultiFlowSolver.
     pub fn typeset_document_multi_flow(&self, doc: &DocumentRoot) -> Vec<PageLayoutBox> {
-        let content_width =
-            self.config.page_width_pt - self.config.margin_inner_pt - self.config.margin_outer_pt;
-        let content_height =
-            self.config.page_height_pt - self.config.margin_top_pt - self.config.margin_bottom_pt;
+        let content = self.content_rect_for_side(SpreadSide::Recto);
+        let content_width = content.width;
+        let content_height = content.height;
 
         let Some(first_sec) = doc.sections.first() else {
             return vec![self.new_page(1, content_width, content_height, Vec::new(), None, "gemara")];
@@ -1707,7 +1703,7 @@ mod tests {
 
         // Long commentary text (overflows page 1 onto page 2 and page 3)
         let mut comm_flow = Flow::new(FlowId::new("commentary"), FlowType::CommentA);
-        for i in 1..=15 {
+        for i in 1..=45 {
             comm_flow.add_paragraph(ParagraphNode::new(
                 FractionalIndex::new(format!("c{:02}", i)),
                 "style-comm",
@@ -1732,10 +1728,10 @@ mod tests {
             .collect();
 
         assert!(!all_lines_text.is_empty(), "Commentary lines must be placed");
-        // Verify that paragraph 1 and paragraph 15 both appear in the text
+        // Verify that paragraph 1 and paragraph 45 both appear in the text
         let combined_text = all_lines_text.join(" ");
         assert!(combined_text.contains("קטע מספר 1:"), "First commentary paragraph must appear");
-        assert!(combined_text.contains("קטע מספר 15:"), "Last commentary paragraph must appear");
+        assert!(combined_text.contains("קטע מספר 45:"), "Last commentary paragraph must appear");
 
         // Verify break token on first page
         assert!(pages[0].break_token.is_some(), "First page should have a break token pointing to continuation");
