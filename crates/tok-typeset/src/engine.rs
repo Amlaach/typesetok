@@ -4,6 +4,7 @@
 //! 3-tier Hebrew justification, and multi-page convergence pagination.
 
 use crate::font::{FontManager, ShapingSession};
+use crate::footnote_paginator::{DynamicFootnotePaginator, FootnotePaginatorConfig};
 use crate::gematria::GematriaEngine;
 use crate::geometry::{
     BreakToken, GlyphBox, LineBox, PageLayoutBox, PhysicalRect, TextFrameBox, UNKNOWN_FONT,
@@ -778,7 +779,28 @@ impl TypesettingEngine {
                 SpreadSide::Verso
             };
 
-            let footnote_target = if has_notes { Some(50.0) } else { None };
+            let notes_flow = first_sec.flows.iter().find(|f| {
+                f.flow_type == FlowType::Footnote
+                    || f.placement_role.as_deref() == Some("bottom_band")
+                    || f.id.0.contains("note")
+            });
+            let notes_id = notes_flow.map(|f| f.id.0.as_str());
+
+            let footnote_target = if let Some(n_id) = notes_id {
+                let cur = flow_cursors.get(n_id).copied().unwrap_or(0);
+                if let Some(lines) = flow_lines_map.get(n_id) {
+                    let remaining = &lines[cur..];
+                    DynamicFootnotePaginator::calculate_target_height(
+                        remaining,
+                        content_height,
+                        &FootnotePaginatorConfig::default(),
+                    )
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
 
             // Determine active flows on this page (flows with unplaced lines)
             let active_specs: Vec<FlowGeometrySpec> = flow_specs
@@ -966,25 +988,17 @@ impl TypesettingEngine {
                 let mut current_h = 0.0;
 
                 if let Some(pool) = lines_pool {
-                    let mut idx = cursor;
-                    while idx < pool.len() {
-                        let l = &pool[idx];
-                        if current_h + l.height > fn_alloc.allocated_height_pt
-                            && !frame_lines.is_empty()
-                        {
-                            break;
-                        }
-                        let mut positioned_line = l.clone();
-                        positioned_line.baseline_y = current_h + positioned_line.height;
-                        positioned_line.line_index = frame_lines.len();
-                        current_h += positioned_line.height;
-                        frame_lines.push(positioned_line);
-                        idx += 1;
-                    }
-                    if idx > cursor {
-                        flow_cursors.insert(notes_id.clone(), idx);
+                    let remaining = &pool[cursor..];
+                    let fn_slice = DynamicFootnotePaginator::slice_for_allocated_band(
+                        remaining,
+                        fn_alloc.allocated_height_pt,
+                        &FootnotePaginatorConfig::default(),
+                    );
+                    if fn_slice.lines_consumed > 0 {
+                        flow_cursors.insert(notes_id.clone(), cursor + fn_slice.lines_consumed);
                         any_lines_placed = true;
                     }
+                    frame_lines = fn_slice.placed_lines;
                 }
 
                 page_frames.push(TextFrameBox {
