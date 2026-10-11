@@ -110,36 +110,11 @@ export function layoutToPageDescriptors(pages: PageLayoutBox[]): PageDescriptor[
     const pageWidth = pageBox.dimensions?.width || 595.28;
     const pageHeight = pageBox.dimensions?.height || 841.89;
 
-    // Content area in points - calculated dynamically from frame bounds or page margins
-    const hasFrames = Array.isArray(pageBox.frames) && pageBox.frames.length > 0;
-    const minFrameX = hasFrames ? Math.min(...pageBox.frames.map((f) => f.rect.x)) : 42.5;
-    const minFrameY = hasFrames ? Math.min(...pageBox.frames.map((f) => f.rect.y)) : 42.5;
-    const maxFrameRight = hasFrames
-      ? Math.max(...pageBox.frames.map((f) => f.rect.x + f.rect.width))
-      : (pageWidth - minFrameX);
-    const maxFrameBottom = hasFrames
-      ? Math.max(...pageBox.frames.map((f) => f.rect.y + f.rect.height))
-      : (pageHeight - minFrameY);
-
-    const marginInner = Math.max(0, minFrameX);
-    const marginTop = Math.max(0, minFrameY);
-    const contentWidthPt = Math.max(1, maxFrameRight - marginInner);
-    const contentHeightPt = Math.max(1, maxFrameBottom - marginTop);
-
-    // SpreadCanvas sheet content box: 404px width, 577px height
-    const TARGET_CONTENT_W = 404;
-    const TARGET_CONTENT_H = 577;
-    const scaleX = TARGET_CONTENT_W / contentWidthPt;
-    const scaleY = TARGET_CONTENT_H / contentHeightPt;
-
     const framesHtml = (pageBox.frames || []).map((frame) => {
-      const relX = Math.max(0, frame.rect.x - marginInner);
-      const relY = Math.max(0, frame.rect.y - marginTop);
-
-      const leftPx = Math.max(0, Math.round(relX * scaleX));
-      const topPx = Math.max(0, Math.round(relY * scaleY));
-      const widthPx = Math.max(20, Math.round(frame.rect.width * scaleX));
-      const heightPx = Math.max(20, Math.round(frame.rect.height * scaleY));
+      const leftPt = frame.rect.x;
+      const topPt = frame.rect.y;
+      const widthPt = frame.rect.width;
+      const heightPt = frame.rect.height;
 
       const flowId = frame.flow_id || 'gemara';
       const frameId = frame.frame_id || `frame_${pageIndex}_${flowId}`;
@@ -161,14 +136,13 @@ export function layoutToPageDescriptors(pages: PageLayoutBox[]): PageDescriptor[
       const linesHtml = (frame.lines || []).map((line) => {
         // Exact physical top offset from Rust layout engine: baseline_y - height
         const topOffsetPt = Math.max(0, line.baseline_y - line.height);
-        const lineTopPx = topOffsetPt * scaleY;
-        const lineHPx = Math.max(1, line.height * scaleY);
+        const lineHPt = Math.max(1, line.height);
 
         const engineFont = formatEngineFont(line.fonts?.[0], isPrimary);
         const fontStyle = `font-family: ${engineFont.fontFamily};` + (engineFont.fontWeight ? ` font-weight: ${engineFont.fontWeight};` : '');
         const paraAttr = line.paragraph_id ? ` data-para-id="${escapeHtml(String(line.paragraph_id))}"` : '';
 
-        return `<div class="tok-line-box tok-line" data-line-index="${line.line_index}"${paraAttr} data-baseline-y="${line.baseline_y}" data-line-height="${line.height}" data-line-width="${line.width}" style="position: absolute; top: ${lineTopPx.toFixed(2)}px; left: 0; right: 0; height: ${lineHPx.toFixed(2)}px; line-height: ${lineHPx.toFixed(2)}px; ${fontStyle} direction: ${line.is_rtl ? 'rtl' : 'ltr'}; white-space: nowrap !important; overflow: visible; contain: layout style;">${escapeHtml(line.text)}</div>`;
+        return `<div class="tok-line-box tok-line" data-line-index="${line.line_index}"${paraAttr} data-baseline-y="${line.baseline_y}" data-line-height="${line.height}" data-line-width="${line.width}" style="position: absolute; top: ${topOffsetPt.toFixed(2)}pt; left: 0; right: 0; height: ${lineHPt.toFixed(2)}pt; line-height: ${lineHPt.toFixed(2)}pt; ${fontStyle} direction: ${line.is_rtl ? 'rtl' : 'ltr'}; white-space: nowrap !important; overflow: visible; contain: layout style;">${escapeHtml(line.text)}</div>`;
       }).join('\n');
 
       const emptyNotice = (!frame.lines || frame.lines.length === 0)
@@ -185,7 +159,7 @@ export function layoutToPageDescriptors(pages: PageLayoutBox[]): PageDescriptor[
              data-rect-y="${frame.rect.y}"
              data-rect-w="${frame.rect.width}"
              data-rect-h="${frame.rect.height}"
-             style="position: absolute; left: ${leftPx}px; top: ${topPx}px; width: ${widthPx}px; height: ${heightPx}px; overflow: hidden;">
+             style="position: absolute; left: ${leftPt.toFixed(2)}pt; top: ${topPt.toFixed(2)}pt; width: ${widthPt.toFixed(2)}pt; height: ${heightPt.toFixed(2)}pt; overflow: hidden;">
           <div class="tok-frame-inner" style="position: relative; width: 100%; height: 100%;">
             ${linesHtml}
             ${emptyNotice}
