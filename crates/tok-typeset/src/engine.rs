@@ -62,6 +62,7 @@ impl Default for TypesettingEngineConfig {
 pub struct TypesettingEngine {
     config: TypesettingEngineConfig,
     pub font_manager: FontManager,
+    pub paragraph_cache: std::sync::RwLock<crate::layout_cache::ParagraphLayoutCache>,
 }
 
 /// Whitespace that separates words. No-break spaces stay inside words.
@@ -122,6 +123,7 @@ impl TypesettingEngine {
         Self {
             config,
             font_manager: FontManager::default(),
+            paragraph_cache: std::sync::RwLock::new(crate::layout_cache::ParagraphLayoutCache::new()),
         }
     }
 
@@ -129,7 +131,30 @@ impl TypesettingEngine {
         Self {
             config,
             font_manager,
+            paragraph_cache: std::sync::RwLock::new(crate::layout_cache::ParagraphLayoutCache::new()),
         }
+    }
+
+    /// Invalidates cached layout lines for a specific paragraph.
+    pub fn invalidate_paragraph(&self, node_id: tok_core::id::NodeId) -> bool {
+        self.paragraph_cache.write().unwrap().invalidate(node_id)
+    }
+
+    /// Invalidates cached layout lines for a collection of paragraph IDs.
+    pub fn invalidate_paragraphs<I: IntoIterator<Item = tok_core::id::NodeId>>(&self, ids: I) -> usize {
+        let mut cache = self.paragraph_cache.write().unwrap();
+        let mut count = 0;
+        for id in ids {
+            if cache.invalidate(id) {
+                count += 1;
+            }
+        }
+        count
+    }
+
+    /// Clears the entire paragraph layout cache.
+    pub fn clear_cache(&self) {
+        self.paragraph_cache.write().unwrap().clear();
     }
 
     /// Typesets a single paragraph into formatted, justified LineBoxes using default font.
@@ -518,12 +543,41 @@ impl TypesettingEngine {
             })
             .collect();
 
-        let laid_out: Vec<Vec<LineBox>> = jobs
+        let default_style = tok_core::styles::ParagraphStyle::default();
+        let cached_lookup: Vec<(crate::layout_cache::ParagraphCacheKey, Option<Vec<LineBox>>)> = {
+            let cache = self.paragraph_cache.read().unwrap();
+            jobs.iter()
+                .map(|&(_, _, p)| {
+                    let style = doc
+                        .paragraph_styles
+                        .iter()
+                        .find(|s| s.id == p.style_id)
+                        .unwrap_or(&default_style);
+                    let key = crate::layout_cache::ParagraphLayoutCache::make_key(p, style, content_width);
+                    let hit = cache.get(&key).map(|c| c.lines.clone());
+                    (key, hit)
+                })
+                .collect()
+        };
+
+        let misses: Vec<(usize, &ParagraphNode, crate::layout_cache::ParagraphCacheKey)> = jobs
+            .iter()
+            .zip(&cached_lookup)
+            .enumerate()
+            .filter_map(|(idx, (&(_, _, p), (key, cached)))| {
+                if cached.is_none() {
+                    Some((idx, p, key.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let computed: Vec<(usize, crate::layout_cache::ParagraphCacheKey, Vec<LineBox>)> = misses
             .par_iter()
             .map_init(
-                // Fonts are parsed once per family and worker, not per paragraph.
                 HashMap::<String, ShapingSession<'_>>::new,
-                |sessions, &(_, _, p)| {
+                |sessions, &(idx, p, ref key)| {
                     let (font_family, font_size, line_height) = doc
                         .paragraph_styles
                         .iter()
@@ -544,9 +598,30 @@ impl TypesettingEngine {
                     let session = sessions
                         .entry(font_family)
                         .or_insert_with_key(|family| self.font_manager.session(family));
-                    Self::typeset_with_session(session, p, content_width, font_size, line_height)
+                    let lines = Self::typeset_with_session(session, p, content_width, font_size, line_height);
+                    (idx, key.clone(), lines)
                 },
             )
+            .collect();
+
+        if !computed.is_empty() {
+            let mut cache = self.paragraph_cache.write().unwrap();
+            for (_, key, lines) in &computed {
+                cache.insert(key.clone(), lines.clone());
+            }
+        }
+
+        let mut computed_map: HashMap<usize, Vec<LineBox>> = computed
+            .into_iter()
+            .map(|(idx, _, lines)| (idx, lines))
+            .collect();
+
+        let laid_out: Vec<Vec<LineBox>> = cached_lookup
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (_, hit))| {
+                hit.unwrap_or_else(|| computed_map.remove(&idx).unwrap_or_default())
+            })
             .collect();
 
         let mut pagination_inputs = Vec::new();
@@ -2251,5 +2326,47 @@ mod tests {
             "Multi-flow typesetting took too long: {:?}",
             elapsed
         );
+    }
+
+    #[test]
+    fn test_paragraph_cache_integration_in_engine() {
+        let mut doc = DocumentRoot::new("מבחן מטמון פסקאות");
+        let flow = doc.sections[0].main_flow_mut().unwrap();
+        let p1 = ParagraphNode::new(tok_core::id::FractionalIndex::new("a"), "default-body", "פסקה ראשונה לצורך בדיקת מטמון");
+        let p2 = ParagraphNode::new(tok_core::id::FractionalIndex::new("b"), "default-body", "פסקה שנייה לצורך בדיקת מטמון וחישוב אינקרמנטלי");
+        let p1_id = p1.id;
+        flow.add_paragraph(p1);
+        flow.add_paragraph(p2);
+
+        let eng = engine();
+        assert_eq!(eng.paragraph_cache.read().unwrap().len(), 0);
+
+        // Run 1: Cold cache -> 2 misses
+        let pages1 = eng.typeset_document(&doc);
+        assert!(!pages1.is_empty());
+        assert_eq!(eng.paragraph_cache.read().unwrap().len(), 2);
+        let misses1 = eng.paragraph_cache.read().unwrap().metrics().miss_count();
+        let hits1 = eng.paragraph_cache.read().unwrap().metrics().hit_count();
+        assert_eq!(misses1, 2);
+        assert_eq!(hits1, 0);
+
+        // Run 2: Warm cache -> 2 hits, 0 new misses
+        let pages2 = eng.typeset_document(&doc);
+        assert_eq!(pages1.len(), pages2.len());
+        let hits2 = eng.paragraph_cache.read().unwrap().metrics().hit_count();
+        let misses2 = eng.paragraph_cache.read().unwrap().metrics().miss_count();
+        assert_eq!(hits2, 2);
+        assert_eq!(misses2, 2);
+
+        // Invalidate p1
+        assert!(eng.invalidate_paragraph(p1_id));
+        assert_eq!(eng.paragraph_cache.read().unwrap().len(), 1);
+
+        // Run 3: p1 is recomputed (1 miss), p2 is hit (1 hit)
+        let _pages3 = eng.typeset_document(&doc);
+        let hits3 = eng.paragraph_cache.read().unwrap().metrics().hit_count();
+        let misses3 = eng.paragraph_cache.read().unwrap().metrics().miss_count();
+        assert_eq!(hits3, 3);
+        assert_eq!(misses3, 3);
     }
 }
