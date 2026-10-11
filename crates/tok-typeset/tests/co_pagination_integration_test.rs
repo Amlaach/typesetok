@@ -261,3 +261,143 @@ fn test_async_paginator_incremental_streaming_and_cancellation() {
     }
     assert!(got_cancelled, "Worker must acknowledge cancellation token");
 }
+
+#[test]
+fn test_multi_stream_co_pagination_defect_prevention_no_orphans_or_widows() {
+    let engine = create_engine();
+    let template = TemplateConfig {
+        page_width_pt: 595.0,
+        page_height_pt: 350.0, // Constrained height to force cross-page transitions
+        margin_inner_pt: 30.0,
+        margin_outer_pt: 24.0,
+        margin_top_pt: 24.0,
+        margin_bottom_pt: 24.0,
+        gutter_pt: 10.0,
+        main_line_height: 18.0,
+        commentary_line_height: 13.5,
+        ..Default::default()
+    };
+    let sync_config = SynchronizerConfig::default();
+
+    // 4 Gemara chunks and substantial Rashi commentary designed to overflow across spreads
+    let mut main_chunks = Vec::new();
+    let mut rashi_items = Vec::new();
+
+    for i in 1..=4 {
+        let anchor = format!("anc_{}", i);
+        main_chunks.push(CoPaginatedChunk {
+            text: format!(
+                "פסקה ראשית מספר {} מאימתי קורין את שמע בערבית משעה שהכהנים נכנסים לאכול בתרומתן ועד סוף האשמורה",
+                i
+            ),
+            anchors: vec![(AnchorKey(anchor.clone()), "קורין".to_string())],
+        });
+
+        let rashi_text = (0..18)
+            .map(|k| format!("רש\"י {} אות {}: ביאור רחב ועמוק על דברי הגמרא", i, k))
+            .collect::<Vec<_>>()
+            .join(" ");
+        rashi_items.push(CoPaginatedCommentary {
+            target_anchor: AnchorKey(anchor),
+            text: rashi_text,
+        });
+    }
+
+    let doc = CoPaginationDocument {
+        main_chunks,
+        rashi_items,
+        tosafot_items: Vec::new(),
+    };
+
+    let result = engine.typeset_co_paginated_document(&template, &sync_config, &doc);
+    assert!(
+        result.pages.len() >= 3,
+        "Expected at least 3 pages with constrained height, got {}",
+        result.pages.len()
+    );
+
+    for page in &result.pages {
+        // Geometric validity: frame coordinates inside page
+        for frame in &page.page_layout.frames {
+            assert!(frame.rect.x >= 0.0);
+            assert!(frame.rect.y >= 0.0);
+            assert!(frame.rect.x + frame.rect.width <= template.page_width_pt + 0.1);
+            assert!(frame.rect.y + frame.rect.height <= template.page_height_pt + 0.1);
+        }
+
+        // Defect prevention: orphan and widow protection
+        if page.rashi_lines_count > 0 {
+            assert!(
+                page.rashi_lines_count >= 2,
+                "Page {} Rashi lines count ({}) violates orphan/widow constraint (min 2 lines)",
+                page.page_number,
+                page.rashi_lines_count
+            );
+        }
+        if page.gemara_lines_count > 0 {
+            assert!(
+                page.gemara_lines_count >= 2,
+                "Page {} Gemara lines count ({}) violates orphan/widow constraint (min 2 lines)",
+                page.page_number,
+                page.gemara_lines_count
+            );
+        }
+    }
+}
+
+#[test]
+fn test_multi_stream_co_pagination_anchor_continuity_and_flow_conservation() {
+    let engine = create_engine();
+    let template = TemplateConfig::default();
+    let sync_config = SynchronizerConfig::default();
+
+    let mut main_chunks = Vec::new();
+    let mut rashi_items = Vec::new();
+    let mut tosafot_items = Vec::new();
+
+    for i in 1..=3 {
+        let a1 = format!("anchor_{}_a", i);
+        let a2 = format!("anchor_{}_b", i);
+
+        main_chunks.push(CoPaginatedChunk {
+            text: format!(
+                "קטע גמרא מספר {} דיבור א קורין את שמע ועוד דיבור ב תפלת השחר עד חצות",
+                i
+            ),
+            anchors: vec![
+                (AnchorKey(a1.clone()), "קורין".to_string()),
+                (AnchorKey(a2.clone()), "תפלת".to_string()),
+            ],
+        });
+
+        rashi_items.push(CoPaginatedCommentary {
+            target_anchor: AnchorKey(a1.clone()),
+            text: format!("רש\"י א עבור קטע {}", i),
+        });
+        rashi_items.push(CoPaginatedCommentary {
+            target_anchor: AnchorKey(a2.clone()),
+            text: format!("רש\"י ב עבור קטע {}", i),
+        });
+
+        tosafot_items.push(CoPaginatedCommentary {
+            target_anchor: AnchorKey(a1),
+            text: format!("תוספות א עבור קטע {}", i),
+        });
+        tosafot_items.push(CoPaginatedCommentary {
+            target_anchor: AnchorKey(a2),
+            text: format!("תוספות ב עבור קטע {}", i),
+        });
+    }
+
+    let doc = CoPaginationDocument {
+        main_chunks,
+        rashi_items,
+        tosafot_items,
+    };
+
+    let result = engine.typeset_co_paginated_document(&template, &sync_config, &doc);
+    assert!(!result.pages.is_empty());
+    assert_eq!(result.total_gemara_lines, result.pages.iter().map(|p| p.gemara_lines_count).sum::<usize>());
+    assert_eq!(result.total_rashi_lines, result.pages.iter().map(|p| p.rashi_lines_count).sum::<usize>());
+    assert_eq!(result.total_tosafot_lines, result.pages.iter().map(|p| p.tosafot_lines_count).sum::<usize>());
+}
