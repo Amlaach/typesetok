@@ -109,6 +109,7 @@ export class TypesetOkApp {
   private wordCountTimer: ReturnType<typeof setTimeout> | null = null;
   private repaginateTimer: ReturnType<typeof setTimeout> | null = null;
   private latestTypesetRequestId = 0;
+  private activeTypesetAbortController: AbortController | null = null;
   private documentState: MultiFlowDocumentState = {
     title: 'פרויקט דף גמרא.tok',
     templateType: 'gemara',
@@ -1507,15 +1508,40 @@ export class TypesetOkApp {
     }
   }
 
-  private scheduleRepaginate(delayMs = 120): void {
-    if (this.repaginateTimer) clearTimeout(this.repaginateTimer);
+  public cancelPendingRepaginate(): void {
+    if (this.repaginateTimer) {
+      clearTimeout(this.repaginateTimer);
+      this.repaginateTimer = null;
+    }
+    if (this.activeTypesetAbortController) {
+      this.activeTypesetAbortController.abort();
+      this.activeTypesetAbortController = null;
+    }
+    this.latestTypesetRequestId++;
+  }
+
+  public scheduleRepaginate(delayMs = 150, forceReset = false): void {
+    if (this.repaginateTimer) {
+      clearTimeout(this.repaginateTimer);
+      this.repaginateTimer = null;
+    }
+    if (delayMs <= 0) {
+      this.repaginateAndSync(forceReset);
+      return;
+    }
     this.repaginateTimer = setTimeout(() => {
       this.repaginateTimer = null;
-      this.repaginateAndSync(false);
+      this.repaginateAndSync(forceReset);
     }, delayMs);
   }
 
-  private async repaginateAndSync(forceReset = false): Promise<void> {
+  public async repaginateAndSync(forceReset = false): Promise<void> {
+    if (this.activeTypesetAbortController) {
+      this.activeTypesetAbortController.abort();
+    }
+    const abortCtrl = new AbortController();
+    this.activeTypesetAbortController = abortCtrl;
+
     const requestId = ++this.latestTypesetRequestId;
     const win = window as any;
     let newPages: PageDescriptor[] = [];
@@ -1525,27 +1551,31 @@ export class TypesetOkApp {
         const docRoot = documentStateToDocumentRoot(this.documentState);
         const res = await win.tokIpc.typesetDocument({ document: docRoot });
         // Discard stale response if a newer typeset request was dispatched while this was in flight
-        if (requestId !== this.latestTypesetRequestId) {
+        if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
           return;
         }
         if (res && res.success && Array.isArray(res.pages)) {
           newPages = layoutToPageDescriptors(res.pages);
         }
       } catch (err: any) {
-        if (requestId !== this.latestTypesetRequestId) {
+        if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
           return;
         }
         console.warn('[TOK] Rust live typesetting failed, falling back to layout conversion:', err);
       }
     }
 
-    if (requestId !== this.latestTypesetRequestId) {
+    if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
       return;
     }
 
     if (newPages.length === 0) {
       const minPages = Math.max(1, this.pages.length);
       newPages = FlowPaginator.paginateDocument(this.documentState, minPages);
+    }
+
+    if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
+      return;
     }
 
     this.pages = newPages;
@@ -1568,6 +1598,10 @@ export class TypesetOkApp {
     this.structureBar.updateFlowWordCounts(counts);
     this.statusBar.updateStats({ wordCount: totalWords });
     this.updateStoryToolbar();
+
+    if (this.activeTypesetAbortController === abortCtrl) {
+      this.activeTypesetAbortController = null;
+    }
   }
 
   /** Story edits update the word count in the status bar (debounced while typing). */
