@@ -4,7 +4,12 @@
 //! multi-flow spread allocation, providing mathematical validity verification.
 
 use crate::layout_family::LayoutFamily;
-use crate::multi_flow::{FlowGeometrySpec, FlowPlacementRole};
+use crate::multi_flow::{
+    FlowGeometrySpec, FlowPlacementRole, MultiFlowSolver, SolvedFlowAllocation, SpreadSide,
+};
+use crate::solver::{
+    GeometricConstraintSolver, PageConstraintModel, PageGeometryConfig, SolverError,
+};
 use std::collections::HashSet;
 use std::fmt;
 use tok_core::FlowId;
@@ -102,6 +107,28 @@ impl LayoutTemplate {
             .count()
     }
 
+    /// Solves the concrete physical column allocations for this template using the geometric solver.
+    pub fn solve_geometry(
+        &self,
+        page_width_pt: f32,
+        page_height_pt: f32,
+        margin_x_total_pt: f32,
+        margin_y_total_pt: f32,
+        side: SpreadSide,
+    ) -> Result<Vec<SolvedFlowAllocation>, SolverError> {
+        let margin_x = margin_x_total_pt / 2.0;
+        let margin_y = margin_y_total_pt / 2.0;
+        Ok(MultiFlowSolver::solve_generic_spread(
+            page_width_pt,
+            page_height_pt,
+            margin_x,
+            margin_x,
+            margin_y,
+            &self.flow_specs,
+            side,
+        ))
+    }
+
     /// Validates mathematical consistency and geometric integrity of the template constraints.
     pub fn validate(
         &self,
@@ -117,6 +144,25 @@ impl LayoutTemplate {
         let printable_w = page_width_pt - margin_x_total_pt;
         let printable_h = page_height_pt - margin_y_total_pt;
         if printable_w <= 0.0 || printable_h <= 0.0 || !printable_w.is_finite() || !printable_h.is_finite() {
+            return Err(TemplateConstraintError::InsufficientPageGeometry {
+                printable_width_pt: printable_w,
+                printable_height_pt: printable_h,
+            });
+        }
+
+        // Verify solver feasibility under geometric constraints
+        let page_config = PageGeometryConfig::new(
+            page_width_pt,
+            page_height_pt,
+            margin_x_total_pt / 2.0,
+            margin_x_total_pt / 2.0,
+            margin_y_total_pt / 2.0,
+            margin_y_total_pt / 2.0,
+            SpreadSide::Recto,
+        );
+        let mut solver = GeometricConstraintSolver::new();
+        let page_model = PageConstraintModel::new();
+        if page_model.apply(&mut solver, &page_config).is_err() {
             return Err(TemplateConstraintError::InsufficientPageGeometry {
                 printable_width_pt: printable_w,
                 printable_height_pt: printable_h,
@@ -294,6 +340,35 @@ mod tests {
             }
             other => panic!("Expected InvalidProportions, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_solve_geometry_with_constraint_solver() {
+        let mut t = LayoutTemplate::new(LayoutFamily::ParallelColumns {
+            column_count: 2,
+            proportions: Some(vec![0.6, 0.4]),
+            flow_ids: vec![FlowId::new("col1"), FlowId::new("col2")],
+        });
+        t.flow_specs.push(
+            FlowGeometrySpec::new(FlowId::new("col1"), 1)
+                .with_role(FlowPlacementRole::Primary)
+                .with_width_ratio(0.6),
+        );
+        t.flow_specs.push(
+            FlowGeometrySpec::new(FlowId::new("col2"), 2)
+                .with_role(FlowPlacementRole::InnerSpine)
+                .with_width_ratio(0.4),
+        );
+        t.nominal_proportions = vec![0.6, 0.4];
+
+        let allocs = t
+            .solve_geometry(600.0, 800.0, 80.0, 60.0, SpreadSide::Recto)
+            .unwrap();
+
+        assert_eq!(allocs.len(), 2);
+        let total_avail = 600.0 - 80.0 - 12.0; // 508 pt
+        assert!((allocs[0].allocated_width_pt - total_avail * 0.6).abs() < 1e-3);
+        assert!((allocs[1].allocated_width_pt - total_avail * 0.4).abs() < 1e-3);
     }
 }
 
