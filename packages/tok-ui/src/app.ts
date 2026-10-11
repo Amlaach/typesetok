@@ -344,11 +344,34 @@ export class TypesetOkApp {
 
     // 5. Action HUD (Floating, anchored)
     this.actionHud = new ActionHud({
-      onFontChange: (f) => this.inspector.setMode('text-edit', undefined, { fontFamily: f }),
-      onSizeChange: (s) => this.inspector.setMode('text-edit', undefined, { fontSizePt: s }),
-      onWeightChange: (b) => this.inspector.setMode('text-edit', undefined, { fontWeight: b ? FONT_WEIGHT_BOLD : FONT_WEIGHT_REGULAR }),
-      onAlignChange: (a) => this.inspector.setMode('text-edit', undefined, { alignment: a }),
-      onStyleChange: (st) => this.showToast(tf('toastQuickStyle', { name: st })),
+      onFontChange: (f) => {
+        this.storyEditor.formatSelection({ fontFamily: f });
+        this.updateFormattingToolbarState();
+      },
+      onSizeChange: (s) => {
+        this.storyEditor.formatSelection({ fontSizePt: s });
+        this.updateFormattingToolbarState();
+      },
+      onWeightChange: (b) => {
+        this.storyEditor.formatSelection({ fontWeight: b ? FONT_WEIGHT_BOLD : FONT_WEIGHT_REGULAR });
+        this.updateFormattingToolbarState();
+      },
+      onAlignChange: (a) => {
+        const sel = this.storyEditor.getStorySelection();
+        if (sel) {
+          const alignment = (a === 'justify' ? 'Justified' : a === 'center' ? 'Center' : a === 'left' ? 'Left' : 'Right') as any;
+          this.storyEditor.setParagraphPatch(sel.paraId, { alignment });
+          this.updateFormattingToolbarState();
+        }
+      },
+      onStyleChange: (st) => {
+        const sel = this.storyEditor.getStorySelection();
+        if (sel) {
+          this.storyEditor.setParagraphStyle(sel.paraId, st);
+          this.updateFormattingToolbarState();
+        }
+        this.showToast(tf('toastQuickStyle', { name: st }));
+      },
       onDismiss: () => this.inspector.setMode('zero')
     });
     this.root.appendChild(this.actionHud.element);
@@ -770,6 +793,17 @@ export class TypesetOkApp {
       this.updateFormattingToolbarState();
     });
     bar.appendChild(this.storyUnderlineBtn);
+
+    const clearFmtBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
+      type: 'button',
+      title: 'ניקוי עיצוב תווים (Ctrl+\\)',
+      style: 'min-width:24px;height:24px;padding:0;font-size:11px;font-weight:600;'
+    }, 'Tx');
+    clearFmtBtn.addEventListener('click', () => {
+      this.storyEditor.clearFormattingSelection();
+      this.updateFormattingToolbarState();
+    });
+    bar.appendChild(clearFmtBtn);
 
     bar.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:18px' }));
 
