@@ -156,8 +156,9 @@ export class TypesetOkApp {
 
     i18n.onChange(() => this.applyLanguage());
 
-    // Record exit/closing timestamp and warn on dirty state on window close
     if (typeof window !== 'undefined') {
+      (window as any).appInstance = this;
+      (window as any).__tokIsDirty = false;
       window.addEventListener('beforeunload', this.onBeforeUnload);
     }
   }
@@ -2021,6 +2022,13 @@ export class TypesetOkApp {
    */
   public handleSystemAction(action: string, data?: unknown): void {
     switch (action) {
+      case 'quit-app':
+      case 'exit':
+        this.requestCloseOrExit('quit');
+        break;
+      case 'close-window':
+        this.requestCloseOrExit('close');
+        break;
       case 'close-document':
         this.closeDocument();
         break;
@@ -2223,6 +2231,9 @@ export class TypesetOkApp {
   public setDirty(dirty: boolean): void {
     if (!this.documentState) return;
     this.documentState.isDirty = dirty;
+    if (typeof window !== 'undefined') {
+      (window as any).__tokIsDirty = dirty;
+    }
     this.topBar?.setDirty(dirty);
     const cleanTitle = (this.documentTitle || 'TypesetOK').replace(/\.tok$/i, '');
     if (typeof document !== 'undefined') {
@@ -2236,5 +2247,26 @@ export class TypesetOkApp {
       return window.confirm(t('confirmUnsavedChanges'));
     }
     return true;
+  }
+
+  /**
+   * Safe application close/exit coordination supporting save-before-exit, discard, and cancel.
+   */
+  public async requestCloseOrExit(action: 'close' | 'quit' = 'quit'): Promise<boolean> {
+    const win = typeof window !== 'undefined' ? (window as any) : null;
+    if (this.documentTitle) {
+      updateProjectClosedTime(this.documentTitle);
+    }
+    if (win?.tokIpc?.quitApp && action === 'quit') {
+      await win.tokIpc.quitApp();
+      return true;
+    }
+    if (win?.tokIpc?.closeWindow && action === 'close') {
+      await win.tokIpc.closeWindow();
+      return true;
+    }
+    // Web environment fallback
+    if (!this.confirmDiscardUnsaved()) return false;
+    return this.closeDocument();
   }
 }
