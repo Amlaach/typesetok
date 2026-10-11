@@ -60,6 +60,8 @@ export type IconName =
   | 'help'
   | 'upload'
   | 'chevronUp'
+  | 'chevronLeft'
+  | 'chevronRight'
   | 'bold'
   | 'history'
   | 'documentEmpty';
@@ -340,6 +342,16 @@ const ICONS_SVG: Record<IconName, string> = {
   chevronDown: `
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="5.5 7.5 10 12 14.5 7.5"/>
+    </svg>
+  `,
+  chevronLeft: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="12.5 5.5 8 10 12.5 14.5"/>
+    </svg>
+  `,
+  chevronRight: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="7.5 5.5 12 10 7.5 14.5"/>
     </svg>
   `,
   image: `

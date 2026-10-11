@@ -230,6 +230,11 @@ export class TypesetOkApp {
         this.showToast(tf('toastFlowSelected', { name }));
       },
       onSelectStyle: (styleId) => {
+        const sel = this.storyEditor.getStorySelection();
+        if (sel) {
+          this.storyEditor.setParagraphStyle(sel.paraId, styleId);
+          this.updateFormattingToolbarState();
+        }
         this.inspector.setMode('text-edit');
         this.showToast(tf('toastStyleApplied', { name: styleId }));
       },
@@ -810,22 +815,59 @@ export class TypesetOkApp {
     // Alignment controls
     const alignRightBtn = iconButton('alignRight', 'יישור לימין', () => {
       const sel = this.storyEditor.getStorySelection();
-      if (sel) this.storyEditor.setParagraphPatch(sel.paraId, { alignment: 'Right' });
+      if (sel) {
+        this.storyEditor.setParagraphPatch(sel.paraId, { alignment: 'Right' });
+        this.updateFormattingToolbarState();
+      }
     }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
 
     const alignCenterBtn = iconButton('alignCenter', 'יישור למרכז', () => {
       const sel = this.storyEditor.getStorySelection();
-      if (sel) this.storyEditor.setParagraphPatch(sel.paraId, { alignment: 'Center' });
+      if (sel) {
+        this.storyEditor.setParagraphPatch(sel.paraId, { alignment: 'Center' });
+        this.updateFormattingToolbarState();
+      }
+    }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
+
+    const alignLeftBtn = iconButton('alignLeft', 'יישור לשמאל', () => {
+      const sel = this.storyEditor.getStorySelection();
+      if (sel) {
+        this.storyEditor.setParagraphPatch(sel.paraId, { alignment: 'Left' });
+        this.updateFormattingToolbarState();
+      }
     }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
 
     const alignJustifyBtn = iconButton('alignJustify', 'יישור לשני הצדדים', () => {
       const sel = this.storyEditor.getStorySelection();
-      if (sel) this.storyEditor.setParagraphPatch(sel.paraId, { alignment: 'Justified' });
+      if (sel) {
+        this.storyEditor.setParagraphPatch(sel.paraId, { alignment: 'Justified' });
+        this.updateFormattingToolbarState();
+      }
     }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
 
     bar.appendChild(alignRightBtn);
     bar.appendChild(alignCenterBtn);
+    bar.appendChild(alignLeftBtn);
     bar.appendChild(alignJustifyBtn);
+
+    const outdentBtn = iconButton('chevronRight', 'הזחה החוצה (Shift+Tab)', () => {
+      const sel = this.storyEditor.getStorySelection();
+      if (sel) {
+        this.storyEditor.outdentParagraph(sel.paraId);
+        this.updateFormattingToolbarState();
+      }
+    }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
+
+    const indentBtn = iconButton('chevronLeft', 'הזחה פנימה (Tab)', () => {
+      const sel = this.storyEditor.getStorySelection();
+      if (sel) {
+        this.storyEditor.indentParagraph(sel.paraId);
+        this.updateFormattingToolbarState();
+      }
+    }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
+
+    bar.appendChild(outdentBtn);
+    bar.appendChild(indentBtn);
 
     bar.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:18px' }));
 
