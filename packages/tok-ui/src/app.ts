@@ -1745,7 +1745,8 @@ export class TypesetOkApp {
           if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
             return;
           }
-          console.warn('[TOK] Rust live typesetting failed, falling back to layout conversion:', err);
+          console.error('[TOK] Rust live typesetting failed:', err);
+          this.showToast('עימוד Rust נכשל — מוצגת תצוגה משוערת בלבד', true);
         }
       }
 
@@ -1755,7 +1756,8 @@ export class TypesetOkApp {
 
       if (newPages.length === 0) {
         const minPages = Math.max(1, this.pages.length);
-        newPages = FlowPaginator.paginateDocument(this.documentState, minPages);
+        const isExplicitFallback = Boolean(win.tokIpc?.typesetDocument);
+        newPages = FlowPaginator.paginateDocument(this.documentState, minPages, isExplicitFallback);
       }
 
       if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {

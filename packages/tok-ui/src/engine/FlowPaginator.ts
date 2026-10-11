@@ -243,22 +243,32 @@ export class FlowPaginator {
    */
   public static paginateDocument(
     doc: MultiFlowDocumentState,
-    minPages = 1
+    minPages = 1,
+    isExplicitFallback = false
   ): PageDescriptor[] {
     const isTalmud = doc.templateType === 'gemara' || doc.templateType === 'mikraot';
     const isProse = doc.templateType === 'prose';
     const isNotes = doc.templateType === 'notes';
 
+    let pages: PageDescriptor[];
     if (isProse) {
-      return this.paginateProse(doc, minPages);
+      pages = this.paginateProse(doc, minPages);
+    } else if (isNotes) {
+      pages = this.paginateWithFootnotes(doc, minPages);
+    } else {
+      // Default: Full Talmudic Multi-flow layout (Gemara + Rashi + Tosafot + Notes)
+      pages = this.paginateTalmud(doc, minPages);
     }
 
-    if (isNotes) {
-      return this.paginateWithFootnotes(doc, minPages);
+    if (isExplicitFallback) {
+      const banner = `<div class="tok-fallback-warning-badge" data-fallback="true" style="background: rgba(239, 68, 68, 0.08); border: 1px dashed var(--tok-status-warning, #d97706); color: var(--tok-status-warning, #d97706); padding: 4px 8px; font-size: 11px; font-weight: 500; text-align: center; margin-bottom: 8px; border-radius: 4px;">⚠️ תצוגה משוערת בלבד — מנוע העימוד Rust אינו זמין</div>`;
+      for (const p of pages) {
+        (p as any).isSimulatedFallback = true;
+        p.htmlContent = `${banner}\n${p.htmlContent}`;
+      }
     }
 
-    // Default: Full Talmudic Multi-flow layout (Gemara + Rashi + Tosafot + Notes)
-    return this.paginateTalmud(doc, minPages);
+    return pages;
   }
 
   /**
