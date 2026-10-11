@@ -11,9 +11,15 @@
  */
 
 import { MultiFlowDocumentState, TemplateType } from './FlowPaginator';
-import { StoryParagraph } from 'tok-story-editor';
+import {
+  CharacterFormat,
+  ParagraphStylePatch,
+  StoryParagraph,
+  TextSpan
+} from 'tok-story-editor';
 
 export const CROCKFORD_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
 
 /**
  * Validates whether a string is a 26-character Crockford Base32 ULID
@@ -98,13 +104,115 @@ export interface ParagraphStyleJson {
   widow_control: number;
 }
 
+export interface StylePatchJson {
+  font_family?: string;
+  font_size_pt?: number;
+  line_height_pt?: number;
+  alignment?: 'Justified' | 'Right' | 'Left' | 'Center';
+  tracking_em?: number;
+  color?: ColorJson;
+  font_weight?: number;
+  space_before_pt?: number;
+  space_after_pt?: number;
+  first_line_indent_pt?: number;
+  indent_start_pt?: number;
+  indent_end_pt?: number;
+  direction?: 'Rtl' | 'Ltr';
+}
+
+export interface CharacterFormatJson {
+  character_style_id?: string;
+  font_family?: string;
+  font_size_pt?: number;
+  font_weight?: number;
+  italic?: boolean;
+  underline?: boolean;
+  tracking_em?: number;
+  color?: ColorJson;
+}
+
+export interface TextSpanJson {
+  start: number;
+  end: number;
+  format: CharacterFormatJson;
+}
+
 export interface ParagraphNodeJson {
   id: string;
   index: string;
   style_id: string;
   text: string;
-  style_patches: unknown[];
+  style_patches: StylePatchJson[];
+  spans?: TextSpanJson[];
 }
+
+export function patchToStylePatchJson(patch: ParagraphStylePatch): StylePatchJson {
+  const json: StylePatchJson = {};
+  if (patch.fontFamily !== undefined) json.font_family = patch.fontFamily;
+  if (patch.fontSizePt !== undefined) json.font_size_pt = patch.fontSizePt;
+  if (patch.fontWeight !== undefined) json.font_weight = patch.fontWeight;
+  if (patch.lineHeightPt !== undefined) json.line_height_pt = patch.lineHeightPt;
+  if (patch.spaceBeforePt !== undefined) json.space_before_pt = patch.spaceBeforePt;
+  if (patch.spaceAfterPt !== undefined) json.space_after_pt = patch.spaceAfterPt;
+  if (patch.firstLineIndentPt !== undefined) json.first_line_indent_pt = patch.firstLineIndentPt;
+  if (patch.indentStartPt !== undefined) json.indent_start_pt = patch.indentStartPt;
+  if (patch.indentEndPt !== undefined) json.indent_end_pt = patch.indentEndPt;
+  if (patch.alignment !== undefined) json.alignment = patch.alignment;
+  if (patch.direction !== undefined) json.direction = patch.direction;
+  return json;
+}
+
+export function stylePatchJsonToPatch(json: StylePatchJson): ParagraphStylePatch {
+  const patch: ParagraphStylePatch = {};
+  if (json.font_family !== undefined) patch.fontFamily = json.font_family;
+  if (json.font_size_pt !== undefined) patch.fontSizePt = json.font_size_pt;
+  if (json.font_weight !== undefined) patch.fontWeight = json.font_weight;
+  if (json.line_height_pt !== undefined) patch.lineHeightPt = json.line_height_pt;
+  if (json.space_before_pt !== undefined) patch.spaceBeforePt = json.space_before_pt;
+  if (json.space_after_pt !== undefined) patch.spaceAfterPt = json.space_after_pt;
+  if (json.first_line_indent_pt !== undefined) patch.firstLineIndentPt = json.first_line_indent_pt;
+  if (json.indent_start_pt !== undefined) patch.indentStartPt = json.indent_start_pt;
+  if (json.indent_end_pt !== undefined) patch.indentEndPt = json.indent_end_pt;
+  if (json.alignment !== undefined) patch.alignment = json.alignment;
+  if (json.direction !== undefined) patch.direction = json.direction;
+  return patch;
+}
+
+export function spanToSpanJson(span: TextSpan): TextSpanJson {
+  const fmt = span.format || {};
+  const fmtJson: CharacterFormatJson = {};
+  if (fmt.characterStyleId !== undefined) fmtJson.character_style_id = fmt.characterStyleId;
+  if (fmt.fontFamily !== undefined) fmtJson.font_family = fmt.fontFamily;
+  if (fmt.fontSizePt !== undefined) fmtJson.font_size_pt = fmt.fontSizePt;
+  if (fmt.fontWeight !== undefined) fmtJson.font_weight = fmt.fontWeight;
+  if (fmt.italic !== undefined) fmtJson.italic = fmt.italic;
+  if (fmt.underline !== undefined) fmtJson.underline = fmt.underline;
+  if (fmt.trackingEm !== undefined) fmtJson.tracking_em = fmt.trackingEm;
+  return {
+    start: span.start,
+    end: span.end,
+    format: fmtJson
+  };
+}
+
+export function spanJsonToSpan(json: TextSpanJson): TextSpan {
+  const fmt = json.format || {};
+  const format: CharacterFormat = {};
+  if (fmt.character_style_id !== undefined) format.characterStyleId = fmt.character_style_id;
+  if (fmt.font_family !== undefined) format.fontFamily = fmt.font_family;
+  if (fmt.font_size_pt !== undefined) format.fontSizePt = fmt.font_size_pt;
+  if (fmt.font_weight !== undefined) format.fontWeight = fmt.font_weight;
+
+  if (fmt.italic !== undefined) format.italic = fmt.italic;
+  if (fmt.underline !== undefined) format.underline = fmt.underline;
+  if (fmt.tracking_em !== undefined) format.trackingEm = fmt.tracking_em;
+  return {
+    start: json.start,
+    end: json.end,
+    format
+  };
+}
+
 
 export type FlowTypeJson = 'Main' | 'CommentA' | 'CommentB' | 'Footnote';
 
@@ -320,12 +428,23 @@ export function documentStateToDocumentRoot(
         definedStyleIds.add(styleId);
       }
 
+      const stylePatches: StylePatchJson[] = [];
+      if (p.patch) {
+        const pj = patchToStylePatchJson(p.patch);
+        if (Object.keys(pj).length > 0) {
+          stylePatches.push(pj);
+        }
+      }
+
+      const spansJson: TextSpanJson[] = (p.spans || []).map(spanToSpanJson);
+
       return {
         id: pid,
         index: fractionalIndexFor(idx),
         style_id: styleId,
         text: stripHtmlTags(p.text || ''),
-        style_patches: []
+        style_patches: stylePatches,
+        spans: spansJson.length > 0 ? spansJson : undefined
       };
     });
 
@@ -391,11 +510,25 @@ export function documentRootToDocumentState(root: DocumentRootJson): MultiFlowDo
       hasCommentary = true;
     }
 
-    const storyParas: StoryParagraph[] = (flow.paragraphs || []).map((p) => ({
-      id: p.id,
-      styleId: p.style_id,
-      text: p.text
-    }));
+    const storyParas: StoryParagraph[] = (flow.paragraphs || []).map((p) => {
+      let patch: ParagraphStylePatch | undefined;
+      if (p.style_patches && p.style_patches.length > 0) {
+        patch = {};
+        for (const sp of p.style_patches) {
+          Object.assign(patch, stylePatchJsonToPatch(sp));
+        }
+      }
+
+      const spans = p.spans && p.spans.length > 0 ? p.spans.map(spanJsonToSpan) : undefined;
+
+      return {
+        id: p.id,
+        styleId: p.style_id,
+        text: p.text,
+        spans,
+        patch
+      };
+    });
 
     flowMap[key] = storyParas;
   }
