@@ -17,7 +17,7 @@ import { PageDescriptor } from 'tok-viewer';
 import { ViewMode } from './types';
 import { i18n, t, tf } from './i18n';
 import { themeManager } from './theme';
-import { FONT_WEIGHT_BOLD, FONT_WEIGHT_REGULAR } from './fonts';
+import { FONT_WEIGHT_BOLD, FONT_WEIGHT_REGULAR, getAvailableFonts, DOCUMENT_FONTS, getSafeFontStack } from './fonts';
 import { el, icon, iconButton, button } from './ui';
 import {
   MultiFlowDocumentState,
@@ -82,6 +82,7 @@ export class TypesetOkApp {
   private storyBoldBtn?: HTMLButtonElement;
   private storyItalicBtn?: HTMLButtonElement;
   private storyUnderlineBtn?: HTMLButtonElement;
+  private storyFontFamilySelect?: HTMLSelectElement;
   private findBar?: HTMLElement;
   private findInput?: HTMLInputElement;
   private replaceInput?: HTMLInputElement;
@@ -900,6 +901,32 @@ export class TypesetOkApp {
 
     bar.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:18px' }));
 
+    // Font Family selector
+    this.storyFontFamilySelect = el('select', 'tok-select tok-select-xs', {
+      title: 'גופן מקטע / פיסקה',
+      style: 'height:24px;font-size:11px;padding:0 4px;max-width:130px;background:var(--tok-surface-2);color:var(--tok-text);border:1px solid var(--tok-border-subtle);border-radius:3px;'
+    }) as HTMLSelectElement;
+    for (const font of getAvailableFonts()) {
+      const opt = el('option', undefined, { value: font.family }, font.family) as HTMLOptionElement;
+      this.storyFontFamilySelect.appendChild(opt);
+    }
+    this.storyFontFamilySelect.addEventListener('change', () => {
+      const chosenFont = this.storyFontFamilySelect?.value;
+      if (!chosenFont) return;
+      const sel = this.storyEditor?.getStorySelection();
+      if (sel) {
+        if (!sel.isCollapsed) {
+          this.storyEditor.formatSelection({ fontFamily: chosenFont });
+        } else {
+          this.storyEditor.setParagraphPatch(sel.paraId, { fontFamily: chosenFont });
+        }
+        this.setDirty(true);
+        this.scheduleRepaginate();
+        this.updateFormattingToolbarState();
+      }
+    });
+    bar.appendChild(this.storyFontFamilySelect);
+
     // Alignment controls
     const alignRightBtn = iconButton('alignRight', 'יישור לימין', () => {
       const sel = this.storyEditor.getStorySelection();
@@ -1192,6 +1219,15 @@ export class TypesetOkApp {
     this.storyBoldBtn.style.background = isBold ? 'var(--tok-surface-hover)' : '';
     this.storyItalicBtn.style.background = isItalic ? 'var(--tok-surface-hover)' : '';
     this.storyUnderlineBtn.style.background = isUnderline ? 'var(--tok-surface-hover)' : '';
+
+    if (this.storyFontFamilySelect) {
+      const sel = this.storyEditor.getStorySelection();
+      const p = sel ? this.storyEditor.getParagraph(sel.paraId) : null;
+      const targetFamily = fmt.fontFamily || p?.patch?.fontFamily || (this.activeFlowId === 'gemara' ? 'Frank Ruhl Libre' : 'Noto Rashi Hebrew');
+      if (targetFamily) {
+        this.storyFontFamilySelect.value = targetFamily;
+      }
+    }
 
     if (this.inspector && this.currentViewMode !== 'canvas') {
       const sel = this.storyEditor.getStorySelection();

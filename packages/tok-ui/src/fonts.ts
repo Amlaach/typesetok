@@ -23,6 +23,18 @@ export const DOCUMENT_FONTS: FontEntry[] = [
 
 export const DEFAULT_DOCUMENT_FONT = DOCUMENT_FONTS[0].family;
 
+/**
+ * Resolves a robust CSS font-family stack with appropriate Hebrew serif/sans fallbacks.
+ */
+export function getSafeFontStack(family: string): string {
+  const clean = (family || '').trim();
+  if (!clean) return "'Frank Ruhl Libre', 'David Libre', 'Times New Roman', serif";
+  if (clean.includes(',') || clean.startsWith('"') || clean.startsWith("'")) {
+    return clean;
+  }
+  return `"${clean}", 'Frank Ruhl Libre', 'David Libre', 'Times New Roman', serif`;
+}
+
 /** Same values as ParagraphStyle.font_weight in tok-core. */
 export const FONT_WEIGHT_REGULAR = 400;
 export const FONT_WEIGHT_BOLD = 700;
@@ -39,6 +51,9 @@ export const EXTENDED_SYSTEM_FONTS: FontEntry[] = [
   { family: 'Miriam', label: 'מרים (Miriam)' },
   { family: 'Narkisim', label: 'נרקיסים (Narkisim)' },
   { family: 'Hadassah Friedlaender', label: 'הדסה (Hadassah Friedlaender)' },
+  { family: 'Keter YG', label: 'כתר ארם צובא (Keter YG)' },
+  { family: 'SBL Hebrew', label: 'שב״ל עברית (SBL Hebrew)' },
+  { family: 'Ezra SIL', label: 'עזרא סיל (Ezra SIL)' },
 ];
 
 /** Live registered custom and discovered fonts */
