@@ -31,6 +31,7 @@ pub struct PdfExportOptions {
     pub bleed_pt: f32, // default 3mm = 8.504 pt
     pub slug_pt: f32,  // default 10mm = 28.346 pt
     pub draw_crop_marks: bool,
+    pub draw_page_numbers: bool,
     /// Font used for glyphs whose font the layout does not record (layouts
     /// built without font information, or text-only lines). Defaults to the
     /// embedded Noto Serif Hebrew.
@@ -54,6 +55,7 @@ impl Default for PdfExportOptions {
             bleed_pt: 8.504,
             slug_pt: 28.346,
             draw_crop_marks: true,
+            draw_page_numbers: false,
             custom_font_data: None,
             creation_date: None,
             mod_date: None,
@@ -402,6 +404,18 @@ impl PdfPrePressEngine {
                 }
             }
         }
+        if options.draw_page_numbers {
+            for p in iter_pages {
+                if !p.page_number_gematria.is_empty() {
+                    for ch in p.page_number_gematria.chars() {
+                        if let Some(gid) = legacy_face.glyph_index(ch) {
+                            let slot = registry.legacy();
+                            registry.slots[slot].mark(gid.0, Some(ch));
+                        }
+                    }
+                }
+            }
+        }
 
         // 2. Subset every font.
         let mut embedded = Vec::with_capacity(registry.slots.len());
@@ -504,6 +518,7 @@ impl PdfPrePressEngine {
                 p_box,
                 &page_boxes,
                 options.draw_crop_marks,
+                options.draw_page_numbers,
                 &embedded,
                 &registry,
                 &legacy_face,
@@ -645,6 +660,7 @@ impl PdfPrePressEngine {
         p_box: &PageLayoutBox,
         page_boxes: &PrePressPageBoxes,
         draw_crop_marks: bool,
+        draw_page_numbers: bool,
         embedded: &[EmbeddedFont],
         registry: &FontRegistry<'_>,
         legacy_face: &ttf_parser::Face<'_>,
@@ -746,6 +762,45 @@ impl PdfPrePressEngine {
                     content.set_rise(0.0);
                 }
                 content.end_text();
+            }
+        }
+
+        // Draw page number gematria folio footer if enabled and present
+        if draw_page_numbers && !p_box.page_number_gematria.is_empty() {
+            if let Some(slot) = registry.legacy {
+                let font = &embedded[slot];
+                let folio_font_size = 10.0;
+                let cids: Vec<u8> = p_box
+                    .page_number_gematria
+                    .chars()
+                    .filter_map(|ch| legacy_face.glyph_index(ch))
+                    .filter_map(|gid| font.cid(gid.0))
+                    .flat_map(u16::to_be_bytes)
+                    .collect();
+                if !cids.is_empty() {
+                    let total_width: f32 = p_box
+                        .page_number_gematria
+                        .chars()
+                        .filter_map(|ch| legacy_face.glyph_index(ch))
+                        .filter_map(|gid| font.cid(gid.0))
+                        .map(|cid| {
+                            let adv = font
+                                .subset
+                                .cid_widths_1000
+                                .get(usize::from(cid))
+                                .copied()
+                                .unwrap_or(500.0);
+                            adv / 1000.0 * folio_font_size
+                        })
+                        .sum();
+                    let folio_x = origin_x + (p_box.dimensions.width - total_width) / 2.0;
+                    let folio_y = origin_y + 25.0;
+                    content.begin_text();
+                    content.set_font(Name(font.resource.as_bytes()), folio_font_size);
+                    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, folio_x, folio_y]);
+                    content.show(Str(&cids));
+                    content.end_text();
+                }
             }
         }
 
@@ -1075,5 +1130,24 @@ mod tests {
         let s_uncomp = String::from_utf8_lossy(&uncompressed);
         assert!(s_comp.contains("/Filter /FlateDecode"));
         assert!(!s_uncomp.contains("/Filter /FlateDecode"));
+    }
+
+    #[test]
+    fn test_pdf_export_with_gematria_folio() {
+        let lines = typeset("בדיקת מספר עמוד עברי", "Noto Serif Hebrew");
+        let mut p = page_with(lines);
+        p.page_number_gematria = "קמ״ה".to_string();
+
+        let options = PdfExportOptions {
+            draw_page_numbers: true,
+            ..Default::default()
+        };
+
+        let bytes = PdfPrePressEngine::export_pdf(&[p], &options).unwrap();
+        assert!(!bytes.is_empty());
+        let decompressed = decompress_flate_streams(&bytes);
+        // Expect at least 2 text objects: 1 for content line, 1 for folio
+        let bt_count: usize = decompressed.iter().map(|st| count(st, b"BT\n")).sum();
+        assert!(bt_count >= 2, "Must contain at least 2 text objects including folio, got {}", bt_count);
     }
 }

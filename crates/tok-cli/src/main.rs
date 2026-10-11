@@ -238,6 +238,7 @@ fn handle_render_pdf(input: &str, output: &str) -> Result<(), Box<dyn std::error
         bleed_pt: 8.504,
         slug_pt: 28.346,
         draw_crop_marks: true,
+        draw_page_numbers: true,
         custom_font_data: None,
         creation_date: Some(manifest.created_at.clone()),
         mod_date: Some(manifest.modified_at.clone()),
