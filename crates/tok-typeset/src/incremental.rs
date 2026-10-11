@@ -203,6 +203,9 @@ mod tests {
             space_before: 0.0,
             space_after: 0.0,
             char_offset: l * 10,
+            force_page_break_before: false,
+            force_page_break_after: false,
+            keep_lines_together: false,
         }
     }
 

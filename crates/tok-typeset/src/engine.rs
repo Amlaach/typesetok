@@ -682,6 +682,9 @@ impl TypesettingEngine {
                     },
                     space_after,
                     char_offset,
+                    force_page_break_before: p.has_forced_page_break_before(),
+                    force_page_break_after: p.has_forced_page_break_after(),
+                    keep_lines_together: p.overrides.as_ref().map_or(false, |o| o.keep_lines_together),
                 });
             }
             prev_space_after = space_after;
@@ -1001,6 +1004,9 @@ impl TypesettingEngine {
                     },
                     space_after,
                     char_offset,
+                    force_page_break_before: p.has_forced_page_break_before(),
+                    force_page_break_after: p.has_forced_page_break_after(),
+                    keep_lines_together: p.overrides.as_ref().map_or(false, |o| o.keep_lines_together),
                 });
             }
             prev_space_after = space_after;
@@ -3229,5 +3235,57 @@ mod tests {
         // Footnote frame must contain updated note
         let note_frame = pages2[0].frames.iter().find(|f| f.flow_id == "notes").unwrap();
         assert!(note_frame.lines.iter().any(|l| l.paragraph_id == Some(note_p_id)));
+    }
+
+    #[test]
+    fn test_incremental_typeset_respects_layout_locks_and_page_break_overrides() {
+        let mut doc = DocumentRoot::new("מבחן נעילת מעברי עמוד בעימוד אינקרמנטלי");
+        let flow = doc.sections[0].main_flow_mut().unwrap();
+
+        // P1: short paragraph (fits on page 1)
+        let p1 = ParagraphNode::new(
+            tok_core::id::FractionalIndex::new("a01"),
+            "default-body",
+            "פסקה ראשונה קצרה המתאימה בקלות לחלק העליון של עמוד ראשון.",
+        );
+        let p1_id = p1.id;
+        flow.add_paragraph(p1);
+
+        // P2: forced page break before
+        let p2 = ParagraphNode::new(
+            tok_core::id::FractionalIndex::new("b01"),
+            "default-body",
+            "פסקה שניה עם נעילת מעבר עמוד כפוי לפניה - חייבת להתחיל בעמוד חדש.",
+        )
+        .with_overrides(tok_core::overrides::LayoutLockOverrides::page_break_before());
+        let p2_id = p2.id;
+        flow.add_paragraph(p2);
+
+        // P3: forced page break before
+        let p3 = ParagraphNode::new(
+            tok_core::id::FractionalIndex::new("c01"),
+            "default-body",
+            "פסקה שלישית כפויה להתחיל בעמוד הבא.",
+        )
+        .with_overrides(tok_core::overrides::LayoutLockOverrides::page_break_before());
+        let p3_id = p3.id;
+        flow.add_paragraph(p3);
+
+        let eng = engine();
+        let pages1 = eng.typeset_document(&doc);
+
+        assert_eq!(pages1.len(), 3, "Each paragraph with forced page break before must be on its own page");
+        assert!(pages1[0].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p1_id)));
+        assert!(pages1[1].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p2_id)));
+        assert!(pages1[2].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p3_id)));
+
+        // Incrementally edit P1 by adding more text
+        doc.sections[0].flows[0].paragraphs[0].text = "פסקה ראשונה שנערכה באופן אינקרמנטלי ונוספו לה מילים נוספות.".to_string();
+
+        let (pages2, _diag) = eng.typeset_document_incremental(&doc, &pages1, Some(p1_id));
+        assert_eq!(pages2.len(), 3, "Forced page break overrides must be strictly preserved during incremental reflow");
+        assert!(pages2[0].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p1_id)));
+        assert!(pages2[1].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p2_id)));
+        assert!(pages2[2].frames[0].lines.iter().any(|l| l.paragraph_id == Some(p3_id)));
     }
 }

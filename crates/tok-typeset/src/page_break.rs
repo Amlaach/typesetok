@@ -46,6 +46,8 @@ pub struct BreakOpportunity {
     pub line_height: f32,
     /// Collapsed inter-paragraph margin after this line (if this is the last line of the paragraph).
     pub margin_after: f32,
+    /// Whether the paragraph's manual lock overrides require keeping all lines together.
+    pub keep_lines_together: bool,
 }
 
 impl BreakOpportunity {
@@ -81,6 +83,11 @@ impl BreakOpportunity {
             if lines_on_next_page < min_widows {
                 penalty += PageBreakPenalty::WIDOW;
             }
+        }
+
+        // 4. Keep lines together: if paragraph has keep_lines_together, penalize any intra-paragraph break
+        if self.keep_lines_together && !self.is_last_line_of_paragraph() {
+            penalty += 25_000.0;
         }
 
         penalty
@@ -133,6 +140,9 @@ pub struct PaginationLineInput {
     pub space_before: f32,
     pub space_after: f32,
     pub char_offset: usize,
+    pub force_page_break_before: bool,
+    pub force_page_break_after: bool,
+    pub keep_lines_together: bool,
 }
 
 impl PaginationLineInput {
@@ -147,6 +157,7 @@ impl PaginationLineInput {
             widow_control: self.widow_control,
             line_height: self.line.height,
             margin_after,
+            keep_lines_together: self.keep_lines_together,
         }
     }
 }
@@ -265,6 +276,11 @@ impl GlobalPageBreaker {
         let mut prev_sec = None;
 
         for (idx, item) in remaining.iter().enumerate() {
+            if idx > 0 && item.line_in_paragraph == 0 && item.force_page_break_before {
+                // Forced break immediately before this line!
+                break;
+            }
+
             if prev_sec != Some(item.section_idx) {
                 prev_sec = Some(item.section_idx);
             }
@@ -299,6 +315,11 @@ impl GlobalPageBreaker {
                 score,
                 penalty,
             });
+
+            if item.line_in_paragraph + 1 == item.total_lines_in_paragraph && item.force_page_break_after {
+                // Forced break immediately after this paragraph!
+                return (idx + 1, curr_h);
+            }
         }
 
         if candidates.is_empty() {
@@ -364,6 +385,7 @@ mod tests {
             widow_control: 2,
             line_height: 14.5,
             margin_after: 0.0,
+            keep_lines_together: false,
         };
         assert_eq!(opp.calculate_penalty(), 0.0);
     }
@@ -381,6 +403,7 @@ mod tests {
             widow_control: 2,
             line_height: 14.5,
             margin_after: 0.0,
+            keep_lines_together: false,
         };
         let penalty = opp.calculate_penalty();
         assert!(penalty >= PageBreakPenalty::ORPHAN);
@@ -399,6 +422,7 @@ mod tests {
             widow_control: 2,
             line_height: 14.5,
             margin_after: 0.0,
+            keep_lines_together: false,
         };
         let penalty = opp.calculate_penalty();
         assert!(penalty >= PageBreakPenalty::WIDOW);
@@ -417,6 +441,7 @@ mod tests {
             widow_control: 2,
             line_height: 20.0,
             margin_after: 8.0,
+            keep_lines_together: false,
         };
         assert!(opp.is_last_line_of_paragraph());
         let penalty = opp.calculate_penalty();
@@ -458,6 +483,7 @@ mod tests {
             widow_control: 2,
             line_height: 14.5,
             margin_after: 0.0,
+            keep_lines_together: false,
         };
         let opp_heading = BreakOpportunity {
             global_line_idx: 11,
@@ -469,6 +495,7 @@ mod tests {
             widow_control: 2,
             line_height: 20.0,
             margin_after: 10.0,
+            keep_lines_together: false,
         };
 
         let score_clean = score_page_break(480.0, 500.0, &opp_clean);
@@ -510,6 +537,9 @@ mod tests {
                 space_before: 0.0,
                 space_after: 0.0,
                 char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: false,
+                keep_lines_together: false,
             })
             .collect::<Vec<_>>();
 
@@ -545,6 +575,9 @@ mod tests {
                 space_before: 0.0,
                 space_after: 5.0,
                 char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: false,
+                keep_lines_together: false,
             });
         }
         // H1: 1 line heading
@@ -561,6 +594,9 @@ mod tests {
             space_before: 5.0,
             space_after: 5.0,
             char_offset: 0,
+            force_page_break_before: false,
+            force_page_break_after: false,
+            keep_lines_together: false,
         });
         // P2: 3 lines
         for i in 0..3 {
@@ -577,6 +613,9 @@ mod tests {
                 space_before: 5.0,
                 space_after: 0.0,
                 char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: false,
+                keep_lines_together: false,
             });
         }
 
@@ -613,6 +652,9 @@ mod tests {
                 space_before: 0.0,
                 space_after: 0.0,
                 char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: false,
+                keep_lines_together: false,
             });
         }
         for i in 0..3 {
@@ -629,6 +671,9 @@ mod tests {
                 space_before: 0.0,
                 space_after: 0.0,
                 char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: false,
+                keep_lines_together: false,
             });
         }
 
@@ -665,6 +710,9 @@ mod tests {
                 space_before: 0.0,
                 space_after: 0.0,
                 char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: false,
+                keep_lines_together: false,
             });
         }
         for i in 0..3 {
@@ -681,6 +729,9 @@ mod tests {
                 space_before: 0.0,
                 space_after: 0.0,
                 char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: false,
+                keep_lines_together: false,
             });
         }
 
@@ -709,6 +760,9 @@ mod tests {
                 space_before: 20.0,
                 space_after: 20.0,
                 char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: false,
+                keep_lines_together: false,
             },
             PaginationLineInput {
                 line: make_test_line(1, 30.0),
@@ -723,6 +777,9 @@ mod tests {
                 space_before: 20.0,
                 space_after: 20.0,
                 char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: false,
+                keep_lines_together: false,
             },
         ];
 
@@ -730,5 +787,92 @@ mod tests {
         assert_eq!(pages.len(), 2);
         // On Page 2, line 1 is at top of page, so top margin collapses to 0.0
         assert_eq!(pages[1].lines[0].baseline_y, 30.0);
+    }
+
+    #[test]
+    fn test_global_page_breaker_forced_page_break_and_keep_together() {
+        let breaker = GlobalPageBreaker::new(100.0);
+
+        // Test forced page break before
+        let inputs_before = vec![
+            PaginationLineInput {
+                line: make_test_line(0, 30.0),
+                section_idx: 0,
+                paragraph_idx: 0,
+                paragraph_id: Some(NodeId::new()),
+                line_in_paragraph: 0,
+                total_lines_in_paragraph: 1,
+                keep_with_next: false,
+                orphan_control: 1,
+                widow_control: 1,
+                space_before: 0.0,
+                space_after: 0.0,
+                char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: false,
+                keep_lines_together: false,
+            },
+            PaginationLineInput {
+                line: make_test_line(1, 30.0),
+                section_idx: 0,
+                paragraph_idx: 1,
+                paragraph_id: Some(NodeId::new()),
+                line_in_paragraph: 0,
+                total_lines_in_paragraph: 1,
+                keep_with_next: false,
+                orphan_control: 1,
+                widow_control: 1,
+                space_before: 0.0,
+                space_after: 0.0,
+                char_offset: 0,
+                force_page_break_before: true,
+                force_page_break_after: false,
+                keep_lines_together: false,
+            },
+        ];
+
+        let pages_before = breaker.break_pages(&inputs_before);
+        assert_eq!(pages_before.len(), 2, "Forced break before must push line 1 to page 2");
+
+        // Test forced page break after
+        let inputs_after = vec![
+            PaginationLineInput {
+                line: make_test_line(0, 30.0),
+                section_idx: 0,
+                paragraph_idx: 0,
+                paragraph_id: Some(NodeId::new()),
+                line_in_paragraph: 0,
+                total_lines_in_paragraph: 1,
+                keep_with_next: false,
+                orphan_control: 1,
+                widow_control: 1,
+                space_before: 0.0,
+                space_after: 0.0,
+                char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: true,
+                keep_lines_together: false,
+            },
+            PaginationLineInput {
+                line: make_test_line(1, 30.0),
+                section_idx: 0,
+                paragraph_idx: 1,
+                paragraph_id: Some(NodeId::new()),
+                line_in_paragraph: 0,
+                total_lines_in_paragraph: 1,
+                keep_with_next: false,
+                orphan_control: 1,
+                widow_control: 1,
+                space_before: 0.0,
+                space_after: 0.0,
+                char_offset: 0,
+                force_page_break_before: false,
+                force_page_break_after: false,
+                keep_lines_together: false,
+            },
+        ];
+
+        let pages_after = breaker.break_pages(&inputs_after);
+        assert_eq!(pages_after.len(), 2, "Forced break after must terminate page immediately");
     }
 }
