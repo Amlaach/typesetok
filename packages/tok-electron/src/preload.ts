@@ -34,6 +34,8 @@ export interface TokIpcBridge {
   getAppInfo: () => Promise<{ version: string; name: string }>;
   showSaveDialog: (options?: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
   showOpenDialog: (options?: { filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
+  closeWindow: () => Promise<void>;
+  quitApp: () => Promise<void>;
 }
 
 const tokIpc: TokIpcBridge = {
@@ -135,6 +137,12 @@ const tokIpc: TokIpcBridge = {
   },
   showOpenDialog: async (options?: { filters?: { name: string; extensions: string[] }[] }) => {
     return await ipcRenderer.invoke('tok:show-open-dialog', options);
+  },
+  closeWindow: async () => {
+    return await ipcRenderer.invoke('tok:close-window');
+  },
+  quitApp: async () => {
+    return await ipcRenderer.invoke('tok:quit-app');
   }
 };
 

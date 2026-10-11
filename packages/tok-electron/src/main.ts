@@ -660,6 +660,19 @@ handle('tok:show-open-dialog', async (_, options?: { filters?: { name: string; e
   return res.filePaths[0];
 });
 
+// Window and Application Lifecycle Handlers
+handle('tok:close-window', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.close();
+  }
+  return { success: true };
+});
+
+handle('tok:quit-app', () => {
+  app.quit();
+  return { success: true };
+});
+
 // ---------------------------------------------------------------------------
 // App lifecycle
 // ---------------------------------------------------------------------------
