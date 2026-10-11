@@ -869,67 +869,11 @@ impl TypesettingEngine {
 
                 let cursor = flow_cursors.get(source_id).copied().unwrap_or(0);
 
-                let (lines_pool, is_dynamic_expansion_pool) = if is_expansion {
-                    let base_flow = first_sec.flows.iter().find(|f| f.id.0 == source_id);
-                    let base_lines = flow_lines_map.get(source_id);
-
-                    if let (Some(b_flow), Some(b_lines)) = (base_flow, base_lines) {
-                        if cursor < b_lines.len() {
-                            let placed_p_ids: std::collections::HashSet<_> = b_lines[..cursor]
-                                .iter()
-                                .filter_map(|l| l.paragraph_id)
-                                .collect();
-
-                            let mut exp_lines = Vec::new();
-                            for p in &b_flow.paragraphs {
-                                if !placed_p_ids.contains(&p.id) {
-                                    let (font_family, font_size, line_height) = doc
-                                        .paragraph_styles
-                                        .iter()
-                                        .find(|s| s.id == p.style_id)
-                                        .map(|style| {
-                                            (
-                                                self.font_manager
-                                                    .face_for(&style.font_family, style.font_weight),
-                                                style.font_size_pt,
-                                                style.line_height_pt,
-                                            )
-                                        })
-                                        .unwrap_or_else(|| {
-                                            ("Noto Rashi Hebrew".to_string(), 10.5, 10.5 * 1.45)
-                                        });
-
-                                    let p_lines = self.typeset_paragraph_with_font(
-                                        p,
-                                        &font_family,
-                                        alloc.allocated_width_pt,
-                                        font_size,
-                                        line_height,
-                                    );
-                                    exp_lines.extend(p_lines);
-                                }
-                            }
-                            if !exp_lines.is_empty() {
-                                (Some(exp_lines), true)
-                            } else {
-                                (Some(b_lines[cursor..].to_vec()), true)
-                            }
-                        } else {
-                            (None, false)
-                        }
-                    } else {
-                        (None, false)
-                    }
-                } else {
-                    (flow_lines_map.get(source_id).cloned(), false)
-                };
-
                 let mut frame_lines = Vec::new();
                 let mut current_h = 0.0;
 
-                if let Some(pool) = lines_pool {
-                    let start_idx = if is_dynamic_expansion_pool { 0 } else { cursor };
-                    let mut idx = start_idx;
+                if let Some(pool) = flow_lines_map.get(source_id) {
+                    let mut idx = cursor;
                     while idx < pool.len() {
                         let l = &pool[idx];
                         if current_h + l.height > alloc.allocated_height_pt
@@ -938,6 +882,60 @@ impl TypesettingEngine {
                             break;
                         }
                         let mut positioned_line = l.clone();
+                        // In expansion frames, if the allocated width is wider than the original line width,
+                        // re-justify the line to fill the wider expansion measure.
+                        if is_expansion && alloc.allocated_width_pt > positioned_line.width + 5.0 {
+                            let font_sz = positioned_line
+                                .glyphs
+                                .first()
+                                .map(|g| g.height)
+                                .unwrap_or(DEFAULT_FONT_SIZE_PT);
+                            let p_glyphs: Vec<PositionedGlyph> = positioned_line
+                                .glyphs
+                                .iter()
+                                .map(|g| PositionedGlyph {
+                                    glyph_id: g.glyph_id,
+                                    cluster: g.cluster,
+                                    x_advance: g.width,
+                                    y_advance: 0.0,
+                                    x_offset: 0.0,
+                                    y_offset: g.y,
+                                    character: g.character,
+                                })
+                                .collect();
+                            let justified = HebrewJustifier::justify_line(
+                                p_glyphs,
+                                alloc.allocated_width_pt,
+                                font_sz,
+                                false,
+                            );
+                            let new_w: f32 = justified.glyphs.iter().map(|g| g.x_advance).sum();
+                            let mut curr_x = if positioned_line.is_rtl {
+                                alloc.allocated_width_pt - new_w
+                            } else {
+                                0.0
+                            };
+                            positioned_line.width = new_w;
+                            positioned_line.glyphs = justified
+                                .glyphs
+                                .into_iter()
+                                .zip(positioned_line.glyphs.iter())
+                                .map(|(jg, orig_g)| {
+                                    let b = GlyphBox {
+                                        glyph_id: jg.glyph_id,
+                                        cluster: jg.cluster,
+                                        x: curr_x + jg.x_offset,
+                                        y: jg.y_offset,
+                                        width: jg.x_advance,
+                                        height: orig_g.height,
+                                        character: jg.character,
+                                        font_index: orig_g.font_index,
+                                    };
+                                    curr_x += jg.x_advance;
+                                    b
+                                })
+                                .collect();
+                        }
                         positioned_line.baseline_y = current_h + positioned_line.height;
                         positioned_line.line_index = frame_lines.len();
                         current_h += positioned_line.height;
@@ -945,7 +943,7 @@ impl TypesettingEngine {
                         idx += 1;
                     }
 
-                    let lines_placed = idx - start_idx;
+                    let lines_placed = idx - cursor;
                     if lines_placed > 0 {
                         flow_cursors.insert(source_id.to_string(), cursor + lines_placed);
                         any_lines_placed = true;
@@ -2050,6 +2048,76 @@ mod tests {
                     p2_lines_on_page.len()
                 );
             }
+        }
+    }
+
+    #[test]
+    fn test_multi_flow_l_shape_expansion_multi_paragraph_completeness() {
+        use tok_core::model::{Flow, FlowId};
+
+        let mut config = TypesettingEngineConfig::default();
+        config.page_width_pt = 500.0;
+        config.page_height_pt = 300.0;
+        config.margin_top_pt = 20.0;
+        config.margin_bottom_pt = 20.0;
+        config.margin_inner_pt = 30.0;
+        config.margin_outer_pt = 20.0;
+        let eng = TypesettingEngine::new(config);
+
+        let mut doc = DocumentRoot::new("בדיקת שימור פסקאות בהרחבת צורת הדף");
+        let sec = &mut doc.sections[0];
+        sec.flows.clear();
+
+        // 1. Central Gemara stream: finishes early (e.g. 50pt height out of 260pt)
+        let mut central = Flow::new(FlowId::new("gemara"), FlowType::Main);
+        central.placement_role = Some("primary".to_string());
+        central.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("g1"),
+            "default-body",
+            "גמרא קצרה שמסתיימת מוקדם כדי להפעיל הרחבת צורת הדף.",
+        ));
+        sec.flows.push(central);
+
+        // 2. Commentary stream (e.g. Rashi) with MULTIPLE paragraphs
+        let mut rashi = Flow::new(FlowId::new("rashi"), FlowType::CommentA);
+        rashi.placement_role = Some("inner_spine".to_string());
+        for i in 1..=4 {
+            rashi.add_paragraph(ParagraphNode::new(
+                FractionalIndex::new(format!("r{}", i)),
+                "default-body",
+                &format!("רש\"י פסקה מספר {}: פירוש דברי הגמרא בהרחבה רבה, כולל הסברים וביאורים ארוכים מאוד שמתפרסים על פני שורות רבות.", i),
+            ));
+        }
+        sec.flows.push(rashi);
+
+        // 3. Outer commentary (Tosafot)
+        let mut tosafot = Flow::new(FlowId::new("tosafot"), FlowType::CommentB);
+        tosafot.placement_role = Some("outer_margin".to_string());
+        tosafot.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("t1"),
+            "default-body",
+            "תוספות קצר בעמודה החיצונית.",
+        ));
+        sec.flows.push(tosafot);
+
+        let pages = eng.typeset_document(&doc);
+        assert!(!pages.is_empty());
+
+        // Collect all lines for Rashi across all frames (both narrow and expansion frames)
+        let rashi_texts: Vec<String> = pages
+            .iter()
+            .flat_map(|p| p.frames.iter())
+            .filter(|f| f.flow_id.contains("rashi"))
+            .flat_map(|f| f.lines.iter().map(|l| l.text.clone()))
+            .collect();
+
+        let combined = rashi_texts.join(" ");
+        for i in 1..=4 {
+            assert!(
+                combined.contains(&format!("פסקה מספר {}:", i)),
+                "Rashi paragraph {} must be completely preserved across frames, but was missing!",
+                i
+            );
         }
     }
 }
