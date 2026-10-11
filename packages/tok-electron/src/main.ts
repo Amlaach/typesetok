@@ -730,6 +730,45 @@ handle('tok:show-open-dialog', async (_, options?: { filters?: { name: string; e
   return res.filePaths[0];
 });
 
+handle('tok:show-import-dialog', async (_, options?: { filters?: { name: string; extensions: string[] }[] }) => {
+  if (!mainWindow) return null;
+  const res = await dialog.showOpenDialog(mainWindow, {
+    title: 'ייבוא מסמך ל-TypesetOK',
+    filters: options?.filters ?? [
+      { name: 'כל המסמכים הנתמכים (*.docx, *.md, *.txt)', extensions: ['docx', 'md', 'txt'] },
+      { name: 'מסמכי Microsoft Word (*.docx)', extensions: ['docx'] },
+      { name: 'מסמכי Markdown (*.md)', extensions: ['md'] },
+      { name: 'קובצי טקסט פשוט (*.txt)', extensions: ['txt'] },
+      { name: 'כל הקבצים (*.*)', extensions: ['*'] }
+    ],
+    properties: ['openFile']
+  });
+  if (res.canceled || !res.filePaths.length) return null;
+  return res.filePaths[0];
+});
+
+handle('tok:read-import-file', async (_, filePath: string) => {
+  const sourcePath = requireString(filePath, 'filePath');
+  const resolvedPath = path.isAbsolute(sourcePath) ? sourcePath : path.resolve(sourcePath);
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`Import file does not exist: ${resolvedPath}`);
+  }
+  const stat = await fs.promises.stat(resolvedPath);
+  const buffer = await fs.promises.readFile(resolvedPath);
+  const ext = path.extname(resolvedPath).toLowerCase();
+  const isBinary = ext === '.docx';
+  logger.info(`[IPC] Import file read successfully: ${resolvedPath} (${stat.size} bytes)`);
+  return {
+    fileName: path.basename(resolvedPath),
+    filePath: resolvedPath,
+    size: stat.size,
+    isBinary,
+    dataBase64: buffer.toString('base64'),
+    text: isBinary ? undefined : buffer.toString('utf-8')
+  };
+});
+
+
 // Window and Application Lifecycle Handlers
 handle('tok:close-window', () => {
   if (mainWindow && !mainWindow.isDestroyed()) {

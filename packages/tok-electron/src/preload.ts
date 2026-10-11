@@ -34,6 +34,15 @@ export interface TokIpcBridge {
   getAppInfo: () => Promise<{ version: string; name: string }>;
   showSaveDialog: (options?: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
   showOpenDialog: (options?: { filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
+  showImportDialog: (options?: { filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
+  readImportFile: (filePath: string) => Promise<{
+    fileName: string;
+    filePath: string;
+    size: number;
+    isBinary: boolean;
+    dataBase64: string;
+    text?: string;
+  }>;
   closeWindow: () => Promise<void>;
   quitApp: () => Promise<void>;
 }
@@ -137,6 +146,12 @@ const tokIpc: TokIpcBridge = {
   },
   showOpenDialog: async (options?: { filters?: { name: string; extensions: string[] }[] }) => {
     return await ipcRenderer.invoke('tok:show-open-dialog', options);
+  },
+  showImportDialog: async (options?: { filters?: { name: string; extensions: string[] }[] }) => {
+    return await ipcRenderer.invoke('tok:show-import-dialog', options);
+  },
+  readImportFile: async (filePath: string) => {
+    return await ipcRenderer.invoke('tok:read-import-file', filePath);
   },
   closeWindow: async () => {
     return await ipcRenderer.invoke('tok:close-window');
