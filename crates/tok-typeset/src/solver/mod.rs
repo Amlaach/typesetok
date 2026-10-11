@@ -6,6 +6,7 @@
 pub mod frame_model;
 pub mod model;
 pub mod page_model;
+pub mod proportions;
 pub mod solver_core;
 
 pub use frame_model::{
@@ -16,4 +17,5 @@ pub use model::{
     LinearExpression, LinearTerm, RectVariables, SolvedRect,
 };
 pub use page_model::{PageConstraintModel, PageGeometryConfig};
+pub use proportions::ColumnWidthDistribution;
 pub use solver_core::{GeometricConstraintSolver, SolverError};
