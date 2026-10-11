@@ -710,7 +710,8 @@ export class TypesetOkApp {
         onClose: () => {},
         onOpenSettings: () => this.settingsModal.show(),
         onOpenAbout: () => this.aboutModal.show(),
-        onOpenGuide: () => this.userGuideModal.show()
+        onOpenGuide: () => this.userGuideModal.show(),
+        onExitApp: () => this.handleSystemAction('quit-app')
       });
       this.root.appendChild(this.welcomeModalInstance.element);
     }

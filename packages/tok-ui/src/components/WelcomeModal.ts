@@ -11,6 +11,7 @@ export interface WelcomeModalCallbacks {
   onOpenSettings?: () => void;
   onOpenAbout?: () => void;
   onOpenGuide?: () => void;
+  onExitApp?: () => void;
 }
 
 /** A block of a page drawing: top/right/width/height in % of the page, and its kind. */
@@ -247,7 +248,12 @@ export class WelcomeModal {
   }
 
   private close(): void {
-    if (!this.hasOpenDocument) return;
+    if (!this.hasOpenDocument) {
+      if (this.callbacks.onExitApp) {
+        this.callbacks.onExitApp();
+      }
+      return;
+    }
     this.hide();
     this.callbacks.onClose();
   }
@@ -262,13 +268,18 @@ export class WelcomeModal {
     this.element.innerHTML = '';
     const isEn = i18n.getLanguage() === 'en';
 
-    // ---- Top strip: Brand only (no redundant return buttons or settings) ----
+    // ---- Top strip: Brand & Exit/Return button ----
     const topStrip = el('div', 'tok-welcome-top');
     const brandMark = el('span', 'tok-brand-mark', { 'aria-hidden': 'true' });
     brandMark.appendChild(icon('brand', 18));
     topStrip.appendChild(brandMark);
     topStrip.appendChild(el('span', 'tok-brand-name', undefined, 'TypesetOK'));
     topStrip.appendChild(el('span', 'tok-grow'));
+
+    const closeOrExitBtn = iconButton('close', this.hasOpenDocument ? (isEn ? 'Return to Document (Esc)' : 'חזרה למסמך (Esc)') : (isEn ? 'Exit Application (Esc)' : 'יציאה מהתוכנה (Esc)'), () => {
+      this.close();
+    }, { size: 16, attrs: { title: this.hasOpenDocument ? (isEn ? 'Return to Document' : 'חזרה למסמך') : (isEn ? 'Exit Application' : 'יציאה מהתוכנה'), style: 'width:32px;height:32px;' } });
+    topStrip.appendChild(closeOrExitBtn);
     this.element.appendChild(topStrip);
 
     // ---- Body ----
