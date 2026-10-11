@@ -17,6 +17,7 @@
 
 pub mod bidi;
 pub mod co_pagination;
+pub mod diagnostics;
 pub mod engine;
 pub mod fixtures;
 pub mod font;
@@ -46,6 +47,7 @@ pub use co_pagination::{
     NonBlockingPaginator, PaginationEvent, SpreadMathematics, SyncRemedy, SynchronizerConfig,
     TemplateConfig, TemplateKind,
 };
+pub use diagnostics::RecomputeReport;
 pub use engine::{TypesettingEngine, TypesettingEngineConfig};
 pub use font::{FontData, FontManager, FontMetrics};
 pub use footnote_paginator::{
