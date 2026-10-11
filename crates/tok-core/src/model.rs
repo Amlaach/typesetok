@@ -205,6 +205,8 @@ pub struct DocumentRoot {
     pub paragraph_styles: Vec<ParagraphStyle>,
     pub character_styles: Vec<CharacterStyle>,
     pub sections: Vec<SectionNode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outline: Option<crate::outline::DocumentOutline>,
 }
 
 impl DocumentRoot {
@@ -218,12 +220,18 @@ impl DocumentRoot {
             paragraph_styles: vec![ParagraphStyle::default()],
             character_styles: Vec::new(),
             sections: Vec::new(),
+            outline: None,
         };
 
         // Add a default first section
         let default_section = SectionNode::new("שער ראשון", "chapter-first");
         root.sections.push(default_section);
         root
+    }
+
+    pub fn with_outline(mut self, outline: crate::outline::DocumentOutline) -> Self {
+        self.outline = Some(outline);
+        self
     }
 
     pub fn find_paragraph(&self, id: NodeId) -> Option<&ParagraphNode> {

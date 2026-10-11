@@ -3,6 +3,7 @@ pub mod error;
 pub mod id;
 pub mod model;
 pub mod normalizer;
+pub mod outline;
 pub mod styles;
 pub mod transaction;
 
@@ -14,6 +15,7 @@ pub use model::{
     SectionNode,
 };
 pub use normalizer::{HebrewMarkCategory, HebrewNormalizer};
+pub use outline::{DocumentHierarchyNode, DocumentOutline, HierarchyLevel};
 pub use styles::{
     AhaltermStretchMode, CharacterStyle, Color, ParagraphStyle, Progression, StylePatch,
     TextAlignment,
