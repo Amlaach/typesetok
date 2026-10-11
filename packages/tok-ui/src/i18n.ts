@@ -59,6 +59,7 @@ export const strings: Translations = {
   menuShieldDivineNames: { he: 'מגן שמות קדושים (איסור שבירה)', en: 'Divine Names Shield (No Break)' },
   menuRecalcGematria: { he: 'סנכרון מספור עמודים עברי', en: 'Sync Hebrew Page Numbering' },
   menuExportPdf: { he: 'ייצוא לדפוס…', en: 'Export for print…' },
+  menuExit: { he: 'יציאה מהתוכנה', en: 'Exit Application' },
 
   // Command Palette
   paletteSearchPlaceholder: { he: 'הקלד לחיפוש פקודות, תזרימים, עמודים או פעולות עימוד...', en: 'Type to search commands, flows, pages or layout actions...' },

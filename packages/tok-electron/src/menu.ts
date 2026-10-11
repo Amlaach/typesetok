@@ -64,7 +64,11 @@ export function buildApplicationMenu(mainWindow: BrowserWindow): Menu {
           click: () => send('export-pdf'),
         },
         { type: 'separator' },
-        { role: 'quit', label: 'יציאה' },
+        {
+          label: 'יציאה מהתוכנה',
+          accelerator: 'CmdOrCtrl+Q',
+          click: () => send('quit-app'),
+        },
       ],
     },
     {
