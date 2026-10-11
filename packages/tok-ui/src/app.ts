@@ -966,6 +966,26 @@ export class TypesetOkApp {
     }) as HTMLInputElement;
 
     let ignoreNiqqud = true;
+    const matchBadge = el('span', 'tok-find-badge', {
+      style: 'font-size:11px;color:var(--tok-text-muted);padding:0 4px;min-width:60px;'
+    });
+
+    const updateMatchBadge = () => {
+      const q = this.findInput?.value || '';
+      if (!q) {
+        matchBadge.textContent = '';
+        return;
+      }
+      const matches = this.storyEditor.findAll({ query: q, ignoreNiqqud });
+      if (matches.length === 0) {
+        matchBadge.textContent = '0 נמצאו';
+        matchBadge.style.color = 'var(--tok-status-error, #ef4444)';
+      } else {
+        matchBadge.textContent = `${matches.length} נמצאו`;
+        matchBadge.style.color = 'var(--tok-text-muted)';
+      }
+    };
+
     const niqqudBtn = el('button', 'tok-btn tok-btn-xs tok-btn-primary', {
       type: 'button',
       title: 'התעלם מניקוד ומטעמים בחיפוש',
@@ -980,6 +1000,7 @@ export class TypesetOkApp {
         niqqudBtn.classList.remove('tok-btn-primary');
         niqqudBtn.classList.add('tok-btn-ghost');
       }
+      updateMatchBadge();
     });
 
     const prevBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
@@ -989,7 +1010,10 @@ export class TypesetOkApp {
     }, '↑ הקודם');
     prevBtn.addEventListener('click', () => {
       const q = this.findInput?.value;
-      if (q) this.storyEditor.findPrev({ query: q, ignoreNiqqud });
+      if (q) {
+        this.storyEditor.findPrev({ query: q, ignoreNiqqud });
+        updateMatchBadge();
+      }
     });
 
     const nextBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
@@ -999,9 +1023,13 @@ export class TypesetOkApp {
     }, '↓ הבא');
     nextBtn.addEventListener('click', () => {
       const q = this.findInput?.value;
-      if (q) this.storyEditor.findNext({ query: q, ignoreNiqqud });
+      if (q) {
+        this.storyEditor.findNext({ query: q, ignoreNiqqud });
+        updateMatchBadge();
+      }
     });
 
+    this.findInput.addEventListener('input', updateMatchBadge);
     this.findInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -1012,8 +1040,22 @@ export class TypesetOkApp {
         } else {
           this.storyEditor.findNext({ query: q, ignoreNiqqud });
         }
+        updateMatchBadge();
       } else if (e.key === 'Escape') {
         this.toggleFindReplaceBar(false);
+      }
+    });
+
+    this.replaceInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const q = this.findInput?.value;
+        if (q && this.replaceInput) {
+          this.storyEditor.replaceNext(this.replaceInput.value, { query: q, ignoreNiqqud });
+          this.updateFormattingToolbarState();
+          this.scheduleRepaginate();
+          updateMatchBadge();
+        }
       }
     });
 
@@ -1025,7 +1067,11 @@ export class TypesetOkApp {
     replaceBtn.addEventListener('click', () => {
       const q = this.findInput?.value;
       if (q && this.replaceInput) {
-        this.storyEditor.replaceNext(this.replaceInput.value, { query: q, ignoreNiqqud });
+        const replaced = this.storyEditor.replaceNext(this.replaceInput.value, { query: q, ignoreNiqqud });
+        this.updateFormattingToolbarState();
+        this.scheduleRepaginate();
+        updateMatchBadge();
+        if (replaced) this.showToast('מופע הוחלף בהצלחה');
       }
     });
 
@@ -1038,6 +1084,9 @@ export class TypesetOkApp {
       const q = this.findInput?.value;
       if (q && this.replaceInput) {
         const count = this.storyEditor.replaceAll(this.replaceInput.value, { query: q, ignoreNiqqud });
+        this.updateFormattingToolbarState();
+        this.scheduleRepaginate();
+        updateMatchBadge();
         this.showToast(`הוחלפו ${count} מופעים`);
       }
     });
@@ -1047,6 +1096,7 @@ export class TypesetOkApp {
     }, { size: 12, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
 
     this.findBar.appendChild(this.findInput);
+    this.findBar.appendChild(matchBadge);
     this.findBar.appendChild(niqqudBtn);
     this.findBar.appendChild(prevBtn);
     this.findBar.appendChild(nextBtn);
@@ -1066,6 +1116,16 @@ export class TypesetOkApp {
     const show = force !== undefined ? force : !isVisible;
     this.findBar.style.display = show ? 'flex' : 'none';
     if (show) {
+      const sel = this.storyEditor?.getStorySelection();
+      if (sel && !sel.isCollapsed) {
+        const p = this.storyEditor.getParagraph(sel.paraId);
+        if (p) {
+          const text = Array.from(p.text).slice(sel.start, sel.end).join('');
+          if (text && this.findInput) {
+            this.findInput.value = text;
+          }
+        }
+      }
       this.findInput?.focus();
       this.findInput?.select();
     }
