@@ -16,9 +16,9 @@
 
 import { StoryParagraph } from 'tok-story-editor';
 import { PageDescriptor } from 'tok-viewer';
-import { toHebrewGematria } from '../gematria';
-import { isRectoPage, isRightHandPage } from '../components/SpreadCanvas';
-import { DocumentSettings } from '../types';
+import { toHebrewGematria } from '../gematria.js';
+import { isRectoPage, isRightHandPage } from '../components/SpreadCanvas.js';
+import { DocumentSettings } from '../types.js';
 
 export type TemplateType = 'gemara' | 'mikraot' | 'prose' | 'notes' | 'bulletin';
 
