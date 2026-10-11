@@ -13,12 +13,14 @@
 //!   (`DynamicFootnotePaginator`) and coordinates parallel commentary streams across facing spreads
 //!   (`CoPaginationEngine`, `SpreadMathematics`).
 
+#![allow(clippy::field_reassign_with_default)]
+
 pub mod bidi;
 pub mod co_pagination;
 pub mod engine;
+pub mod fixtures;
 pub mod font;
 pub mod footnote_paginator;
-pub mod fixtures;
 pub mod gematria;
 pub mod geometry;
 pub mod hebrew_justify;
@@ -35,11 +37,6 @@ pub mod solver;
 pub mod template_synthesizer;
 
 pub use bidi::{BidiEngine, BidiRun};
-pub use layout_classifier::{ClassificationConfidence, ClassificationResult, DocumentClassifier};
-pub use layout_family::LayoutFamily;
-pub use layout_features::{DocumentLayoutFeatures, FlowFeature};
-pub use layout_template::{LayoutTemplate, TemplateConstraintError};
-pub use template_synthesizer::TemplateSynthesizer;
 pub use co_pagination::{
     calculate_typographic_split, ActiveSyncResult, ActiveSynchronizer, AnchorKey, AnchorPoint,
     CancellationToken, CoPaginatedChunk, CoPaginatedCommentary, CoPaginatedPage,
@@ -59,6 +56,10 @@ pub use geometry::{
 pub use hebrew_justify::{HebrewJustifier, JustificationTier, JustifiedLine, AHALTERM_LETTERS};
 pub use hit_test::{HitTestResult, HitTester};
 pub use knuth_plass::{BrokenLine, KnuthPlassBreaker, LayoutItem, LineSpan, MeasureProfile};
+pub use layout_classifier::{ClassificationConfidence, ClassificationResult, DocumentClassifier};
+pub use layout_family::LayoutFamily;
+pub use layout_features::{DocumentLayoutFeatures, FlowFeature};
+pub use layout_template::{LayoutTemplate, TemplateConstraintError};
 pub use multi_flow::{
     DynamicPageResult, DynamicTalmudPageResult, FlowGeometrySpec, FlowPlacementRole,
     MultiFlowSolver, SolvedFlowAllocation, SpreadSide,
@@ -75,5 +76,4 @@ pub use solver::{
     LinearExpression, LinearTerm, MultiColumnConstraintModel, PageConstraintModel,
     PageGeometryConfig, RectVariables, SolvedColumnAllocation, SolvedRect, SolverError,
 };
-
-
+pub use template_synthesizer::TemplateSynthesizer;

@@ -7,7 +7,9 @@
 //! - Ordinary Hebrew prose with hierarchical headings, orphan/widow constraints, and footnotes
 //! - Difficult page break boundary tests with tight vertical budgets
 
-use crate::co_pagination::{AnchorKey, CoPaginatedChunk, CoPaginatedCommentary, CoPaginationDocument};
+use crate::co_pagination::{
+    AnchorKey, CoPaginatedChunk, CoPaginatedCommentary, CoPaginationDocument,
+};
 use tok_core::id::FractionalIndex;
 use tok_core::model::{DocumentRoot, Flow, FlowId, FlowType, ParagraphNode, SectionNode};
 use tok_core::styles::ParagraphStyle;
@@ -237,7 +239,11 @@ pub fn create_realistic_mikraot_gedolot_document() -> DocumentRoot {
         "וַחֲזָא יְיָ יָת נְהוֹרָא אֲרֵי טָב וְאַפְרֵשׁ יְיָ בֵּין נְהוֹרָא וּבֵין חֲשׁוֹכָא.",
     ];
     for v in onkelos_verses {
-        onkelos.add_paragraph(ParagraphNode::new(next_fidx(&mut p_idx), "onkelos-style", v));
+        onkelos.add_paragraph(ParagraphNode::new(
+            next_fidx(&mut p_idx),
+            "onkelos-style",
+            v,
+        ));
     }
     sec.flows.push(onkelos);
 
@@ -311,7 +317,10 @@ pub fn create_realistic_prose_document(num_chapters: usize) -> DocumentRoot {
         flow.add_paragraph(ParagraphNode::new(
             next_fidx(&mut p_idx),
             "h1",
-            &format!("פרק {}: עקרונות העימוד והטיפוגרפיה העברית", crate::gematria::GematriaEngine::to_hebrew_numeral(ch)),
+            &format!(
+                "פרק {}: עקרונות העימוד והטיפוגרפיה העברית",
+                crate::gematria::GematriaEngine::to_hebrew_numeral(ch)
+            ),
         ));
 
         flow.add_paragraph(ParagraphNode::new(
@@ -349,14 +358,26 @@ mod tests {
         assert_eq!(sec.flows.len(), 4);
         assert_eq!(sec.layout_kind.as_deref(), Some("tzurat_hadaf"));
 
-        let gemara = sec.flows.iter().find(|f| f.id == FlowId::new("gemara")).unwrap();
+        let gemara = sec
+            .flows
+            .iter()
+            .find(|f| f.id == FlowId::new("gemara"))
+            .unwrap();
         assert!(!gemara.paragraphs.is_empty());
         assert_eq!(gemara.placement_role.as_deref(), Some("primary"));
 
-        let rashi = sec.flows.iter().find(|f| f.id == FlowId::new("rashi")).unwrap();
+        let rashi = sec
+            .flows
+            .iter()
+            .find(|f| f.id == FlowId::new("rashi"))
+            .unwrap();
         assert_eq!(rashi.placement_role.as_deref(), Some("inner_spine"));
 
-        let tosafot = sec.flows.iter().find(|f| f.id == FlowId::new("tosafot")).unwrap();
+        let tosafot = sec
+            .flows
+            .iter()
+            .find(|f| f.id == FlowId::new("tosafot"))
+            .unwrap();
         assert_eq!(tosafot.placement_role.as_deref(), Some("outer_margin"));
     }
 
@@ -374,7 +395,11 @@ mod tests {
         let doc = create_realistic_prose_document(3);
         let h1_style = doc.paragraph_styles.iter().find(|s| s.id == "h1").unwrap();
         assert!(h1_style.keep_with_next);
-        let body_style = doc.paragraph_styles.iter().find(|s| s.id == "body").unwrap();
+        let body_style = doc
+            .paragraph_styles
+            .iter()
+            .find(|s| s.id == "body")
+            .unwrap();
         assert_eq!(body_style.orphan_control, 2);
         assert_eq!(body_style.widow_control, 2);
     }

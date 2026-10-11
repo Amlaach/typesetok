@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name for release (e.g. v0.9.8)'
+        description: 'Tag name for release (e.g. v0.10.6)'
         required: false
-        default: 'v0.9.8'
+        default: 'v0.10.6'
 
 permissions:
   contents: write
@@ -205,9 +205,15 @@ jobs:
           prerelease: false
           files: release-assets/*
           body: |
-            ## TypesetOK (TOK) ${{ needs.check-release.outputs.tag_name }} — שדרוג חוויית משתמש, דיוק טיפוגרפי וניהול פרויקטים
+            ## TypesetOK (TOK) ${{ needs.check-release.outputs.tag_name }} — שדרוג חוויית משתמש, דיוק טיפוגרפי ואימות ליבת עימוד מלא
 
             ### 🚀 מה חדש בגרסה ${{ needs.check-release.outputs.tag_name }}:
+            - **אימות והקשחת ליבת מנוע העימוד (Stage 9 Engine Hardening):**
+              - תמיכה מלאה ודטרמיניסטית בעימוד רב-תזרימי (צורת הדף תלמוד, מקראות גדולות, 4 טורים, הערות שוליים דינמיות).
+              - פותר אילוצים גיאומטרי סימפלקס עם הרחבת L-Shape מובנית ללא חפיפות מסגרות או גלישת גבולות.
+              - עימוד עוקב Recto/Verso עם שולי שדרה מתחלפים (Spine/Outer margins) ושימור רציפות עוגנים.
+              - טיפוגרפיה עברית מדויקת: אלגוריתם Knuth-Plass, יישור אהלתר״ם תלת-שלבי, ניקוד וטעמים לפי ת״י 6100.
+              - אימות דטרמיניזם ביט-אחר-ביט מוחלט בייצוא PDF ובפרוייקציית Pre-paginated HTML.
             - **היסטוריית פרויקטים מדויקת:** תיקון חותמות הזמן לשמירה ויציאה מדויקות (`lastSavedAt` ו-`lastClosedAt`) וביטול זמן פיקטיבי.
             - **ניהול פרויקטים במסך הפתיחה:** אפשרות לצפייה בכלל הפרויקטים, שינוי שם פרויקט ומחיקת פרויקטים ישירות ממסך הבית.
             - **בחירת תיקיית פרויקטים באשף ההתקנה:** אשף ההתקנה (Inno Setup) מאפשר בחירת תיקיית פרויקטים ראשית עם שמירת הנתיב בהגדרות המערכת.

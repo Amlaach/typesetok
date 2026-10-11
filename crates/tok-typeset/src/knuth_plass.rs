@@ -1109,7 +1109,9 @@ mod tests {
             stretch: 5.0,
             shrink: -2.0,
         };
-        assert!(KnuthPlassBreaker::break_paragraph(&[word(50.0), neg_shrink], 100.0, 2.0).is_empty());
+        assert!(
+            KnuthPlassBreaker::break_paragraph(&[word(50.0), neg_shrink], 100.0, 2.0).is_empty()
+        );
 
         // Infinite penalty is rejected
         let inf_penalty = LayoutItem::Penalty {
@@ -1117,7 +1119,9 @@ mod tests {
             penalty: f32::INFINITY,
             flagged: false,
         };
-        assert!(KnuthPlassBreaker::break_paragraph(&[word(50.0), inf_penalty], 100.0, 2.0).is_empty());
+        assert!(
+            KnuthPlassBreaker::break_paragraph(&[word(50.0), inf_penalty], 100.0, 2.0).is_empty()
+        );
 
         // Target width zero or negative returns empty without panic
         let items = paragraph(&[40.0, 40.0]);
@@ -1131,7 +1135,12 @@ mod tests {
         assert_eq!(lines.len(), 2);
         let total_words: usize = lines
             .iter()
-            .map(|l| l.items.iter().filter(|it| matches!(it, LayoutItem::Box { .. })).count())
+            .map(|l| {
+                l.items
+                    .iter()
+                    .filter(|it| matches!(it, LayoutItem::Box { .. }))
+                    .count()
+            })
             .sum();
         assert_eq!(total_words, 2);
     }
@@ -1139,18 +1148,17 @@ mod tests {
     #[test]
     fn test_knuth_plass_multiple_forced_breaks() {
         // Multiple consecutive forced breaks (empty lines)
-        let items = vec![
-            word(30.0),
-            forced(),
-            forced(),
-            word(40.0),
-            forced(),
-        ];
+        let items = vec![word(30.0), forced(), forced(), word(40.0), forced()];
         let lines = KnuthPlassBreaker::break_paragraph(&items, 100.0, 2.0);
         assert!(!lines.is_empty());
         let total_words: usize = lines
             .iter()
-            .map(|l| l.items.iter().filter(|it| matches!(it, LayoutItem::Box { .. })).count())
+            .map(|l| {
+                l.items
+                    .iter()
+                    .filter(|it| matches!(it, LayoutItem::Box { .. }))
+                    .count()
+            })
             .sum();
         assert_eq!(total_words, 2);
     }

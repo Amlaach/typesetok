@@ -1,4 +1,5 @@
 //! End-to-End Multi-Page Flow and Global Pagination Regression Test Suite (Stage 8).
+#![allow(clippy::field_reassign_with_default)]
 //!
 //! Validates:
 //! - Coordinated pagination across consecutive pages in the real layout pipeline.
@@ -34,7 +35,10 @@ fn test_regression_multi_page_single_flow_global_page_breaker() {
     for i in 0..12 {
         let style = if i % 4 == 0 { "heading1" } else { "default" };
         let text = if style == "heading1" {
-            format!("פרק {}: כותרת ראשית חשובה שאינה רשאית להישאר יתומה בתחתית עמוד", i)
+            format!(
+                "פרק {}: כותרת ראשית חשובה שאינה רשאית להישאר יתומה בתחתית עמוד",
+                i
+            )
         } else {
             format!(
                 "פסקה {} מתוך החיבור. זהו תוכן עיוני מעמיק הדן בסוגיות שונות של עימוד וחלוקת עמודים. ",
@@ -62,7 +66,11 @@ fn test_regression_multi_page_single_flow_global_page_breaker() {
     let engine = TypesettingEngine::new(config);
     let pages = engine.typeset_document(&doc);
 
-    assert!(pages.len() >= 3, "Expected at least 3 pages, got {}", pages.len());
+    assert!(
+        pages.len() >= 3,
+        "Expected at least 3 pages, got {}",
+        pages.len()
+    );
 
     for (page_idx, page) in pages.iter().enumerate() {
         let page_num = page_idx + 1;
@@ -125,7 +133,11 @@ fn test_regression_multi_page_long_footnotes_carry_over_three_pages() {
         main.paragraphs.push(ParagraphNode::new(
             FractionalIndex::new(format!("m_{:03}", i)),
             "default",
-            &format!("גוף הטקסט הראשי פסקה מספר {} עם מראי מקומות והערות שוליים רבות. ", i).repeat(5),
+            &format!(
+                "גוף הטקסט הראשי פסקה מספר {} עם מראי מקומות והערות שוליים רבות. ",
+                i
+            )
+            .repeat(5),
         ));
     }
 
@@ -135,7 +147,11 @@ fn test_regression_multi_page_long_footnotes_carry_over_three_pages() {
         notes.paragraphs.push(ParagraphNode::new(
             FractionalIndex::new(format!("fn_{:03}", i)),
             "default",
-            &format!("הערה {}: ביאור מקיף והרחבה עיונית רחבה הדורשת שטח נכבד בתחתית העמוד. ", i).repeat(4),
+            &format!(
+                "הערה {}: ביאור מקיף והרחבה עיונית רחבה הדורשת שטח נכבד בתחתית העמוד. ",
+                i
+            )
+            .repeat(4),
         ));
     }
 
@@ -226,7 +242,10 @@ fn test_regression_talmud_multi_flow_co_pagination_recto_verso_spine_alternation
     for i in 1..=5 {
         let anchor = format!("anc_{}", i);
         main_chunks.push(CoPaginatedChunk {
-            text: format!("גמרא קטע {} מאימתי קורין את שמע בערבית משעה שהכהנים נכנסים לאכול", i),
+            text: format!(
+                "גמרא קטע {} מאימתי קורין את שמע בערבית משעה שהכהנים נכנסים לאכול",
+                i
+            ),
             anchors: vec![(AnchorKey(anchor.clone()), "קורין".to_string())],
         });
 
@@ -267,19 +286,39 @@ fn test_regression_talmud_multi_flow_co_pagination_recto_verso_spine_alternation
         let expected_recto = page_num % 2 == 1;
 
         if expected_recto {
-            assert_eq!(page.math.side, SpreadSide::Recto, "Page {} must be Recto", page_num);
+            assert_eq!(
+                page.math.side,
+                SpreadSide::Recto,
+                "Page {} must be Recto",
+                page_num
+            );
             assert_eq!(page.math.margin_left_pt, template.margin_inner_pt);
             assert_eq!(page.math.margin_right_pt, template.margin_outer_pt);
         } else {
-            assert_eq!(page.math.side, SpreadSide::Verso, "Page {} must be Verso", page_num);
+            assert_eq!(
+                page.math.side,
+                SpreadSide::Verso,
+                "Page {} must be Verso",
+                page_num
+            );
             assert_eq!(page.math.margin_left_pt, template.margin_outer_pt);
             assert_eq!(page.math.margin_right_pt, template.margin_inner_pt);
         }
 
         // Validate geometric frames
         assert_eq!(page.page_layout.frames.len(), 3);
-        let rashi_frame = page.page_layout.frames.iter().find(|f| f.flow_id == "rashi").unwrap();
-        let tosafot_frame = page.page_layout.frames.iter().find(|f| f.flow_id == "tosafot").unwrap();
+        let rashi_frame = page
+            .page_layout
+            .frames
+            .iter()
+            .find(|f| f.flow_id == "rashi")
+            .unwrap();
+        let tosafot_frame = page
+            .page_layout
+            .frames
+            .iter()
+            .find(|f| f.flow_id == "tosafot")
+            .unwrap();
 
         if expected_recto {
             // Recto: Inner (Rashi) is on left

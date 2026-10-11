@@ -269,13 +269,19 @@ mod tests {
         let html = HtmlProjectionCompiler::compile_to_html(&[page], 210.0, 297.0);
 
         // Frame must have exact geometry
-        assert!(html.contains("left: 60.00pt; top: 40.00pt; width: 350.00pt; height: 520.00pt; overflow: hidden;"));
+        assert!(html.contains(
+            "left: 60.00pt; top: 40.00pt; width: 350.00pt; height: 520.00pt; overflow: hidden;"
+        ));
 
         // First line: top = baseline (16) - height (16) = 0.00pt
-        assert!(html.contains("position: absolute; top: 0.00pt; left: 0; right: 0; height: 16.00pt;"));
+        assert!(
+            html.contains("position: absolute; top: 0.00pt; left: 0; right: 0; height: 16.00pt;")
+        );
 
         // Second line: top = baseline (46) - height (16) = 30.00pt
-        assert!(html.contains("position: absolute; top: 30.00pt; left: 0; right: 0; height: 16.00pt;"));
+        assert!(
+            html.contains("position: absolute; top: 30.00pt; left: 0; right: 0; height: 16.00pt;")
+        );
     }
 
     #[test]

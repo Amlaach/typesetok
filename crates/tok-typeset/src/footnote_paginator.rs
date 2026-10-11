@@ -189,7 +189,10 @@ mod tests {
     fn test_calculate_target_height_empty_returns_none() {
         let lines = Vec::new();
         let config = FootnotePaginatorConfig::default();
-        assert_eq!(DynamicFootnotePaginator::calculate_target_height(&lines, 500.0, &config), None);
+        assert_eq!(
+            DynamicFootnotePaginator::calculate_target_height(&lines, 500.0, &config),
+            None
+        );
     }
 
     #[test]
@@ -272,7 +275,10 @@ mod tests {
         // Remaining budget is 20pt. 1 line of fn2 (15pt) could fit, but that would leave a 1-line orphan!
         // Orphan control must roll back line 0 of fn2, leaving only fn1 (2 lines).
         let slice = DynamicFootnotePaginator::slice_for_allocated_band(&lines, 50.0, &config);
-        assert_eq!(slice.lines_consumed, 2, "Must not place a single orphan line of fn2");
+        assert_eq!(
+            slice.lines_consumed, 2,
+            "Must not place a single orphan line of fn2"
+        );
         assert_eq!(slice.placed_lines.len(), 2);
         assert_eq!(slice.placed_lines[0].paragraph_id, Some(fn_id1));
         assert_eq!(slice.placed_lines[1].paragraph_id, Some(fn_id1));
@@ -301,7 +307,10 @@ mod tests {
         // Budget of 50pt fits 3 lines (45pt), which would leave 1 line (a widow) on the next page!
         // Widow control must push back line 2, so that 2 lines are on page 1 and 2 lines on page 2.
         let slice = DynamicFootnotePaginator::slice_for_allocated_band(&lines, 50.0, &config);
-        assert_eq!(slice.lines_consumed, 2, "Must balance lines to avoid 1-line widow on next page");
+        assert_eq!(
+            slice.lines_consumed, 2,
+            "Must balance lines to avoid 1-line widow on next page"
+        );
         assert_eq!(slice.placed_lines.len(), 2);
         assert_eq!(slice.actual_height_pt, 30.0);
         assert!(slice.has_carry_over);

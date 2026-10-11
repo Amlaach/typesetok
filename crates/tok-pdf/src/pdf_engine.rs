@@ -1148,6 +1148,10 @@ mod tests {
         let decompressed = decompress_flate_streams(&bytes);
         // Expect at least 2 text objects: 1 for content line, 1 for folio
         let bt_count: usize = decompressed.iter().map(|st| count(st, b"BT\n")).sum();
-        assert!(bt_count >= 2, "Must contain at least 2 text objects including folio, got {}", bt_count);
+        assert!(
+            bt_count >= 2,
+            "Must contain at least 2 text objects including folio, got {}",
+            bt_count
+        );
     }
 }

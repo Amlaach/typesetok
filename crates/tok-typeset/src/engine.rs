@@ -380,11 +380,7 @@ impl TypesettingEngine {
 
             let line_width: f32 = justified.glyphs.iter().map(|g| g.x_advance).sum();
             // RTL lines start at the right edge of the assigned line measure.
-            let mut current_x = if is_rtl {
-                target_w - line_width
-            } else {
-                0.0
-            };
+            let mut current_x = if is_rtl { target_w - line_width } else { 0.0 };
             let glyph_boxes: Vec<GlyphBox> = justified
                 .glyphs
                 .into_iter()
@@ -446,7 +442,10 @@ impl TypesettingEngine {
                 margin_left,
                 self.config.margin_top_pt,
                 (self.config.page_width_pt - margin_left - margin_right).max(0.0),
-                (self.config.page_height_pt - self.config.margin_top_pt - self.config.margin_bottom_pt).max(0.0),
+                (self.config.page_height_pt
+                    - self.config.margin_top_pt
+                    - self.config.margin_bottom_pt)
+                    .max(0.0),
             )
         }
     }
@@ -470,12 +469,7 @@ impl TypesettingEngine {
         let frame = TextFrameBox {
             frame_id: format!("frame_{}_{}", page_num, flow_id),
             flow_id: flow_id.to_string(),
-            rect: PhysicalRect::new(
-                content.x,
-                content.y,
-                content.width,
-                content_height,
-            ),
+            rect: PhysicalRect::new(content.x, content.y, content.width, content_height),
             lines,
         };
         PageLayoutBox {
@@ -600,13 +594,17 @@ impl TypesettingEngine {
                     line,
                     section_idx: sec_idx,
                     paragraph_idx: p_idx,
-                    paragraph_id: Some(p.id.clone()),
+                    paragraph_id: Some(p.id),
                     line_in_paragraph: l_idx,
                     total_lines_in_paragraph: total_lines,
                     keep_with_next,
                     orphan_control,
                     widow_control,
-                    space_before: if l_idx == 0 { effective_space_before } else { 0.0 },
+                    space_before: if l_idx == 0 {
+                        effective_space_before
+                    } else {
+                        0.0
+                    },
                     space_after,
                     char_offset,
                 });
@@ -631,14 +629,7 @@ impl TypesettingEngine {
         }
 
         if pages.is_empty() {
-            pages.push(self.new_page(
-                1,
-                content_width,
-                content_height,
-                Vec::new(),
-                None,
-                flow_id,
-            ));
+            pages.push(self.new_page(1, content_width, content_height, Vec::new(), None, flow_id));
         }
 
         pages
@@ -651,7 +642,14 @@ impl TypesettingEngine {
         let content_height = content.height;
 
         let Some(first_sec) = doc.sections.first() else {
-            return vec![self.new_page(1, content_width, content_height, Vec::new(), None, "gemara")];
+            return vec![self.new_page(
+                1,
+                content_width,
+                content_height,
+                Vec::new(),
+                None,
+                "gemara",
+            )];
         };
 
         let margin_x = self.config.margin_inner_pt + self.config.margin_outer_pt;
@@ -683,8 +681,9 @@ impl TypesettingEngine {
                 margin_y,
             )
             .unwrap_or_else(|_| {
-                let mut fallback_tmpl =
-                    LayoutTemplate::new(LayoutFamily::SingleFlow { flow_id: FlowId::main() });
+                let mut fallback_tmpl = LayoutTemplate::new(LayoutFamily::SingleFlow {
+                    flow_id: FlowId::main(),
+                });
                 fallback_tmpl.flow_specs = first_sec
                     .flows
                     .iter()
@@ -754,19 +753,16 @@ impl TypesettingEngine {
                     .entry(font_family.clone())
                     .or_insert_with(|| self.font_manager.session(&font_family));
 
-                let p_lines = Self::typeset_with_session(
-                    session,
-                    p,
-                    flow_width,
-                    font_size,
-                    line_height,
-                );
+                let p_lines =
+                    Self::typeset_with_session(session, p, flow_width, font_size, line_height);
                 lines.extend(p_lines);
             }
             flow_lines_map.insert(flow.id.0.clone(), lines);
         }
 
-        let _has_notes = flow_specs.iter().any(|s| s.role == FlowPlacementRole::BottomBand);
+        let _has_notes = flow_specs
+            .iter()
+            .any(|s| s.role == FlowPlacementRole::BottomBand);
 
         let mut pages = Vec::new();
         let mut current_page_num = 1;
@@ -1035,17 +1031,15 @@ impl TypesettingEngine {
                 continuing_flow.and_then(|f| {
                     let cursor = flow_cursors.get(&f.id.0).copied().unwrap_or(0);
                     let lines = flow_lines_map.get(&f.id.0)?;
-                    lines.get(cursor).map(|line| {
-                        BreakToken {
-                            section_index: 0,
-                            paragraph_index: cursor,
-                            char_offset: line
-                                .glyphs
-                                .iter()
-                                .map(|g| g.cluster as usize)
-                                .min()
-                                .unwrap_or(0),
-                        }
+                    lines.get(cursor).map(|line| BreakToken {
+                        section_index: 0,
+                        paragraph_index: cursor,
+                        char_offset: line
+                            .glyphs
+                            .iter()
+                            .map(|g| g.cluster as usize)
+                            .min()
+                            .unwrap_or(0),
                     })
                 })
             } else {
@@ -1108,7 +1102,6 @@ impl TypesettingEngine {
             self.clone(),
         )
     }
-
 }
 
 #[cfg(test)]
@@ -1640,8 +1633,8 @@ mod tests {
 
         let result = eng.typeset_co_paginated_document(&tmpl, &sync_cfg, &doc);
         assert!(!result.pages.is_empty());
-        assert_eq!(result.total_gemara_lines > 0, true);
-        assert_eq!(result.total_rashi_lines > 0, true);
+        assert!(result.total_gemara_lines > 0);
+        assert!(result.total_rashi_lines > 0);
     }
 
     #[test]
@@ -1680,7 +1673,10 @@ mod tests {
             }
         }
 
-        assert!(got_page, "Worker should stream at least one PageReady event");
+        assert!(
+            got_page,
+            "Worker should stream at least one PageReady event"
+        );
         assert!(got_finished, "Worker should emit Finished event");
     }
 
@@ -1713,7 +1709,11 @@ mod tests {
         sec.flows.push(comm_flow);
 
         let pages = engine().typeset_document(&doc);
-        assert!(pages.len() >= 2, "Long commentary should cascade to at least 2 pages, got {}", pages.len());
+        assert!(
+            pages.len() >= 2,
+            "Long commentary should cascade to at least 2 pages, got {}",
+            pages.len()
+        );
 
         // Verify page numbering & gematria
         assert_eq!(pages[0].page_number_gematria, "א׳");
@@ -1727,14 +1727,26 @@ mod tests {
             .flat_map(|f| f.lines.iter().map(|l| l.text.clone()))
             .collect();
 
-        assert!(!all_lines_text.is_empty(), "Commentary lines must be placed");
+        assert!(
+            !all_lines_text.is_empty(),
+            "Commentary lines must be placed"
+        );
         // Verify that paragraph 1 and paragraph 45 both appear in the text
         let combined_text = all_lines_text.join(" ");
-        assert!(combined_text.contains("קטע מספר 1:"), "First commentary paragraph must appear");
-        assert!(combined_text.contains("קטע מספר 45:"), "Last commentary paragraph must appear");
+        assert!(
+            combined_text.contains("קטע מספר 1:"),
+            "First commentary paragraph must appear"
+        );
+        assert!(
+            combined_text.contains("קטע מספר 45:"),
+            "Last commentary paragraph must appear"
+        );
 
         // Verify break token on first page
-        assert!(pages[0].break_token.is_some(), "First page should have a break token pointing to continuation");
+        assert!(
+            pages[0].break_token.is_some(),
+            "First page should have a break token pointing to continuation"
+        );
     }
 
     #[test]
@@ -1747,8 +1759,16 @@ mod tests {
 
         // Primary: 2 paragraphs
         let mut main_flow = Flow::new(FlowId::new("main"), FlowType::Main);
-        main_flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("m1"), "main", "פסקה ראשית ראשונה."));
-        main_flow.add_paragraph(ParagraphNode::new(FractionalIndex::new("m2"), "main", "פסקה ראשית שנייה."));
+        main_flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("m1"),
+            "main",
+            "פסקה ראשית ראשונה.",
+        ));
+        main_flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("m2"),
+            "main",
+            "פסקה ראשית שנייה.",
+        ));
         sec.flows.push(main_flow);
 
         // Commentary 1 (Rashi): 8 paragraphs
@@ -1757,7 +1777,10 @@ mod tests {
             rashi_flow.add_paragraph(ParagraphNode::new(
                 FractionalIndex::new(format!("r{:02}", i)),
                 "rashi",
-                &format!("דיבור המתחיל רש\"י פסקה מספר {}: פירוש דברי הגמרא באריכות ובתוספת ביאור מקיף.", i),
+                &format!(
+                    "דיבור המתחיל רש\"י פסקה מספר {}: פירוש דברי הגמרא באריכות ובתוספת ביאור מקיף.",
+                    i
+                ),
             ));
         }
         sec.flows.push(rashi_flow);
@@ -1768,7 +1791,10 @@ mod tests {
             tosafot_flow.add_paragraph(ParagraphNode::new(
                 FractionalIndex::new(format!("t{:02}", i)),
                 "tosafot",
-                &format!("תוספות דיבור המתחיל {}: קושיא ופירוקא על דברי רש\"י והגמרא.", i),
+                &format!(
+                    "תוספות דיבור המתחיל {}: קושיא ופירוקא על דברי רש\"י והגמרא.",
+                    i
+                ),
             ));
         }
         sec.flows.push(tosafot_flow);
@@ -1786,7 +1812,11 @@ mod tests {
 
         let rashi_combined = rashi_lines.join(" ");
         for i in 1..=8 {
-            assert!(rashi_combined.contains(&format!("פסקה מספר {}:", i)), "Rashi paragraph {} must not be dropped", i);
+            assert!(
+                rashi_combined.contains(&format!("פסקה מספר {}:", i)),
+                "Rashi paragraph {} must not be dropped",
+                i
+            );
         }
     }
 
@@ -1874,9 +1904,20 @@ mod tests {
         let p0 = &pages[0];
         assert_eq!(p0.frames.len(), 2);
 
-        let f0 = p0.frames.iter().find(|f| f.flow_id == "hebrew_source").unwrap();
-        let f1 = p0.frames.iter().find(|f| f.flow_id == "aramaic_targum").unwrap();
-        assert!((f0.rect.width - f1.rect.width).abs() < 5.0, "Parallel columns should have equal widths by default");
+        let f0 = p0
+            .frames
+            .iter()
+            .find(|f| f.flow_id == "hebrew_source")
+            .unwrap();
+        let f1 = p0
+            .frames
+            .iter()
+            .find(|f| f.flow_id == "aramaic_targum")
+            .unwrap();
+        assert!(
+            (f0.rect.width - f1.rect.width).abs() < 5.0,
+            "Parallel columns should have equal widths by default"
+        );
     }
 
     #[test]
@@ -1917,8 +1958,16 @@ mod tests {
         let total_w = fa.rect.width + fb.rect.width;
         let ratio_a = fa.rect.width / total_w;
         let ratio_b = fb.rect.width / total_w;
-        assert!((ratio_a - 0.30).abs() < 0.05, "Ratio A should be approx 0.30, got {}", ratio_a);
-        assert!((ratio_b - 0.70).abs() < 0.05, "Ratio B should be approx 0.70, got {}", ratio_b);
+        assert!(
+            (ratio_a - 0.30).abs() < 0.05,
+            "Ratio A should be approx 0.30, got {}",
+            ratio_a
+        );
+        assert!(
+            (ratio_b - 0.70).abs() < 0.05,
+            "Ratio B should be approx 0.70, got {}",
+            ratio_b
+        );
     }
 
     #[test]
@@ -1975,7 +2024,10 @@ mod tests {
         ));
 
         let pages = eng.typeset_document(&doc);
-        assert!(pages.len() >= 2, "Document should split across at least 2 pages");
+        assert!(
+            pages.len() >= 2,
+            "Document should split across at least 2 pages"
+        );
 
         // The heading MUST NOT be on page 1!
         let page1_lines = &pages[0].frames[0].lines;
@@ -2151,7 +2203,10 @@ mod tests {
             rashi.add_paragraph(ParagraphNode::new(
                 FractionalIndex::new(format!("r{}", i)),
                 "default-body",
-                &format!("רש\"י קטע {}: פירוש רש\"י הקדוש על דברי המשנה והגמרא במסכת ברכות.", i),
+                &format!(
+                    "רש\"י קטע {}: פירוש רש\"י הקדוש על דברי המשנה והגמרא במסכת ברכות.",
+                    i
+                ),
             ));
         }
         sec.flows.push(rashi);
@@ -2164,7 +2219,12 @@ mod tests {
         for (idx, (p1, p2)) in run1.iter().zip(run2.iter()).enumerate() {
             assert_eq!(p1.page_index, p2.page_index);
             assert_eq!(p1.page_number_gematria, p2.page_number_gematria);
-            assert_eq!(p1.frames.len(), p2.frames.len(), "Page {} frames count mismatch", idx);
+            assert_eq!(
+                p1.frames.len(),
+                p2.frames.len(),
+                "Page {} frames count mismatch",
+                idx
+            );
             for (f1, f2) in p1.frames.iter().zip(p2.frames.iter()) {
                 assert_eq!(f1.flow_id, f2.flow_id);
                 assert_eq!(f1.rect, f2.rect);
@@ -2186,7 +2246,10 @@ mod tests {
         let pages = eng.typeset_document_multi_flow(&doc);
         let elapsed = start.elapsed();
         assert!(!pages.is_empty(), "Must produce pages");
-        assert!(elapsed.as_millis() < 1500, "Multi-flow typesetting took too long: {:?}", elapsed);
+        assert!(
+            elapsed.as_millis() < 1500,
+            "Multi-flow typesetting took too long: {:?}",
+            elapsed
+        );
     }
 }
-

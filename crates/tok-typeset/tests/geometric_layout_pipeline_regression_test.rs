@@ -210,12 +210,12 @@ fn test_end_to_end_talmud_l_shape_commentary_expansion_in_engine() {
     let page1 = &pages[0];
 
     // Page 1 should contain an expansion frame
-    let has_expansion = page1
-        .frames
-        .iter()
-        .any(|f| f.flow_id.contains("expansion"));
+    let has_expansion = page1.frames.iter().any(|f| f.flow_id.contains("expansion"));
 
-    assert!(has_expansion, "Page 1 must contain dynamic commentary expansion frame");
+    assert!(
+        has_expansion,
+        "Page 1 must contain dynamic commentary expansion frame"
+    );
 
     // Strict non-overlap verification
     for (i, f1) in page1.frames.iter().enumerate() {

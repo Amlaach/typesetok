@@ -52,13 +52,12 @@ impl ColumnWidthDistribution {
                 }
 
                 // Check for non-positive or non-finite values
-                let all_positive = props[..n]
-                    .iter()
-                    .all(|&p| p.is_finite() && p > 0.0);
+                let all_positive = props[..n].iter().all(|&p| p.is_finite() && p > 0.0);
 
                 if !all_positive {
                     return Err(SolverError::InvalidExpression(
-                        "All column proportions must be finite, strictly positive numbers".to_string(),
+                        "All column proportions must be finite, strictly positive numbers"
+                            .to_string(),
                     ));
                 }
 
@@ -91,7 +90,8 @@ mod tests {
     fn test_equal_distribution_three_columns() {
         let mut solver = GeometricConstraintSolver::new();
         let page_model = PageConstraintModel::new();
-        let config = PageGeometryConfig::new(600.0, 800.0, 30.0, 30.0, 20.0, 20.0, SpreadSide::Recto);
+        let config =
+            PageGeometryConfig::new(600.0, 800.0, 30.0, 30.0, 20.0, 20.0, SpreadSide::Recto);
         page_model.apply(&mut solver, &config).unwrap();
 
         let flows = vec![FlowId::new("c1"), FlowId::new("c2"), FlowId::new("c3")];
@@ -103,7 +103,9 @@ mod tests {
         ];
 
         let gutter = 10.0;
-        model.apply(&mut solver, &page_model, gutter, &specs).unwrap();
+        model
+            .apply(&mut solver, &page_model, gutter, &specs)
+            .unwrap();
 
         ColumnWidthDistribution::Equal
             .apply(&mut solver, &model.columns, ConstraintStrength::Required)
@@ -122,10 +124,15 @@ mod tests {
     fn test_proportional_distribution_talmud_ratios() {
         let mut solver = GeometricConstraintSolver::new();
         let page_model = PageConstraintModel::new();
-        let config = PageGeometryConfig::new(500.0, 700.0, 25.0, 25.0, 25.0, 25.0, SpreadSide::Recto);
+        let config =
+            PageGeometryConfig::new(500.0, 700.0, 25.0, 25.0, 25.0, 25.0, SpreadSide::Recto);
         page_model.apply(&mut solver, &config).unwrap();
 
-        let flows = vec![FlowId::new("rashi"), FlowId::new("main"), FlowId::new("tosafot")];
+        let flows = vec![
+            FlowId::new("rashi"),
+            FlowId::new("main"),
+            FlowId::new("tosafot"),
+        ];
         let model = MultiColumnConstraintModel::new(&flows);
         let specs = vec![
             ColumnSpec::new(FlowId::new("rashi")),
@@ -134,7 +141,9 @@ mod tests {
         ];
 
         let gutter = 12.0;
-        model.apply(&mut solver, &page_model, gutter, &specs).unwrap();
+        model
+            .apply(&mut solver, &page_model, gutter, &specs)
+            .unwrap();
 
         // 28% Rashi, 40% Main, 32% Tosafot -> ratios 0.28, 0.40, 0.32
         let ratios = vec![0.28, 0.40, 0.32];

@@ -67,14 +67,34 @@ impl FootnoteBandVariables {
 
         if config.target_height_pt <= 0.0 {
             // Inactive footnote: zero height, positioned at bottom
-            solver.add_eq(self.rect.height.to_expr(), LinearExpression::constant(0.0), ConstraintStrength::Required)?;
-            solver.add_eq(self.rect.width.to_expr(), content.width.to_expr(), ConstraintStrength::Required)?;
-            solver.add_eq(self.rect.x.to_expr(), content.x.to_expr(), ConstraintStrength::Required)?;
-            solver.add_eq(self.rect.bottom_expr(), content.bottom_expr(), ConstraintStrength::Required)?;
+            solver.add_eq(
+                self.rect.height.to_expr(),
+                LinearExpression::constant(0.0),
+                ConstraintStrength::Required,
+            )?;
+            solver.add_eq(
+                self.rect.width.to_expr(),
+                content.width.to_expr(),
+                ConstraintStrength::Required,
+            )?;
+            solver.add_eq(
+                self.rect.x.to_expr(),
+                content.x.to_expr(),
+                ConstraintStrength::Required,
+            )?;
+            solver.add_eq(
+                self.rect.bottom_expr(),
+                content.bottom_expr(),
+                ConstraintStrength::Required,
+            )?;
 
             // Columns use full content height
             for col in columns {
-                solver.add_eq(col.rect.bottom_expr(), content.bottom_expr(), ConstraintStrength::Required)?;
+                solver.add_eq(
+                    col.rect.bottom_expr(),
+                    content.bottom_expr(),
+                    ConstraintStrength::Required,
+                )?;
             }
             return Ok(());
         }
@@ -87,11 +107,23 @@ impl FootnoteBandVariables {
         )?;
 
         // 1. Horizontal span
-        solver.add_eq(self.rect.x.to_expr(), content.x.to_expr(), ConstraintStrength::Required)?;
-        solver.add_eq(self.rect.width.to_expr(), content.width.to_expr(), ConstraintStrength::Required)?;
+        solver.add_eq(
+            self.rect.x.to_expr(),
+            content.x.to_expr(),
+            ConstraintStrength::Required,
+        )?;
+        solver.add_eq(
+            self.rect.width.to_expr(),
+            content.width.to_expr(),
+            ConstraintStrength::Required,
+        )?;
 
         // 2. Anchored to bottom: fn.bottom == content.bottom
-        solver.add_eq(self.rect.bottom_expr(), content.bottom_expr(), ConstraintStrength::Required)?;
+        solver.add_eq(
+            self.rect.bottom_expr(),
+            content.bottom_expr(),
+            ConstraintStrength::Required,
+        )?;
 
         // 3. Height constraints
         solver.add_non_negative(self.rect.height)?;
@@ -103,13 +135,21 @@ impl FootnoteBandVariables {
 
         // Maximum height constraint: fn.height <= max_ratio * content.height
         let max_h_expr = LinearExpression::term(content.height, config.max_height_ratio as f64);
-        solver.add_le(self.rect.height.to_expr(), max_h_expr, ConstraintStrength::Required)?;
+        solver.add_le(
+            self.rect.height.to_expr(),
+            max_h_expr,
+            ConstraintStrength::Required,
+        )?;
 
         // 4. Separation from columns above:
         // For each column above: col.bottom == fn.y - gutter
         let col_bottom_target = self.rect.y.to_expr().minus(&self.gutter.to_expr());
         for col in columns {
-            solver.add_eq(col.rect.bottom_expr(), col_bottom_target.clone(), ConstraintStrength::Required)?;
+            solver.add_eq(
+                col.rect.bottom_expr(),
+                col_bottom_target.clone(),
+                ConstraintStrength::Required,
+            )?;
         }
 
         Ok(())
@@ -134,22 +174,43 @@ mod tests {
         let mut solver = GeometricConstraintSolver::new();
         let page_model = PageConstraintModel::new();
         // Page 500 x 800, margins 50 -> content 400 x 700 (y from 50 to 750)
-        let config = PageGeometryConfig::new(500.0, 800.0, 50.0, 50.0, 50.0, 50.0, SpreadSide::Recto);
+        let config =
+            PageGeometryConfig::new(500.0, 800.0, 50.0, 50.0, 50.0, 50.0, SpreadSide::Recto);
         page_model.apply(&mut solver, &config).unwrap();
 
         let flows = vec![FlowId::new("main")];
         let col_model = MultiColumnConstraintModel::new(&flows);
-        let _specs = vec![ColumnSpec::new(FlowId::new("main"))];
+        let _specs = [ColumnSpec::new(FlowId::new("main"))];
 
         let fn_band = FootnoteBandVariables::new(FlowId::new("footnotes"));
         let fn_config = FootnoteBandConfig::new(120.0, 10.0);
 
         // First apply column frame boundaries without forcing col.height == content.height
-        solver.add_eq(col_model.columns[0].rect.x.to_expr(), page_model.content_rect.x.to_expr(), ConstraintStrength::Required).unwrap();
-        solver.add_eq(col_model.columns[0].rect.y.to_expr(), page_model.content_rect.y.to_expr(), ConstraintStrength::Required).unwrap();
-        solver.add_eq(col_model.columns[0].rect.width.to_expr(), page_model.content_rect.width.to_expr(), ConstraintStrength::Required).unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.x.to_expr(),
+                page_model.content_rect.x.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.y.to_expr(),
+                page_model.content_rect.y.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.width.to_expr(),
+                page_model.content_rect.width.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
 
-        fn_band.apply(&mut solver, &page_model, &col_model.columns, &fn_config).unwrap();
+        fn_band
+            .apply(&mut solver, &page_model, &col_model.columns, &fn_config)
+            .unwrap();
 
         let fn_rect = fn_band.get_rect(&solver);
         let col_rect = solver.get_rect(col_model.columns[0].rect);

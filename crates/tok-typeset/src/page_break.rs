@@ -106,7 +106,11 @@ pub fn compute_badness(accumulated_height: f32, target_height: f32) -> f32 {
 }
 
 /// Combined cost of taking a page break at a given height and opportunity.
-pub fn score_page_break(accumulated_height: f32, target_height: f32, opportunity: &BreakOpportunity) -> f32 {
+pub fn score_page_break(
+    accumulated_height: f32,
+    target_height: f32,
+    opportunity: &BreakOpportunity,
+) -> f32 {
     let badness = compute_badness(accumulated_height, target_height);
     let penalty = opportunity.calculate_penalty();
     badness + penalty
@@ -135,7 +139,7 @@ impl PaginationLineInput {
     pub fn to_opportunity(&self, margin_after: f32) -> BreakOpportunity {
         BreakOpportunity {
             global_line_idx: 0,
-            paragraph_id: self.paragraph_id.clone(),
+            paragraph_id: self.paragraph_id,
             line_in_paragraph: self.line_in_paragraph,
             total_lines_in_paragraph: self.total_lines_in_paragraph,
             keep_with_next: self.keep_with_next,
@@ -316,16 +320,22 @@ impl GlobalPageBreaker {
         let clean_best = window
             .iter()
             .filter(|c| c.penalty < PageBreakPenalty::ORPHAN - 1.0)
-            .min_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
+            .min_by(|a, b| {
+                a.score
+                    .partial_cmp(&b.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
 
         if let Some(best) = clean_best {
             return (best.count, best.height);
         }
 
         // Second attempt: choose lowest overall score in the window
-        let best_in_window = window
-            .iter()
-            .min_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
+        let best_in_window = window.iter().min_by(|a, b| {
+            a.score
+                .partial_cmp(&b.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         if let Some(best) = best_in_window {
             return (best.count, best.height);

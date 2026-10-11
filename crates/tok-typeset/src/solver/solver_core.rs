@@ -254,13 +254,23 @@ mod tests {
 
         // 10 <= x <= 20
         solver
-            .add_ge(x.to_expr(), LinearExpression::constant(10.0), ConstraintStrength::Required)
+            .add_ge(
+                x.to_expr(),
+                LinearExpression::constant(10.0),
+                ConstraintStrength::Required,
+            )
             .unwrap();
         solver
-            .add_le(x.to_expr(), LinearExpression::constant(20.0), ConstraintStrength::Required)
+            .add_le(
+                x.to_expr(),
+                LinearExpression::constant(20.0),
+                ConstraintStrength::Required,
+            )
             .unwrap();
 
-        solver.add_edit_variable(x, ConstraintStrength::Strong).unwrap();
+        solver
+            .add_edit_variable(x, ConstraintStrength::Strong)
+            .unwrap();
 
         // Suggest below minimum
         solver.suggest_value(x, 5.0).unwrap();
@@ -282,12 +292,20 @@ mod tests {
 
         // Weak wants x = 100
         solver
-            .add_eq(x.to_expr(), LinearExpression::constant(100.0), ConstraintStrength::Weak)
+            .add_eq(
+                x.to_expr(),
+                LinearExpression::constant(100.0),
+                ConstraintStrength::Weak,
+            )
             .unwrap();
 
         // Strong wants x = 250
         solver
-            .add_eq(x.to_expr(), LinearExpression::constant(250.0), ConstraintStrength::Strong)
+            .add_eq(
+                x.to_expr(),
+                LinearExpression::constant(250.0),
+                ConstraintStrength::Strong,
+            )
             .unwrap();
 
         // Strong must dominate Weak
@@ -300,7 +318,11 @@ mod tests {
         let x = ConstraintVariable::new();
 
         solver
-            .add_eq(x.to_expr(), LinearExpression::constant(50.0), ConstraintStrength::Required)
+            .add_eq(
+                x.to_expr(),
+                LinearExpression::constant(50.0),
+                ConstraintStrength::Required,
+            )
             .unwrap();
 
         // Contradictory required constraint: x == 80
@@ -323,7 +345,11 @@ mod tests {
         let x = ConstraintVariable::new();
 
         solver
-            .add_ge(x.to_expr(), LinearExpression::constant(100.0), ConstraintStrength::Required)
+            .add_ge(
+                x.to_expr(),
+                LinearExpression::constant(100.0),
+                ConstraintStrength::Required,
+            )
             .unwrap();
 
         // Contradiction: x <= 50 while x >= 100
@@ -346,16 +372,32 @@ mod tests {
         let rect = RectVariables::new();
 
         solver
-            .add_eq(rect.x.to_expr(), LinearExpression::constant(40.0), ConstraintStrength::Required)
+            .add_eq(
+                rect.x.to_expr(),
+                LinearExpression::constant(40.0),
+                ConstraintStrength::Required,
+            )
             .unwrap();
         solver
-            .add_eq(rect.y.to_expr(), LinearExpression::constant(50.0), ConstraintStrength::Required)
+            .add_eq(
+                rect.y.to_expr(),
+                LinearExpression::constant(50.0),
+                ConstraintStrength::Required,
+            )
             .unwrap();
         solver
-            .add_eq(rect.width.to_expr(), LinearExpression::constant(200.0), ConstraintStrength::Required)
+            .add_eq(
+                rect.width.to_expr(),
+                LinearExpression::constant(200.0),
+                ConstraintStrength::Required,
+            )
             .unwrap();
         solver
-            .add_eq(rect.height.to_expr(), LinearExpression::constant(300.0), ConstraintStrength::Required)
+            .add_eq(
+                rect.height.to_expr(),
+                LinearExpression::constant(300.0),
+                ConstraintStrength::Required,
+            )
             .unwrap();
 
         let solved = solver.get_rect(rect);

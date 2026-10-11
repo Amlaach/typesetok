@@ -3,9 +3,8 @@
 use tok_core::FlowId;
 use tok_typeset::multi_flow::SpreadSide;
 use tok_typeset::solver::{
-    ColumnSpec, ColumnWidthDistribution, ConstraintStrength,
-    GeometricConstraintSolver, MultiColumnConstraintModel, PageConstraintModel,
-    PageGeometryConfig, SolvedColumnAllocation,
+    ColumnSpec, ColumnWidthDistribution, ConstraintStrength, GeometricConstraintSolver,
+    MultiColumnConstraintModel, PageConstraintModel, PageGeometryConfig, SolvedColumnAllocation,
 };
 
 /// Common standard book and document page sizes in points (72 pt / inch).
@@ -72,12 +71,26 @@ fn verify_column_geometry(
     assert!(n > 0);
 
     // 1. Overall bounds & alignment
-    assert!((allocs[0].rect.x - content_x).abs() < 1e-3, "First column left edge mismatch");
-    assert!((allocs[n - 1].rect.right() - (content_x + content_w)).abs() < 1e-3, "Last column right edge mismatch");
+    assert!(
+        (allocs[0].rect.x - content_x).abs() < 1e-3,
+        "First column left edge mismatch"
+    );
+    assert!(
+        (allocs[n - 1].rect.right() - (content_x + content_w)).abs() < 1e-3,
+        "Last column right edge mismatch"
+    );
 
     for (i, a) in allocs.iter().enumerate() {
-        assert!((a.rect.y - content_y).abs() < 1e-3, "Column {} top alignment mismatch", i);
-        assert!((a.rect.height - content_h).abs() < 1e-3, "Column {} height mismatch", i);
+        assert!(
+            (a.rect.y - content_y).abs() < 1e-3,
+            "Column {} top alignment mismatch",
+            i
+        );
+        assert!(
+            (a.rect.height - content_h).abs() < 1e-3,
+            "Column {} height mismatch",
+            i
+        );
         assert!(a.rect.width > 0.0, "Column {} width must be positive", i);
     }
 
@@ -95,7 +108,12 @@ fn verify_column_geometry(
             actual_gap
         );
         // Non-overlap condition
-        assert!(left.right() <= right.x + 1e-4, "Columns {} and {} overlap!", i, i + 1);
+        assert!(
+            left.right() <= right.x + 1e-4,
+            "Columns {} and {} overlap!",
+            i,
+            i + 1
+        );
     }
 
     // 3. Width conservation
@@ -142,7 +160,11 @@ fn test_multi_page_sizes_equal_columns() {
                     .unwrap();
 
                 ColumnWidthDistribution::Equal
-                    .apply(&mut solver, &col_model.columns, ConstraintStrength::Required)
+                    .apply(
+                        &mut solver,
+                        &col_model.columns,
+                        ConstraintStrength::Required,
+                    )
                     .unwrap();
 
                 let allocs = col_model.get_allocations(&solver);
@@ -188,7 +210,11 @@ fn test_multi_page_sizes_talmud_and_mikraot_proportions() {
                 page_model.apply(&mut solver, &config).unwrap();
                 let content = page_model.get_content_rect(&solver);
 
-                let flows = vec![FlowId::new("rashi"), FlowId::new("main"), FlowId::new("tosafot")];
+                let flows = vec![
+                    FlowId::new("rashi"),
+                    FlowId::new("main"),
+                    FlowId::new("tosafot"),
+                ];
                 let col_model = MultiColumnConstraintModel::new(&flows);
                 let specs = vec![
                     ColumnSpec::new(FlowId::new("rashi")),
@@ -197,15 +223,28 @@ fn test_multi_page_sizes_talmud_and_mikraot_proportions() {
                 ];
 
                 let gutter = 12.0;
-                col_model.apply(&mut solver, &page_model, gutter, &specs).unwrap();
+                col_model
+                    .apply(&mut solver, &page_model, gutter, &specs)
+                    .unwrap();
 
                 let ratios = vec![0.28, 0.40, 0.32];
                 ColumnWidthDistribution::Proportional(ratios)
-                    .apply(&mut solver, &col_model.columns, ConstraintStrength::Required)
+                    .apply(
+                        &mut solver,
+                        &col_model.columns,
+                        ConstraintStrength::Required,
+                    )
                     .unwrap();
 
                 let allocs = col_model.get_allocations(&solver);
-                verify_column_geometry(&allocs, content.x, content.y, content.width, content.height, gutter);
+                verify_column_geometry(
+                    &allocs,
+                    content.x,
+                    content.y,
+                    content.width,
+                    content.height,
+                    gutter,
+                );
 
                 let avail_w = content.width - 2.0 * gutter;
                 assert!((allocs[0].rect.width - avail_w * 0.28).abs() < 1e-2);
@@ -240,15 +279,28 @@ fn test_multi_page_sizes_talmud_and_mikraot_proportions() {
                 let specs: Vec<_> = flows.iter().map(|f| ColumnSpec::new(f.clone())).collect();
 
                 let gutter = 8.0;
-                col_model.apply(&mut solver, &page_model, gutter, &specs).unwrap();
+                col_model
+                    .apply(&mut solver, &page_model, gutter, &specs)
+                    .unwrap();
 
                 let ratios = vec![0.36, 0.24, 0.22, 0.18];
                 ColumnWidthDistribution::Proportional(ratios)
-                    .apply(&mut solver, &col_model.columns, ConstraintStrength::Required)
+                    .apply(
+                        &mut solver,
+                        &col_model.columns,
+                        ConstraintStrength::Required,
+                    )
                     .unwrap();
 
                 let allocs = col_model.get_allocations(&solver);
-                verify_column_geometry(&allocs, content.x, content.y, content.width, content.height, gutter);
+                verify_column_geometry(
+                    &allocs,
+                    content.x,
+                    content.y,
+                    content.width,
+                    content.height,
+                    gutter,
+                );
             }
         }
     }
@@ -272,5 +324,8 @@ fn test_overconstrained_layout_detection() {
     ];
 
     let result = col_model.apply(&mut solver, &page_model, 10.0, &specs);
-    assert!(result.is_err(), "Overconstrained columns must fail constraint satisfaction");
+    assert!(
+        result.is_err(),
+        "Overconstrained columns must fail constraint satisfaction"
+    );
 }

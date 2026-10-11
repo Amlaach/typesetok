@@ -285,7 +285,12 @@ fn handle_render_html(input: &str, output: &str) -> Result<(), Box<dyn std::erro
 
     let (page_w_mm, page_h_mm) = pages
         .first()
-        .map(|p| (p.dimensions.width * 25.4 / 72.0, p.dimensions.height * 25.4 / 72.0))
+        .map(|p| {
+            (
+                p.dimensions.width * 25.4 / 72.0,
+                p.dimensions.height * 25.4 / 72.0,
+            )
+        })
         .unwrap_or((210.0, 297.0));
     let html = HtmlProjectionCompiler::compile_to_html(&pages, page_w_mm, page_h_mm);
     if let Some(parent) = Path::new(output).parent() {

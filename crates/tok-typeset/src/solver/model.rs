@@ -327,9 +327,21 @@ mod tests {
 
     #[test]
     fn test_constraint_strength_mapping() {
-        assert_eq!(ConstraintStrength::Required.to_cassowary(), cassowary::strength::REQUIRED);
-        assert_eq!(ConstraintStrength::Strong.to_cassowary(), cassowary::strength::STRONG);
-        assert_eq!(ConstraintStrength::Medium.to_cassowary(), cassowary::strength::MEDIUM);
-        assert_eq!(ConstraintStrength::Weak.to_cassowary(), cassowary::strength::WEAK);
+        assert_eq!(
+            ConstraintStrength::Required.to_cassowary(),
+            cassowary::strength::REQUIRED
+        );
+        assert_eq!(
+            ConstraintStrength::Strong.to_cassowary(),
+            cassowary::strength::STRONG
+        );
+        assert_eq!(
+            ConstraintStrength::Medium.to_cassowary(),
+            cassowary::strength::MEDIUM
+        );
+        assert_eq!(
+            ConstraintStrength::Weak.to_cassowary(),
+            cassowary::strength::WEAK
+        );
     }
 }

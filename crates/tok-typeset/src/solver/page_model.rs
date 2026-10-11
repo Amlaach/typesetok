@@ -161,7 +161,10 @@ impl PageConstraintModel {
         )?;
 
         // 5. Content size: content.width == page.width - margin_left - margin_right
-        let total_margin_x = self.margin_left.to_expr().plus(&self.margin_right.to_expr());
+        let total_margin_x = self
+            .margin_left
+            .to_expr()
+            .plus(&self.margin_right.to_expr());
         solver.add_eq(
             self.content_rect.width.to_expr(),
             self.page_rect.width.to_expr().minus(&total_margin_x),
@@ -169,7 +172,10 @@ impl PageConstraintModel {
         )?;
 
         // 6. Content height: content.height == page.height - margin_top - margin_bottom
-        let total_margin_y = self.margin_top.to_expr().plus(&self.margin_bottom.to_expr());
+        let total_margin_y = self
+            .margin_top
+            .to_expr()
+            .plus(&self.margin_bottom.to_expr());
         solver.add_eq(
             self.content_rect.height.to_expr(),
             self.page_rect.height.to_expr().minus(&total_margin_y),
@@ -210,15 +216,8 @@ mod tests {
         let page_model = PageConstraintModel::new();
 
         // Recto: Inner (spine) = 40.0 on LEFT, Outer = 20.0 on RIGHT
-        let config_recto = PageGeometryConfig::new(
-            595.0,
-            842.0,
-            40.0,
-            20.0,
-            30.0,
-            30.0,
-            SpreadSide::Recto,
-        );
+        let config_recto =
+            PageGeometryConfig::new(595.0, 842.0, 40.0, 20.0, 30.0, 30.0, SpreadSide::Recto);
 
         page_model.apply(&mut solver, &config_recto).unwrap();
 
@@ -231,15 +230,8 @@ mod tests {
 
         // Verso: Outer = 20.0 on LEFT, Inner (spine) = 40.0 on RIGHT
         let mut solver_verso = GeometricConstraintSolver::new();
-        let config_verso = PageGeometryConfig::new(
-            595.0,
-            842.0,
-            40.0,
-            20.0,
-            30.0,
-            30.0,
-            SpreadSide::Verso,
-        );
+        let config_verso =
+            PageGeometryConfig::new(595.0, 842.0, 40.0, 20.0, 30.0, 30.0, SpreadSide::Verso);
 
         page_model.apply(&mut solver_verso, &config_verso).unwrap();
         let content_verso = page_model.get_content_rect(&solver_verso);
@@ -252,15 +244,8 @@ mod tests {
         let mut solver = GeometricConstraintSolver::new();
         let page_model = PageConstraintModel::new();
 
-        let invalid_config = PageGeometryConfig::new(
-            100.0,
-            100.0,
-            60.0,
-            60.0,
-            10.0,
-            10.0,
-            SpreadSide::Recto,
-        );
+        let invalid_config =
+            PageGeometryConfig::new(100.0, 100.0, 60.0, 60.0, 10.0, 10.0, SpreadSide::Recto);
 
         let res = page_model.apply(&mut solver, &invalid_config);
         assert!(res.is_err());

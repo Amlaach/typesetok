@@ -109,14 +109,38 @@ impl MultiColumnConstraintModel {
         // 1. Single column case: spans full content width and height
         if n == 1 {
             let col = &self.columns[0];
-            solver.add_eq(col.rect.x.to_expr(), content.x.to_expr(), ConstraintStrength::Required)?;
-            solver.add_eq(col.rect.y.to_expr(), content.y.to_expr(), ConstraintStrength::Required)?;
-            solver.add_eq(col.rect.width.to_expr(), content.width.to_expr(), ConstraintStrength::Required)?;
-            solver.add_eq(col.rect.height.to_expr(), content.height.to_expr(), ConstraintStrength::Required)?;
+            solver.add_eq(
+                col.rect.x.to_expr(),
+                content.x.to_expr(),
+                ConstraintStrength::Required,
+            )?;
+            solver.add_eq(
+                col.rect.y.to_expr(),
+                content.y.to_expr(),
+                ConstraintStrength::Required,
+            )?;
+            solver.add_eq(
+                col.rect.width.to_expr(),
+                content.width.to_expr(),
+                ConstraintStrength::Required,
+            )?;
+            solver.add_eq(
+                col.rect.height.to_expr(),
+                content.height.to_expr(),
+                ConstraintStrength::Required,
+            )?;
 
             if let Some(spec) = column_specs.first() {
-                solver.add_min_value(col.rect.width, spec.min_width_pt as f64, ConstraintStrength::Required)?;
-                solver.add_max_value(col.rect.width, spec.max_width_pt as f64, ConstraintStrength::Required)?;
+                solver.add_min_value(
+                    col.rect.width,
+                    spec.min_width_pt as f64,
+                    ConstraintStrength::Required,
+                )?;
+                solver.add_max_value(
+                    col.rect.width,
+                    spec.max_width_pt as f64,
+                    ConstraintStrength::Required,
+                )?;
             }
             return Ok(());
         }
@@ -167,10 +191,7 @@ impl MultiColumnConstraintModel {
             let left_col = &self.columns[i];
             let right_col = &self.columns[i + 1];
 
-            let required_next_x = left_col
-                .rect
-                .right_expr()
-                .plus(&self.gutter.to_expr());
+            let required_next_x = left_col.rect.right_expr().plus(&self.gutter.to_expr());
 
             solver.add_eq(
                 right_col.rect.x.to_expr(),
@@ -213,15 +234,8 @@ mod tests {
 
     fn page_setup(solver: &mut GeometricConstraintSolver) -> PageConstraintModel {
         let page_model = PageConstraintModel::new();
-        let config = PageGeometryConfig::new(
-            595.0,
-            842.0,
-            30.0,
-            30.0,
-            40.0,
-            40.0,
-            SpreadSide::Recto,
-        );
+        let config =
+            PageGeometryConfig::new(595.0, 842.0, 30.0, 30.0, 40.0, 40.0, SpreadSide::Recto);
         page_model.apply(solver, &config).unwrap();
         page_model
     }
@@ -268,7 +282,9 @@ mod tests {
             .unwrap();
 
         let gutter = 15.0;
-        model.apply(&mut solver, &page_model, gutter, &specs).unwrap();
+        model
+            .apply(&mut solver, &page_model, gutter, &specs)
+            .unwrap();
 
         let allocs = model.get_allocations(&solver);
         assert_eq!(allocs.len(), 2);

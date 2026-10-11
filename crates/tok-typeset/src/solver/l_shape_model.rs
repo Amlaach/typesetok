@@ -22,11 +22,7 @@ pub struct LShapeConfig {
 impl LShapeConfig {
     pub const DEFAULT_MIN_GAP_PT: f32 = 30.0;
 
-    pub fn new(
-        primary_flow_id: FlowId,
-        primary_target_height_pt: f32,
-        gutter_pt: f32,
-    ) -> Self {
+    pub fn new(primary_flow_id: FlowId, primary_target_height_pt: f32, gutter_pt: f32) -> Self {
         Self {
             primary_flow_id,
             primary_target_height_pt,
@@ -95,10 +91,7 @@ impl LShapeExpansionVariables {
         )?;
 
         // 3. Vertical position: exp.y == prim.bottom + gutter
-        let exp_top_target = primary_col
-            .rect
-            .bottom_expr()
-            .plus(&self.gutter.to_expr());
+        let exp_top_target = primary_col.rect.bottom_expr().plus(&self.gutter.to_expr());
         solver.add_eq(
             self.rect.y.to_expr(),
             exp_top_target,
@@ -136,33 +129,89 @@ mod tests {
         let mut solver = GeometricConstraintSolver::new();
         let page_model = PageConstraintModel::new();
         // Page 500 x 800, margins 50 -> content 400 x 700 (y: 50 to 750)
-        let config = PageGeometryConfig::new(500.0, 800.0, 50.0, 50.0, 50.0, 50.0, SpreadSide::Recto);
+        let config =
+            PageGeometryConfig::new(500.0, 800.0, 50.0, 50.0, 50.0, 50.0, SpreadSide::Recto);
         page_model.apply(&mut solver, &config).unwrap();
 
-        let flows = vec![FlowId::new("rashi"), FlowId::new("main"), FlowId::new("tosafot")];
+        let flows = vec![
+            FlowId::new("rashi"),
+            FlowId::new("main"),
+            FlowId::new("tosafot"),
+        ];
         let col_model = MultiColumnConstraintModel::new(&flows);
         let _specs: Vec<_> = flows.iter().map(|f| ColumnSpec::new(f.clone())).collect();
 
         let gutter = 12.0;
 
         // Apply basic column placement without forcing all heights to content.height
-        solver.add_eq(col_model.columns[0].rect.x.to_expr(), page_model.content_rect.x.to_expr(), ConstraintStrength::Required).unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.x.to_expr(),
+                page_model.content_rect.x.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
         for col in &col_model.columns {
-            solver.add_eq(col.rect.y.to_expr(), page_model.content_rect.y.to_expr(), ConstraintStrength::Required).unwrap();
+            solver
+                .add_eq(
+                    col.rect.y.to_expr(),
+                    page_model.content_rect.y.to_expr(),
+                    ConstraintStrength::Required,
+                )
+                .unwrap();
         }
         for i in 0..2 {
-            let next_x = col_model.columns[i].rect.right_expr().plus(&LinearExpression::constant(gutter as f64));
-            solver.add_eq(col_model.columns[i + 1].rect.x.to_expr(), next_x, ConstraintStrength::Required).unwrap();
+            let next_x = col_model.columns[i]
+                .rect
+                .right_expr()
+                .plus(&LinearExpression::constant(gutter as f64));
+            solver
+                .add_eq(
+                    col_model.columns[i + 1].rect.x.to_expr(),
+                    next_x,
+                    ConstraintStrength::Required,
+                )
+                .unwrap();
         }
-        solver.add_eq(col_model.columns[2].rect.right_expr(), page_model.content_rect.right_expr(), ConstraintStrength::Required).unwrap();
+        solver
+            .add_eq(
+                col_model.columns[2].rect.right_expr(),
+                page_model.content_rect.right_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
 
         // Equal column widths
-        solver.add_eq(col_model.columns[0].rect.width.to_expr(), col_model.columns[1].rect.width.to_expr(), ConstraintStrength::Required).unwrap();
-        solver.add_eq(col_model.columns[1].rect.width.to_expr(), col_model.columns[2].rect.width.to_expr(), ConstraintStrength::Required).unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.width.to_expr(),
+                col_model.columns[1].rect.width.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        solver
+            .add_eq(
+                col_model.columns[1].rect.width.to_expr(),
+                col_model.columns[2].rect.width.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
 
         // Side commentaries reach content bottom
-        solver.add_eq(col_model.columns[0].rect.bottom_expr(), page_model.content_rect.bottom_expr(), ConstraintStrength::Required).unwrap();
-        solver.add_eq(col_model.columns[2].rect.bottom_expr(), page_model.content_rect.bottom_expr(), ConstraintStrength::Required).unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.bottom_expr(),
+                page_model.content_rect.bottom_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        solver
+            .add_eq(
+                col_model.columns[2].rect.bottom_expr(),
+                page_model.content_rect.bottom_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
 
         // Gemara (main, index 1) finishes at 300 pt height (out of 700 pt)
         let l_shape = LShapeExpansionVariables::new(FlowId::new("rashi_expansion"));

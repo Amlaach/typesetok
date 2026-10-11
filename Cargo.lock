@@ -874,7 +874,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tok-cli"
-version = "0.9.8"
+version = "0.10.6"
 dependencies = [
  "env_logger",
  "log",
@@ -889,7 +889,7 @@ dependencies = [
 
 [[package]]
 name = "tok-core"
-version = "0.9.8"
+version = "0.10.6"
 dependencies = [
  "log",
  "ropey",
@@ -901,7 +901,7 @@ dependencies = [
 
 [[package]]
 name = "tok-ipc"
-version = "0.9.8"
+version = "0.10.6"
 dependencies = [
  "log",
  "serde",
@@ -912,7 +912,7 @@ dependencies = [
 
 [[package]]
 name = "tok-pdf"
-version = "0.9.8"
+version = "0.10.6"
 dependencies = [
  "log",
  "miniz_oxide",
@@ -927,7 +927,7 @@ dependencies = [
 
 [[package]]
 name = "tok-plugin-host"
-version = "0.9.8"
+version = "0.10.6"
 dependencies = [
  "log",
  "serde",
@@ -937,7 +937,7 @@ dependencies = [
 
 [[package]]
 name = "tok-storage"
-version = "0.9.8"
+version = "0.10.6"
 dependencies = [
  "log",
  "redb",
@@ -952,7 +952,7 @@ dependencies = [
 
 [[package]]
 name = "tok-typeset"
-version = "0.9.8"
+version = "0.10.6"
 dependencies = [
  "cassowary",
  "log",
