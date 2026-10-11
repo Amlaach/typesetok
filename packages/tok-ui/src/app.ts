@@ -565,6 +565,13 @@ export class TypesetOkApp {
         return;
       }
 
+      // Ctrl+Q: Quit / Exit Application
+      if (!e.shiftKey && (code === 'KeyQ' || key === 'q' || key === '/' || key === 'ק')) {
+        e.preventDefault();
+        this.handleSystemAction('quit-app');
+        return;
+      }
+
       // Ctrl+N: New Document
       if (!e.shiftKey && (code === 'KeyN' || key === 'n' || key === 'מ')) {
         e.preventDefault();
@@ -1455,6 +1462,15 @@ export class TypesetOkApp {
         subtitle: 'סגירת המסמך הפעיל וחזרה למסך הפתיחה',
         shortcut: 'Ctrl+W',
         action: () => this.closeDocument()
+      },
+      {
+        id: 'cmd-quit-app',
+        icon: 'close',
+        category: t('cmdCatProjects'),
+        title: t('menuExit'),
+        subtitle: 'יציאה בטוחה מהתוכנה',
+        shortcut: 'Ctrl+Q',
+        action: () => this.handleSystemAction('quit-app')
       },
       {
         id: 'cmd-new-page',
