@@ -142,7 +142,7 @@ export function layoutToPageDescriptors(pages: PageLayoutBox[]): PageDescriptor[
         const fontStyle = `font-family: ${engineFont.fontFamily};` + (engineFont.fontWeight ? ` font-weight: ${engineFont.fontWeight};` : '');
         const paraAttr = line.paragraph_id ? ` data-para-id="${escapeHtml(String(line.paragraph_id))}"` : '';
 
-        return `<div class="tok-line-box tok-line" data-line-index="${line.line_index}"${paraAttr} data-baseline-y="${line.baseline_y}" data-line-height="${line.height}" data-line-width="${line.width}" style="position: absolute; top: ${topOffsetPt.toFixed(2)}pt; left: 0; right: 0; height: ${lineHPt.toFixed(2)}pt; line-height: ${lineHPt.toFixed(2)}pt; ${fontStyle} direction: ${line.is_rtl ? 'rtl' : 'ltr'}; white-space: nowrap !important; overflow: visible; contain: layout style;">${escapeHtml(line.text)}</div>`;
+        return `<div class="tok-line-box tok-line" data-line-index="${line.line_index}"${paraAttr} data-baseline-y="${line.baseline_y}" data-line-height="${line.height}" data-line-width="${line.width}" style="position: absolute; top: ${topOffsetPt.toFixed(2)}pt; left: 0; right: 0; height: ${lineHPt.toFixed(2)}pt; line-height: ${lineHPt.toFixed(2)}pt; ${fontStyle} direction: ${line.is_rtl ? 'rtl' : 'ltr'}; font-feature-settings: 'kern' 1, 'mark' 1, 'mkmk' 1; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; white-space: nowrap !important; overflow: visible; contain: layout style;">${escapeHtml(line.text)}</div>`;
       }).join('\n');
 
       const emptyNotice = (!frame.lines || frame.lines.length === 0)

@@ -441,8 +441,25 @@
     .tok-page-head strong { font-size: 12.5px; font-weight: 700; }
     .tok-talmud-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1.3fr 1fr; grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); column-gap: 10px; row-gap: 8px; }
     .tok-interactive-frame {
-      position: relative; overflow: hidden; cursor: text; text-align: justify; text-justify: inter-word;
+      position: relative; overflow: hidden; cursor: text; text-align: start;
       user-select: text; -webkit-user-select: text; border-radius: 1px;
+    }
+    .tok-frame-rust {
+      text-align: start !important;
+      text-justify: auto !important;
+    }
+    .tok-line-box, .tok-line {
+      white-space: nowrap !important;
+      overflow: visible !important;
+      display: block !important;
+      contain: layout style !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      box-sizing: border-box !important;
+      text-rendering: optimizeLegibility;
+      font-feature-settings: "kern" 1, "mark" 1, "mkmk" 1;
+      -webkit-font-smoothing: antialiased;
     }
     .tok-interactive-frame:hover { box-shadow: 0 0 0 1px var(--tok-accent-soft); }
     .tok-interactive-frame.tok-selected { outline: 1.5px solid var(--tok-selection-frame); outline-offset: 3px; overflow: visible; }
