@@ -132,11 +132,23 @@ fn convert_multi_flow_state_to_root(raw: RawMultiFlowState) -> DocumentRoot {
     }
 
     if section.flows.is_empty() {
-        section.flows.push(Flow::new(FlowId::main(), FlowType::Main));
+        section
+            .flows
+            .push(Flow::new(FlowId::main(), FlowType::Main));
     }
 
     root.sections.push(section);
     root
+}
+
+/// Builds the package manifest (title, author, document id) for a parsed document.
+fn manifest_for_root(root: &DocumentRoot) -> TokManifest {
+    TokManifest {
+        title: root.metadata.title.clone(),
+        author: root.metadata.author.clone(),
+        document_id: root.id.to_string(),
+        ..TokManifest::default()
+    }
 }
 
 fn parse_document_json(
@@ -144,21 +156,16 @@ fn parse_document_json(
 ) -> Result<(DocumentModel, TokManifest), Box<dyn std::error::Error>> {
     // 1. Direct DocumentRoot JSON
     if let Ok(root) = DocumentRoot::from_json(content) {
-        let mut manifest = TokManifest::default();
-        manifest.title = root.metadata.title.clone();
-        manifest.author = root.metadata.author.clone();
-        manifest.document_id = root.id.to_string();
+        let manifest = manifest_for_root(&root);
         return Ok((DocumentModel::new(root), manifest));
     }
 
     // 2. Migration pipeline (for older schemas)
     if let Ok(val) = serde_json::from_str::<serde_json::Value>(content) {
-        if let Ok(migrated) = tok_storage::migration::MigrationPipeline::migrate_document_json(val) {
+        if let Ok(migrated) = tok_storage::migration::MigrationPipeline::migrate_document_json(val)
+        {
             if let Ok(root) = serde_json::from_value::<DocumentRoot>(migrated) {
-                let mut manifest = TokManifest::default();
-                manifest.title = root.metadata.title.clone();
-                manifest.author = root.metadata.author.clone();
-                manifest.document_id = root.id.to_string();
+                let manifest = manifest_for_root(&root);
                 return Ok((DocumentModel::new(root), manifest));
             }
         }
@@ -167,10 +174,7 @@ fn parse_document_json(
     // 3. Raw MultiFlowDocumentState from UI
     if let Ok(raw_state) = serde_json::from_str::<RawMultiFlowState>(content) {
         let root = convert_multi_flow_state_to_root(raw_state);
-        let mut manifest = TokManifest::default();
-        manifest.title = root.metadata.title.clone();
-        manifest.author = root.metadata.author.clone();
-        manifest.document_id = root.id.to_string();
+        let manifest = manifest_for_root(&root);
         return Ok((DocumentModel::new(root), manifest));
     }
 
@@ -215,7 +219,11 @@ fn load_document_input(
                     return parse_document_json(&content);
                 }
             }
-            Err(format!("Failed to open package or document ({}): {}", input, tok_err).into())
+            Err(format!(
+                "Failed to open package or document ({}): {}",
+                input, tok_err
+            )
+            .into())
         }
     }
 }
