@@ -146,7 +146,7 @@ export function layoutToPageDescriptors(pages: PageLayoutBox[]): PageDescriptor[
           : (isPrimary ? 'var(--tok-font-hebrew-body)' : 'var(--tok-font-hebrew-rashi)');
         const paraAttr = line.paragraph_id ? ` data-para-id="${escapeHtml(String(line.paragraph_id))}"` : '';
 
-        return `<div class="tok-line-box" data-line-index="${line.line_index}"${paraAttr} data-baseline-y="${line.baseline_y}" style="position: absolute; top: ${lineTopPx.toFixed(1)}px; left: 0; right: 0; height: ${lineH.toFixed(1)}px; line-height: ${lineH.toFixed(1)}px; font-family: ${fontFam}; direction: ${line.is_rtl ? 'rtl' : 'ltr'}; text-align: justify; overflow: hidden; white-space: pre-wrap;">${escapeHtml(line.text)}</div>`;
+        return `<div class="tok-line-box tok-line" data-line-index="${line.line_index}"${paraAttr} data-baseline-y="${line.baseline_y}" style="position: absolute; top: ${lineTopPx.toFixed(1)}px; left: 0; right: 0; height: ${lineH.toFixed(1)}px; line-height: ${lineH.toFixed(1)}px; font-family: ${fontFam}; direction: ${line.is_rtl ? 'rtl' : 'ltr'}; white-space: nowrap !important; overflow: visible; contain: layout style;">${escapeHtml(line.text)}</div>`;
       }).join('\n');
 
       const emptyNotice = (!frame.lines || frame.lines.length === 0)
