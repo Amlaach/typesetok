@@ -125,7 +125,7 @@ pub fn create_realistic_talmud_document() -> DocumentRoot {
     }
     sec.flows.push(notes);
 
-    doc.sections.push(sec);
+    doc.sections = vec![sec];
     doc
 }
 
@@ -268,7 +268,7 @@ pub fn create_realistic_mikraot_gedolot_document() -> DocumentRoot {
     }
     sec.flows.push(ramban);
 
-    doc.sections.push(sec);
+    doc.sections = vec![sec];
     doc
 }
 
@@ -333,7 +333,7 @@ pub fn create_realistic_prose_document(num_chapters: usize) -> DocumentRoot {
         ));
     }
 
-    doc.sections.push(sec);
+    doc.sections = vec![sec];
     doc
 }
 
@@ -344,8 +344,8 @@ mod tests {
     #[test]
     fn test_create_realistic_talmud_document_structure() {
         let doc = create_realistic_talmud_document();
-        assert_eq!(doc.sections.len(), 2);
-        let sec = &doc.sections[1];
+        assert_eq!(doc.sections.len(), 1);
+        let sec = &doc.sections[0];
         assert_eq!(sec.flows.len(), 4);
         assert_eq!(sec.layout_kind.as_deref(), Some("tzurat_hadaf"));
 
@@ -363,7 +363,7 @@ mod tests {
     #[test]
     fn test_create_realistic_mikraot_gedolot_document_structure() {
         let doc = create_realistic_mikraot_gedolot_document();
-        let sec = &doc.sections[1];
+        let sec = &doc.sections[0];
         assert_eq!(sec.flows.len(), 4);
         assert_eq!(sec.layout_kind.as_deref(), Some("parallel_columns"));
         assert_eq!(sec.column_proportions, Some(vec![0.30, 0.20, 0.25, 0.25]));
