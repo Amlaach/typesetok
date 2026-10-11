@@ -12,10 +12,19 @@ pub enum AtomicOperation {
         char_offset: usize,
         text: String,
     },
+    InsertFormattedText {
+        node_id: NodeId,
+        char_offset: usize,
+        text: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        spans: Vec<crate::spans::TextSpan>,
+    },
     DeleteText {
         node_id: NodeId,
         char_offset: usize,
         deleted_text: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        deleted_spans: Vec<crate::spans::TextSpan>,
     },
     InsertParagraph {
         section_id: NodeId,
@@ -26,6 +35,46 @@ pub enum AtomicOperation {
         section_id: NodeId,
         flow_id: FlowId,
         paragraph: ParagraphNode,
+    },
+    FormatTextRange {
+        node_id: NodeId,
+        start: usize,
+        end: usize,
+        format: crate::styles::CharacterFormat,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        previous_spans: Vec<crate::spans::TextSpan>,
+    },
+    ReplaceSpansInRange {
+        node_id: NodeId,
+        start: usize,
+        end: usize,
+        spans: Vec<crate::spans::TextSpan>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        previous_spans: Vec<crate::spans::TextSpan>,
+    },
+    SetParagraphStyle {
+        node_id: NodeId,
+        new_style_id: String,
+        old_style_id: String,
+    },
+    SetParagraphPatches {
+        node_id: NodeId,
+        patches: Vec<crate::styles::StylePatch>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        previous_patches: Vec<crate::styles::StylePatch>,
+    },
+    SplitParagraph {
+        section_id: NodeId,
+        flow_id: FlowId,
+        node_id: NodeId,
+        split_char_offset: usize,
+        new_paragraph: ParagraphNode,
+    },
+    MergeParagraphs {
+        section_id: NodeId,
+        flow_id: FlowId,
+        first_node_id: NodeId,
+        merged_paragraph: ParagraphNode,
     },
 }
 
@@ -69,15 +118,29 @@ impl AtomicOperation {
                 node_id: *node_id,
                 char_offset: *char_offset,
                 deleted_text: text.clone(),
+                deleted_spans: Vec::new(),
+            },
+            AtomicOperation::InsertFormattedText {
+                node_id,
+                char_offset,
+                text,
+                spans,
+            } => AtomicOperation::DeleteText {
+                node_id: *node_id,
+                char_offset: *char_offset,
+                deleted_text: text.clone(),
+                deleted_spans: spans.clone(),
             },
             AtomicOperation::DeleteText {
                 node_id,
                 char_offset,
                 deleted_text,
-            } => AtomicOperation::InsertText {
+                deleted_spans,
+            } => AtomicOperation::InsertFormattedText {
                 node_id: *node_id,
                 char_offset: *char_offset,
                 text: deleted_text.clone(),
+                spans: deleted_spans.clone(),
             },
             AtomicOperation::InsertParagraph {
                 section_id,
@@ -96,6 +159,74 @@ impl AtomicOperation {
                 section_id: *section_id,
                 flow_id: flow_id.clone(),
                 paragraph: paragraph.clone(),
+            },
+            AtomicOperation::FormatTextRange {
+                node_id,
+                start,
+                end,
+                previous_spans,
+                ..
+            } => AtomicOperation::ReplaceSpansInRange {
+                node_id: *node_id,
+                start: *start,
+                end: *end,
+                spans: previous_spans.clone(),
+                previous_spans: Vec::new(),
+            },
+            AtomicOperation::ReplaceSpansInRange {
+                node_id,
+                start,
+                end,
+                spans,
+                previous_spans,
+            } => AtomicOperation::ReplaceSpansInRange {
+                node_id: *node_id,
+                start: *start,
+                end: *end,
+                spans: previous_spans.clone(),
+                previous_spans: spans.clone(),
+            },
+            AtomicOperation::SetParagraphStyle {
+                node_id,
+                new_style_id,
+                old_style_id,
+            } => AtomicOperation::SetParagraphStyle {
+                node_id: *node_id,
+                new_style_id: old_style_id.clone(),
+                old_style_id: new_style_id.clone(),
+            },
+            AtomicOperation::SetParagraphPatches {
+                node_id,
+                patches,
+                previous_patches,
+            } => AtomicOperation::SetParagraphPatches {
+                node_id: *node_id,
+                patches: previous_patches.clone(),
+                previous_patches: patches.clone(),
+            },
+            AtomicOperation::SplitParagraph {
+                section_id,
+                flow_id,
+                node_id,
+                new_paragraph,
+                ..
+            } => AtomicOperation::MergeParagraphs {
+                section_id: *section_id,
+                flow_id: flow_id.clone(),
+                first_node_id: *node_id,
+                merged_paragraph: new_paragraph.clone(),
+            },
+            AtomicOperation::MergeParagraphs {
+                section_id,
+                flow_id,
+                first_node_id,
+                merged_paragraph,
+            } => AtomicOperation::SplitParagraph {
+                section_id: *section_id,
+                flow_id: flow_id.clone(),
+                node_id: *first_node_id,
+                split_char_offset: 0,
+                new_paragraph: merged_paragraph.clone(),
             },
         }
     }
@@ -118,21 +249,47 @@ impl AtomicOperation {
                     .find_paragraph_mut(*node_id)
                     .ok_or_else(|| ModelError::NodeNotFound(node_id.to_string()))?;
                 let norm_text = HebrewNormalizer::normalize(text);
-                // Offsets past the end append (historical behaviour); the
-                // inverse records where the text really went.
-                let offset = (*char_offset).min(p.text.chars().count());
+                let total_chars = p.text.chars().count();
+                let offset = (*char_offset).min(total_chars);
                 let byte = char_to_byte(&p.text, offset);
                 p.text.insert_str(byte, &norm_text);
+                let ins_chars = norm_text.chars().count();
+                p.spans = crate::spans::insert_range(&p.spans, offset, ins_chars, &[], total_chars);
                 Ok(AtomicOperation::DeleteText {
                     node_id: *node_id,
                     char_offset: offset,
                     deleted_text: norm_text,
+                    deleted_spans: Vec::new(),
+                })
+            }
+            AtomicOperation::InsertFormattedText {
+                node_id,
+                char_offset,
+                text,
+                spans,
+            } => {
+                let p = doc
+                    .find_paragraph_mut(*node_id)
+                    .ok_or_else(|| ModelError::NodeNotFound(node_id.to_string()))?;
+                let norm_text = HebrewNormalizer::normalize(text);
+                let total_chars = p.text.chars().count();
+                let offset = (*char_offset).min(total_chars);
+                let byte = char_to_byte(&p.text, offset);
+                p.text.insert_str(byte, &norm_text);
+                let ins_chars = norm_text.chars().count();
+                p.spans = crate::spans::insert_range(&p.spans, offset, ins_chars, spans, total_chars);
+                Ok(AtomicOperation::DeleteText {
+                    node_id: *node_id,
+                    char_offset: offset,
+                    deleted_text: norm_text,
+                    deleted_spans: spans.clone(),
                 })
             }
             AtomicOperation::DeleteText {
                 node_id,
                 char_offset,
                 deleted_text,
+                ..
             } => {
                 let p = doc
                     .find_paragraph_mut(*node_id)
@@ -149,19 +306,20 @@ impl AtomicOperation {
                 let start = (*char_offset).min(total_len - del_len);
                 let start_byte = char_to_byte(&p.text, start);
                 let end_byte = start_byte + norm_deleted.len();
-                // Never delete text other than the text the operation names:
-                // otherwise undo would "restore" something that was never there.
                 if p.text.get(start_byte..end_byte) != Some(norm_deleted.as_str()) {
                     return Err(ModelError::InvalidTransaction(format!(
                         "text at offset {} of paragraph {} does not match the text to delete",
                         start, node_id
                     )));
                 }
+                let captured_spans = crate::spans::spans_in_range(&p.spans, start, start + del_len);
                 p.text.replace_range(start_byte..end_byte, "");
-                Ok(AtomicOperation::InsertText {
+                p.spans = crate::spans::remove_range(&p.spans, start, start + del_len, total_len);
+                Ok(AtomicOperation::InsertFormattedText {
                     node_id: *node_id,
                     char_offset: start,
                     text: norm_deleted,
+                    spans: captured_spans,
                 })
             }
             AtomicOperation::InsertParagraph {
@@ -194,13 +352,183 @@ impl AtomicOperation {
                     .iter()
                     .position(|p| p.id == paragraph.id)
                     .ok_or_else(|| ModelError::NodeNotFound(paragraph.id.to_string()))?;
-                // Undo must restore the paragraph as it was in the document,
-                // not the (possibly stale) copy carried by the operation.
                 let removed = flow.paragraphs.remove(pos);
                 Ok(AtomicOperation::InsertParagraph {
                     section_id: *section_id,
                     flow_id: flow_id.clone(),
                     paragraph: removed,
+                })
+            }
+            AtomicOperation::FormatTextRange {
+                node_id,
+                start,
+                end,
+                format,
+                ..
+            } => {
+                let p = doc
+                    .find_paragraph_mut(*node_id)
+                    .ok_or_else(|| ModelError::NodeNotFound(node_id.to_string()))?;
+                let total_chars = p.text.chars().count();
+                let s = (*start).min(total_chars);
+                let e = (*end).min(total_chars);
+                let prev_spans = crate::spans::spans_in_range(&p.spans, s, e);
+                p.format_range(s, e, format.clone());
+                Ok(AtomicOperation::ReplaceSpansInRange {
+                    node_id: *node_id,
+                    start: s,
+                    end: e,
+                    spans: prev_spans,
+                    previous_spans: crate::spans::spans_in_range(&p.spans, s, e),
+                })
+            }
+            AtomicOperation::ReplaceSpansInRange {
+                node_id,
+                start,
+                end,
+                spans,
+                ..
+            } => {
+                let p = doc
+                    .find_paragraph_mut(*node_id)
+                    .ok_or_else(|| ModelError::NodeNotFound(node_id.to_string()))?;
+                let total_chars = p.text.chars().count();
+                let s = (*start).min(total_chars);
+                let e = (*end).min(total_chars);
+                let current_spans = crate::spans::spans_in_range(&p.spans, s, e);
+                p.clear_formatting_range(s, e);
+                let mut new_spans = p.spans.clone();
+                for span in spans {
+                    let sp_s = (s + span.start).min(e);
+                    let sp_e = (s + span.end).min(e);
+                    if sp_s < sp_e && !span.format.is_empty() {
+                        new_spans.push(crate::spans::TextSpan::new(sp_s, sp_e, span.format.clone()));
+                    }
+                }
+                p.spans = crate::spans::normalize_spans(new_spans, total_chars);
+                Ok(AtomicOperation::ReplaceSpansInRange {
+                    node_id: *node_id,
+                    start: s,
+                    end: e,
+                    spans: current_spans,
+                    previous_spans: spans.clone(),
+                })
+            }
+            AtomicOperation::SetParagraphStyle {
+                node_id,
+                new_style_id,
+                ..
+            } => {
+                let p = doc
+                    .find_paragraph_mut(*node_id)
+                    .ok_or_else(|| ModelError::NodeNotFound(node_id.to_string()))?;
+                let actual_old = p.style_id.clone();
+                p.style_id = new_style_id.clone();
+                Ok(AtomicOperation::SetParagraphStyle {
+                    node_id: *node_id,
+                    new_style_id: actual_old,
+                    old_style_id: new_style_id.clone(),
+                })
+            }
+            AtomicOperation::SetParagraphPatches {
+                node_id,
+                patches,
+                ..
+            } => {
+                let p = doc
+                    .find_paragraph_mut(*node_id)
+                    .ok_or_else(|| ModelError::NodeNotFound(node_id.to_string()))?;
+                let previous = p.style_patches.clone();
+                p.style_patches = patches.clone();
+                Ok(AtomicOperation::SetParagraphPatches {
+                    node_id: *node_id,
+                    patches: previous,
+                    previous_patches: patches.clone(),
+                })
+            }
+            AtomicOperation::SplitParagraph {
+                section_id,
+                flow_id,
+                node_id,
+                split_char_offset,
+                new_paragraph,
+            } => {
+                let flow = find_flow_mut(doc, section_id, flow_id)?;
+                let pos = flow
+                    .paragraphs
+                    .iter()
+                    .position(|p| p.id == *node_id)
+                    .ok_or_else(|| ModelError::NodeNotFound(node_id.to_string()))?;
+                let p = &mut flow.paragraphs[pos];
+                let total_chars = p.text.chars().count();
+                let split_pt = (*split_char_offset).min(total_chars);
+                let split_byte = char_to_byte(&p.text, split_pt);
+                let trailing_text = p.text[split_byte..].to_string();
+                p.text.truncate(split_byte);
+
+                let trailing_spans = crate::spans::spans_in_range(&p.spans, split_pt, total_chars);
+                p.spans = crate::spans::remove_range(&p.spans, split_pt, total_chars, total_chars);
+
+                let mut second_para = new_paragraph.clone();
+                second_para.text = trailing_text;
+                second_para.spans = trailing_spans;
+
+                flow.paragraphs.insert(pos + 1, second_para.clone());
+
+                Ok(AtomicOperation::MergeParagraphs {
+                    section_id: *section_id,
+                    flow_id: flow_id.clone(),
+                    first_node_id: *node_id,
+                    merged_paragraph: second_para,
+                })
+            }
+            AtomicOperation::MergeParagraphs {
+                section_id,
+                flow_id,
+                first_node_id,
+                merged_paragraph,
+            } => {
+                let flow = find_flow_mut(doc, section_id, flow_id)?;
+                let pos = flow
+                    .paragraphs
+                    .iter()
+                    .position(|p| p.id == *first_node_id)
+                    .ok_or_else(|| ModelError::NodeNotFound(first_node_id.to_string()))?;
+                if pos + 1 >= flow.paragraphs.len() {
+                    return Err(ModelError::InvalidTransaction(format!(
+                        "no subsequent paragraph to merge into {}",
+                        first_node_id
+                    )));
+                }
+                if flow.paragraphs[pos + 1].id != merged_paragraph.id {
+                    return Err(ModelError::InvalidTransaction(format!(
+                        "subsequent paragraph {} does not match expected {}",
+                        flow.paragraphs[pos + 1].id,
+                        merged_paragraph.id
+                    )));
+                }
+                let second = flow.paragraphs.remove(pos + 1);
+                let first = &mut flow.paragraphs[pos];
+                let split_offset = first.text.chars().count();
+                first.text.push_str(&second.text);
+                for sp in &second.spans {
+                    first.spans.push(crate::spans::TextSpan::new(
+                        split_offset + sp.start,
+                        split_offset + sp.end,
+                        sp.format.clone(),
+                    ));
+                }
+                first.spans = crate::spans::normalize_spans(
+                    std::mem::take(&mut first.spans),
+                    first.text.chars().count(),
+                );
+
+                Ok(AtomicOperation::SplitParagraph {
+                    section_id: *section_id,
+                    flow_id: flow_id.clone(),
+                    node_id: *first_node_id,
+                    split_char_offset: split_offset,
+                    new_paragraph: second,
                 })
             }
         }
@@ -510,6 +838,7 @@ mod tests {
             node_id: pid,
             char_offset: 1,
             deleted_text: "XY".to_string(),
+            deleted_spans: Vec::new(),
         });
         assert!(tx.apply(&mut doc).is_err());
         assert_eq!(doc, before);
@@ -519,6 +848,7 @@ mod tests {
             node_id: pid,
             char_offset: 0,
             deleted_text: "אבגדהוז".to_string(),
+            deleted_spans: Vec::new(),
         });
         assert!(too_long.apply(&mut doc).is_err());
         assert_eq!(doc, before);
@@ -552,6 +882,7 @@ mod tests {
             node_id: pid,
             char_offset: 1,
             deleted_text: "שלום".to_string(),
+            deleted_spans: Vec::new(),
         });
         tx.push(AtomicOperation::InsertParagraph {
             section_id: sec_id,
@@ -618,5 +949,111 @@ mod tests {
         stack.undo(&mut doc).unwrap();
         assert!(stack.undo(&mut doc).is_err());
         assert_eq!(doc.find_paragraph(pid).unwrap().text, "א");
+    }
+
+    #[test]
+    fn test_format_text_range_and_undo_redo() {
+        use crate::styles::CharacterFormat;
+        let (mut doc, _, pid) = doc_with_paragraph("שלום עולם יפה");
+        let before = doc.clone();
+
+        let mut tx = CompoundTransaction::new("הדגשת עולם");
+        tx.push(AtomicOperation::FormatTextRange {
+            node_id: pid,
+            start: 5,
+            end: 9,
+            format: CharacterFormat {
+                font_weight: Some(700),
+                ..Default::default()
+            },
+            previous_spans: Vec::new(),
+        });
+
+        let mut stack = TransactionStack::new(50);
+        stack.apply(tx, &mut doc).unwrap();
+
+        let p = doc.find_paragraph(pid).unwrap();
+        assert_eq!(p.spans.len(), 1);
+        assert_eq!(p.spans[0].start, 5);
+        assert_eq!(p.spans[0].end, 9);
+        assert_eq!(p.spans[0].format.font_weight, Some(700));
+
+        // Undo restores plain state
+        stack.undo(&mut doc).unwrap();
+        assert_eq!(doc, before);
+        assert_eq!(doc.find_paragraph(pid).unwrap().spans.len(), 0);
+
+        // Redo restores bold formatting
+        stack.redo(&mut doc).unwrap();
+        assert_eq!(doc.find_paragraph(pid).unwrap().spans.len(), 1);
+    }
+
+    #[test]
+    fn test_set_paragraph_style_and_undo_redo() {
+        let (mut doc, _, pid) = doc_with_paragraph("פסקה לבדיקת סגנון");
+        let before = doc.clone();
+
+        let mut tx = CompoundTransaction::new("שינוי סגנון לכותרת");
+        tx.push(AtomicOperation::SetParagraphStyle {
+            node_id: pid,
+            new_style_id: "heading-1".to_string(),
+            old_style_id: "default-body".to_string(),
+        });
+
+        let mut stack = TransactionStack::new(50);
+        stack.apply(tx, &mut doc).unwrap();
+        assert_eq!(doc.find_paragraph(pid).unwrap().style_id, "heading-1");
+
+        stack.undo(&mut doc).unwrap();
+        assert_eq!(doc, before);
+        assert_eq!(doc.find_paragraph(pid).unwrap().style_id, "default-body");
+
+        stack.redo(&mut doc).unwrap();
+        assert_eq!(doc.find_paragraph(pid).unwrap().style_id, "heading-1");
+    }
+
+    #[test]
+    fn test_split_and_merge_paragraph_undo_redo() {
+        let (mut doc, sec_id, pid) = doc_with_paragraph("חלק ראשון וחלק שני");
+        let before = doc.clone();
+
+        let split_para = ParagraphNode::new(
+            FractionalIndex::new("b"),
+            "default-body",
+            "",
+        );
+        let split_para_id = split_para.id;
+
+        let mut tx = CompoundTransaction::new("פיצול פסקה באנטר");
+        tx.push(AtomicOperation::SplitParagraph {
+            section_id: sec_id,
+            flow_id: FlowId::main(),
+            node_id: pid,
+            split_char_offset: 10,
+            new_paragraph: split_para,
+        });
+
+        let mut stack = TransactionStack::new(50);
+        stack.apply(tx, &mut doc).unwrap();
+
+        let flow = doc.sections[0].main_flow().unwrap();
+        assert_eq!(flow.paragraphs.len(), 2);
+        assert_eq!(flow.paragraphs[0].text, "חלק ראשון ");
+        assert_eq!(flow.paragraphs[1].text, "וחלק שני");
+        assert_eq!(flow.paragraphs[1].id, split_para_id);
+
+        // Undo restores single united paragraph
+        stack.undo(&mut doc).unwrap();
+        assert_eq!(doc, before);
+        let flow_undone = doc.sections[0].main_flow().unwrap();
+        assert_eq!(flow_undone.paragraphs.len(), 1);
+        assert_eq!(flow_undone.paragraphs[0].text, "חלק ראשון וחלק שני");
+
+        // Redo splits again
+        stack.redo(&mut doc).unwrap();
+        let flow_redone = doc.sections[0].main_flow().unwrap();
+        assert_eq!(flow_redone.paragraphs.len(), 2);
+        assert_eq!(flow_redone.paragraphs[0].text, "חלק ראשון ");
+        assert_eq!(flow_redone.paragraphs[1].text, "וחלק שני");
     }
 }
