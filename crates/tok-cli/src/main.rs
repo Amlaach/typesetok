@@ -275,7 +275,11 @@ fn handle_render_html(input: &str, output: &str) -> Result<(), Box<dyn std::erro
     let pages = engine.typeset_document(doc.root());
     println!("  - Typeset {} pages", pages.len());
 
-    let html = HtmlProjectionCompiler::compile_to_html(&pages, 210.0, 297.0);
+    let (page_w_mm, page_h_mm) = pages
+        .first()
+        .map(|p| (p.dimensions.width * 25.4 / 72.0, p.dimensions.height * 25.4 / 72.0))
+        .unwrap_or((210.0, 297.0));
+    let html = HtmlProjectionCompiler::compile_to_html(&pages, page_w_mm, page_h_mm);
     if let Some(parent) = Path::new(output).parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)?;
@@ -393,16 +397,18 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
     use sha2::{Digest, Sha256};
 
     println!("[TOK-CLI] Verifying bit-for-bit deterministic reproducibility...");
-    let doc = create_sample_hebrew_document(50);
     let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
-
     let fonts = &engine.font_manager;
+    let (w_mm, h_mm) = (210.0, 297.0);
 
-    // Pass 1
+    // Test 1: Single-flow Prose Determinism
+    println!("  [1/2] Verifying single-flow prose document determinism...");
+    let doc = create_sample_hebrew_document(50);
+
     let pages1 = engine.typeset_document(doc.root());
     let pdf1 =
         PdfPrePressEngine::export_pdf_with_fonts(&pages1, &PdfExportOptions::default(), fonts)?;
-    let html1 = HtmlProjectionCompiler::compile_to_html(&pages1, 210.0, 297.0);
+    let html1 = HtmlProjectionCompiler::compile_to_html(&pages1, w_mm, h_mm);
 
     let mut hasher1 = Sha256::new();
     hasher1.update(&pdf1);
@@ -412,11 +418,10 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
     hasher1_h.update(html1.as_bytes());
     let html_hash1 = format!("{:x}", hasher1_h.finalize());
 
-    // Pass 2
     let pages2 = engine.typeset_document(doc.root());
     let pdf2 =
         PdfPrePressEngine::export_pdf_with_fonts(&pages2, &PdfExportOptions::default(), fonts)?;
-    let html2 = HtmlProjectionCompiler::compile_to_html(&pages2, 210.0, 297.0);
+    let html2 = HtmlProjectionCompiler::compile_to_html(&pages2, w_mm, h_mm);
 
     let mut hasher2 = Sha256::new();
     hasher2.update(&pdf2);
@@ -426,22 +431,66 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
     hasher2_h.update(html2.as_bytes());
     let html_hash2 = format!("{:x}", hasher2_h.finalize());
 
-    println!("  Pass 1 PDF SHA-256:  {}", pdf_hash1);
-    println!("  Pass 2 PDF SHA-256:  {}", pdf_hash2);
-    println!("  Pass 1 HTML SHA-256: {}", html_hash1);
-    println!("  Pass 2 HTML SHA-256: {}", html_hash2);
-
     if pdf_hash1 != pdf_hash2 {
-        return Err("PDF outputs must be bit-for-bit identical".into());
+        return Err("Single-flow PDF outputs must be bit-for-bit identical".into());
     }
     if html_hash1 != html_hash2 {
-        return Err("HTML outputs must be bit-for-bit identical".into());
+        return Err("Single-flow HTML outputs must be bit-for-bit identical".into());
     }
     if pages1 != pages2 {
-        return Err("Layouts must be identical".into());
+        return Err("Single-flow Layouts must be identical".into());
     }
+    println!("    Prose PDF SHA-256:  {}", pdf_hash1);
+    println!("    Prose HTML SHA-256: {}", html_hash1);
 
-    println!("  [SUCCESS] Bit-for-bit absolute determinism verified across all pipelines!");
+    // Test 2: Multi-flow Complex Talmud Layout Determinism
+    println!("  [2/2] Verifying multi-flow Talmud layout determinism...");
+    let talmud_doc = tok_typeset::fixtures::create_realistic_talmud_document();
+    let talmud_pages1 = engine.typeset_document_multi_flow(&talmud_doc);
+    let talmud_pdf1 = PdfPrePressEngine::export_pdf_with_fonts(
+        &talmud_pages1,
+        &PdfExportOptions::default(),
+        fonts,
+    )?;
+    let talmud_html1 = HtmlProjectionCompiler::compile_to_html(&talmud_pages1, w_mm, h_mm);
+
+    let mut t_hasher1 = Sha256::new();
+    t_hasher1.update(&talmud_pdf1);
+    let talmud_pdf_hash1 = format!("{:x}", t_hasher1.finalize());
+
+    let mut t_hasher1_h = Sha256::new();
+    t_hasher1_h.update(talmud_html1.as_bytes());
+    let talmud_html_hash1 = format!("{:x}", t_hasher1_h.finalize());
+
+    let talmud_pages2 = engine.typeset_document_multi_flow(&talmud_doc);
+    let talmud_pdf2 = PdfPrePressEngine::export_pdf_with_fonts(
+        &talmud_pages2,
+        &PdfExportOptions::default(),
+        fonts,
+    )?;
+    let talmud_html2 = HtmlProjectionCompiler::compile_to_html(&talmud_pages2, w_mm, h_mm);
+
+    let mut t_hasher2 = Sha256::new();
+    t_hasher2.update(&talmud_pdf2);
+    let talmud_pdf_hash2 = format!("{:x}", t_hasher2.finalize());
+
+    let mut t_hasher2_h = Sha256::new();
+    t_hasher2_h.update(talmud_html2.as_bytes());
+    let talmud_html_hash2 = format!("{:x}", t_hasher2_h.finalize());
+
+    if talmud_pdf_hash1 != talmud_pdf_hash2 {
+        return Err("Multi-flow PDF outputs must be bit-for-bit identical".into());
+    }
+    if talmud_html_hash1 != talmud_html_hash2 {
+        return Err("Multi-flow HTML outputs must be bit-for-bit identical".into());
+    }
+    if talmud_pages1 != talmud_pages2 {
+        return Err("Multi-flow Layouts must be identical".into());
+    }
+    println!("    Talmud PDF SHA-256:  {}", talmud_pdf_hash1);
+    println!("    Talmud HTML SHA-256: {}", talmud_html_hash1);
+
+    println!("  [SUCCESS] Bit-for-bit absolute determinism verified across single-flow and multi-flow pipelines!");
     Ok(())
 }
 
