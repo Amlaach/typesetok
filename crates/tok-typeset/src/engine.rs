@@ -712,7 +712,8 @@ impl TypesettingEngine {
         );
 
         // Layout lines for each flow
-        let mut flow_lines_map: HashMap<String, Vec<LineBox>> = HashMap::new();
+        let mut flow_lines_map: std::collections::BTreeMap<String, Vec<LineBox>> =
+            std::collections::BTreeMap::new();
         for flow in &first_sec.flows {
             let flow_width = nominal_allocations
                 .iter()
@@ -767,9 +768,10 @@ impl TypesettingEngine {
         let mut pages = Vec::new();
         let mut current_page_num = 1;
 
-        let mut flow_cursors: HashMap<String, usize> = HashMap::new();
-        for k in flow_lines_map.keys() {
-            flow_cursors.insert(k.clone(), 0);
+        let mut flow_cursors: std::collections::BTreeMap<String, usize> =
+            std::collections::BTreeMap::new();
+        for flow in &first_sec.flows {
+            flow_cursors.insert(flow.id.0.clone(), 0);
         }
 
         loop {
@@ -2118,6 +2120,58 @@ mod tests {
                 "Rashi paragraph {} must be completely preserved across frames, but was missing!",
                 i
             );
+        }
+    }
+
+    #[test]
+    fn test_multi_flow_determinism_across_runs() {
+        use tok_core::model::{Flow, FlowId};
+
+        let mut doc = DocumentRoot::new("בדיקת דטרמיניזם רב-זרימתי");
+        let sec = &mut doc.sections[0];
+        sec.flows.clear();
+
+        let mut central = Flow::new(FlowId::new("gemara"), FlowType::Main);
+        central.placement_role = Some("primary".to_string());
+        for i in 1..=5 {
+            central.add_paragraph(ParagraphNode::new(
+                FractionalIndex::new(format!("g{}", i)),
+                "default-body",
+                &format!("גמרא קטע מספר {}: מאימתי קורין את שמע בערבית משעה שהכהנים נכנסים לאכול בתרומתן.", i),
+            ));
+        }
+        sec.flows.push(central);
+
+        let mut rashi = Flow::new(FlowId::new("rashi"), FlowType::CommentA);
+        rashi.placement_role = Some("inner_spine".to_string());
+        for i in 1..=8 {
+            rashi.add_paragraph(ParagraphNode::new(
+                FractionalIndex::new(format!("r{}", i)),
+                "default-body",
+                &format!("רש\"י קטע {}: פירוש רש\"י הקדוש על דברי המשנה והגמרא במסכת ברכות.", i),
+            ));
+        }
+        sec.flows.push(rashi);
+
+        let eng = engine();
+        let run1 = eng.typeset_document(&doc);
+        let run2 = eng.typeset_document(&doc);
+
+        assert_eq!(run1.len(), run2.len(), "Page count must be identical");
+        for (idx, (p1, p2)) in run1.iter().zip(run2.iter()).enumerate() {
+            assert_eq!(p1.page_index, p2.page_index);
+            assert_eq!(p1.page_number_gematria, p2.page_number_gematria);
+            assert_eq!(p1.frames.len(), p2.frames.len(), "Page {} frames count mismatch", idx);
+            for (f1, f2) in p1.frames.iter().zip(p2.frames.iter()) {
+                assert_eq!(f1.flow_id, f2.flow_id);
+                assert_eq!(f1.rect, f2.rect);
+                assert_eq!(f1.lines.len(), f2.lines.len());
+                for (l1, l2) in f1.lines.iter().zip(f2.lines.iter()) {
+                    assert_eq!(l1.text, l2.text);
+                    assert_eq!(l1.width, l2.width);
+                    assert_eq!(l1.baseline_y, l2.baseline_y);
+                }
+            }
         }
     }
 }
