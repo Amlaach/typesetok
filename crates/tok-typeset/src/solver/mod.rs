@@ -4,10 +4,12 @@
 //! via linear inequality constraint solving over the Cassowary simplex algorithm.
 
 pub mod model;
+pub mod page_model;
 pub mod solver_core;
 
 pub use model::{
     ConstraintRelation, ConstraintStrength, ConstraintVariable, GeometricConstraint,
     LinearExpression, LinearTerm, RectVariables, SolvedRect,
 };
+pub use page_model::{PageConstraintModel, PageGeometryConfig};
 pub use solver_core::{GeometricConstraintSolver, SolverError};
