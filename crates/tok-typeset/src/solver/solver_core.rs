@@ -218,3 +218,152 @@ impl Default for GeometricConstraintSolver {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_satisfiable_linear_system() {
+        let mut solver = GeometricConstraintSolver::new();
+        let x = ConstraintVariable::new();
+        let y = ConstraintVariable::new();
+
+        // x + y == 100
+        solver
+            .add_eq(
+                x.to_expr().plus(&y.to_expr()),
+                LinearExpression::constant(100.0),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+
+        // x == y
+        solver
+            .add_eq(x.to_expr(), y.to_expr(), ConstraintStrength::Required)
+            .unwrap();
+
+        assert!((solver.get_value(x) - 50.0).abs() < 1e-4);
+        assert!((solver.get_value(y) - 50.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_inequality_bounds_and_suggestion() {
+        let mut solver = GeometricConstraintSolver::new();
+        let x = ConstraintVariable::new();
+
+        // 10 <= x <= 20
+        solver
+            .add_ge(x.to_expr(), LinearExpression::constant(10.0), ConstraintStrength::Required)
+            .unwrap();
+        solver
+            .add_le(x.to_expr(), LinearExpression::constant(20.0), ConstraintStrength::Required)
+            .unwrap();
+
+        solver.add_edit_variable(x, ConstraintStrength::Strong).unwrap();
+
+        // Suggest below minimum
+        solver.suggest_value(x, 5.0).unwrap();
+        assert!((solver.get_value(x) - 10.0).abs() < 1e-4);
+
+        // Suggest above maximum
+        solver.suggest_value(x, 50.0).unwrap();
+        assert!((solver.get_value(x) - 20.0).abs() < 1e-4);
+
+        // Suggest inside bounds
+        solver.suggest_value(x, 14.5).unwrap();
+        assert!((solver.get_value(x) - 14.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_strength_prioritization() {
+        let mut solver = GeometricConstraintSolver::new();
+        let x = ConstraintVariable::new();
+
+        // Weak wants x = 100
+        solver
+            .add_eq(x.to_expr(), LinearExpression::constant(100.0), ConstraintStrength::Weak)
+            .unwrap();
+
+        // Strong wants x = 250
+        solver
+            .add_eq(x.to_expr(), LinearExpression::constant(250.0), ConstraintStrength::Strong)
+            .unwrap();
+
+        // Strong must dominate Weak
+        assert!((solver.get_value(x) - 250.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_conflicting_required_constraints_produce_contradiction() {
+        let mut solver = GeometricConstraintSolver::new();
+        let x = ConstraintVariable::new();
+
+        solver
+            .add_eq(x.to_expr(), LinearExpression::constant(50.0), ConstraintStrength::Required)
+            .unwrap();
+
+        // Contradictory required constraint: x == 80
+        let result = solver.add_eq(
+            x.to_expr(),
+            LinearExpression::constant(80.0),
+            ConstraintStrength::Required,
+        );
+
+        assert!(result.is_err());
+        match result {
+            Err(SolverError::Contradiction(_)) => {}
+            other => panic!("Expected SolverError::Contradiction, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_conflicting_required_inequalities() {
+        let mut solver = GeometricConstraintSolver::new();
+        let x = ConstraintVariable::new();
+
+        solver
+            .add_ge(x.to_expr(), LinearExpression::constant(100.0), ConstraintStrength::Required)
+            .unwrap();
+
+        // Contradiction: x <= 50 while x >= 100
+        let result = solver.add_le(
+            x.to_expr(),
+            LinearExpression::constant(50.0),
+            ConstraintStrength::Required,
+        );
+
+        assert!(result.is_err());
+        match result {
+            Err(SolverError::Contradiction(_)) => {}
+            other => panic!("Expected SolverError::Contradiction, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_rect_variables_and_get_rect() {
+        let mut solver = GeometricConstraintSolver::new();
+        let rect = RectVariables::new();
+
+        solver
+            .add_eq(rect.x.to_expr(), LinearExpression::constant(40.0), ConstraintStrength::Required)
+            .unwrap();
+        solver
+            .add_eq(rect.y.to_expr(), LinearExpression::constant(50.0), ConstraintStrength::Required)
+            .unwrap();
+        solver
+            .add_eq(rect.width.to_expr(), LinearExpression::constant(200.0), ConstraintStrength::Required)
+            .unwrap();
+        solver
+            .add_eq(rect.height.to_expr(), LinearExpression::constant(300.0), ConstraintStrength::Required)
+            .unwrap();
+
+        let solved = solver.get_rect(rect);
+        assert!((solved.x - 40.0).abs() < 1e-4);
+        assert!((solved.y - 50.0).abs() < 1e-4);
+        assert!((solved.width - 200.0).abs() < 1e-4);
+        assert!((solved.height - 300.0).abs() < 1e-4);
+        assert!((solved.right() - 240.0).abs() < 1e-4);
+        assert!((solved.bottom() - 350.0).abs() < 1e-4);
+    }
+}
