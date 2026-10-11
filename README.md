@@ -1,17 +1,14 @@
 <div align="center">
 
-<img src="assets/logo.jpg" alt="TypesetOK Logo" width="160" style="border-radius: 16px; margin-bottom: 12px;" />
+<img src="assets/logo.jpg" alt="TypesetOK Logo" width="140" style="border-radius: 16px; margin-bottom: 12px;" />
 
 # TypesetOK (TOK)
-### תוכנת עימוד שולחנית מקצועית בקוד פתוח | Open-Source Professional Desktop Publishing (DTP) System
+### תוכנת עימוד שולחנית לספרים, טקסטים עבריים וספרי קודש
+**A Modern Desktop Publishing (DTP) System for Hebrew Books & Sacred Texts**
 
-[![CI Build](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml/badge.svg)](https://github.com/TypesetOK/typesetok/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/Version-0.10.6-blue.svg)]()
-[![Tests](https://img.shields.io/badge/Tests-239%2F239%20Passing-brightgreen.svg)]()
-[![Electron](https://img.shields.io/badge/Electron-29.4%2B-blue.svg?logo=electron)](https://www.electronjs.org)
-[![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
-[![Pre-Press](https://img.shields.io/badge/PDF%2FX--1a%20%7C%20PDF%2FX--4-ISO%2015930-purple.svg)]()
-[![License](https://img.shields.io/badge/License-TOK--NCCL%20v1.0-blue.svg)](LICENSE.md)
+[![Version](https://img.shields.io/badge/Version-0.10.6-blue.svg)](package.json)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20x64-informational.svg)]()
+[![License](https://img.shields.io/badge/License-TOK--NCCL%20v1.0-orange.svg)](LICENSE.md)
 
 <p align="center">
   <b>[ <a href="#-עברית">עברית</a> | <a href="#-english">English</a> ]</b>
@@ -23,219 +20,181 @@
 
 ## 🇮🇱 עברית
 
-### 📖 סקירה כללית
-**TypesetOK (TOK)** היא מערכת עימוד ופרסום שולחני (Desktop Publishing - DTP) מודרנית בקוד פתוח, שנבנתה מן המסד עבור טיפוגרפיה עברית מתקדמת, ספרי קודש (ש"ס, מקראות גדולות, שו"ת), תמיכה רב-תזרימית וצינור קדם-דפוס נייטיב מלא.
+### 📖 מה זה TypesetOK?
+**TypesetOK (TOK)** היא תוכנת עימוד שולחנית מודרנית שנבנתה מתוך מטרה אחת ברורה: לאפשר עימוד מדויק, נקי ואיכותי של ספרים, טקסטים עבריים וספרי קודש, בחוויית משתמש פשוטה ונוחה.
 
-עולם העימוד המקצועי בעברית נשען מזה עשרות שנים על תוכנות מונוליתיות קנייניות ישנות (כדוגמת "תג" ו-Adobe InDesign). מערכות אלו מתקשות להתמודד עם טקסטים ענקיים בני אלפי עמודים, סובלות מנעילת ממשק (UI Freezing), ואינן מספקות פתרון מודרני לתזרימי טקסט מרובים וסנכרון עמודים דינמי. TypesetOK מפרידה קפדנית בין ליבת העימוד העצמאית ב-Rust המשיגה ביצועים גבוהים לבין מעטפת המשתמש.
+במשך שנים רבות, עימוד מקצועי בעברית נשען על תוכנות מיושנות או על כלים יקרים ומסורבלים שלא תמיד מותאמים לצורכי הטיפוגרפיה העברית. TypesetOK מספקת סביבת עבודה עצמאית ונעימה – מהקלדת ועריכת הטקסט ועד הפקת קובץ PDF מוכן לקריאה ולהדפסה.
 
 ---
 
-### 🏛️ עמודי התווך הארכיטקטוניים
+### ✨ מה אפשר לעשות עם TypesetOK?
 
-```mermaid
-graph TD
-    subgraph UI_Shell [מעטפת שולחן עבודה - TypeScript & Electron]
-        Toolbar[סרגל כלים טיפוגרפי ופאנלים]
-        Virtualizer[וירטואליזציית 3 עמודים פעילים - DOM Virtualizer]
-        CanvasOverlay[שכבת כיסוי שקופה - Canvas Overlay & Caret]
-        StoryEditor[עורך סיפור רציף - Unpaginated Story Editor]
-    end
+#### 1. עימוד וטיפוגרפיה עברית
+- **יישור שורות עברי טבעי:** שילוב של חלוקת רווחי מילים מאוזנת ומתיחת אותיות מתרחבות (אהלתר"ם: א, ה, ל, ת, ר, ם) לקבלת עמודי טקסט יפים ומיושרים.
+- **שליטה מלאה בפסקאות:** הגדרת מרווחים מדויקים לפני ואחרי פסקה, כניסות שורה (אינדנטציה), ומניעת שורות יתומות.
+- **כיווניות מימין לשמאל (RTL):** תמיכה מלאה וטבעית בטקסט עברי בכל חלקי התוכנה.
 
-    subgraph Binary_Bridge [גשר תקשורת בינארי - FlatBuffers / Framed IPC]
-        SharedMem[Framed Length-Prefixed Binary Protocol]
-    end
+#### 2. טיפול מדויק בניקוד, טעמים וטקסט תורני
+- **טקסט מנוקד וטעמי מקרא:** תמיכה מלאה בטקסט עם ניקוד מלא וטעמים ללא שיבושים גרפיים.
+- **סדר יוניקוד תקני:** סידור ונרמול אוטומטי של תווי יוניקוד (אות בסיס, נקודות ש/שׂ, דגש, ניקוד וטעמים) למניעת קפיצות של סימני הניקוד.
+- **מגן שמות קודש:** מניעת שבירת שורות בשמות קודש (איסור שבירה בשמות הויה ואדנות).
+- **מספור עמודים עברי (גימטריה):** מספור עמודים אוטומטי באותיות עבריות לפי הכללים המסורתיים (כולל ט״ו, ט״ז, וסימון גרש/גרשיים תקני).
 
-    subgraph Rust_Core [ליבת העימוד והדפוס - Rust Core Engine]
-        TDM[מודל מסמך סמנטי & טרנזקציות אטומיות - TDM AST]
-        Normalizer[נרמול תקן ישראלי ת"י 6100 & מנוע גימטריה]
-        Typesetter[מעמד Knuth-Plass + HarfBuzz + יישור אהלתר"ם]
-        MultiFlow[פותר אילוצים רב-תזרימי - Talmud Solver]
-        Storage[סביבת עבודה ACID WAL + ארכיב ZIP אטומי .tok]
-        Prepress[מנוע PDF/X-1a נייטיב & מחולל Pre-paginated HTML]
-        PluginHost[מארח הרחבות מבודד - GREP & מגן שמות קדושים]
-    end
+#### 3. סביבת עבודה חזותית ונוחה
+- **תצוגת כפולות עמודים:** צפייה במסמך בפריסת ספר פתוח (עמוד ימני ועמוד שמאלי זה לצד זה).
+- **עורך טקסט מובנה ותצוגה מפוצלת:** עריכת טקסט מהירה בחלון ייעודי, לצד תצוגה מקדימה של הדפים המתעדכנת תוך כדי הקלדה.
+- **שליטה נוחה בתקריב (זום):** כפתורי תקריב, התאמה מהירה לגודל החלון, ותמיכה במחוות משטח מגע במחשבים ניידים (Pinch to Zoom והחלקה בשתי אצבעות).
 
-    UI_Shell <--> Binary_Bridge
-    Binary_Bridge <--> Rust_Core
+#### 4. תבניות עימוד מוכנות מראש
+- **ספר רציף:** פריסה קלאסית ונקייה לספרי קריאה, עיון והגות.
+- **ספר עם הערות שוליים:** טקסט ראשי עם אזור הערות תחתון המתעדכן לפי הצורך.
+- **עלון וקונטרס:** מבנה דו-טורי אלגנטי לעלוני שבת, חוברות ודפי מידע.
+- **דף גמרא ומקראות גדולות:** פריסות תורניות רב-טוריות לטקסט ראשי ומפרשים מקבילים.
+
+#### 5. שמירת פרויקטים וייצוא מהיר ל-PDF
+- **ייצוא ישיר ל-PDF:** הפקת קובצי PDF וקטוריים וחדים ישירות מהתוכנה, מוכנים לצפייה, הדפסה ביתית או מסירה לדפוס.
+- **פורמט קובץ פרויקט (`.tok`):** שמירה וטעינה פשוטה של כל הגדרות העימוד והטקסטים בקובץ אחד.
+
+---
+
+### 💻 איך מורידים ומתחילים לעבוד?
+
+התוכנה מיועדת ל-Windows ומגיעה כגרסה שולחנית מוכנה להפעלה, ללא צורך בהתקנת כלי פיתוח:
+
+1. **הורדה:** היכנסו לדף ה-[Releases ב-GitHub](https://github.com/TypesetOK/typesetok/releases) והורידו את הגרסה האחרונה:
+   - קובץ התקנה: `TypesetOK-Setup.exe`
+   - או חבילה ניידת: קובץ `.zip` לחילוץ ללא התקנה.
+2. **הפעלה:**
+   - בקובץ התקנה: הפעילו את האשף ועקבו אחר ההוראות.
+   - בקובץ ZIP: חלצו את התיקייה ולחצו לחיצה כפולה על `TypesetOK.exe`.
+3. **תחילת עבודה במסמך:**
+   - במסך הפתיחה בחרו תבנית מוכנה (למשל "ספר רציף") או צרו מסמך חדש.
+   - הדביקו או הקלידו את הטקסט שלכם.
+   - כווננו שוליים, מרווחים וגופנים באמצעות סרגלי הכלים.
+   - שמרו את הפרויקט (`Ctrl+S`) וייצאו ל-PDF בלחיצת כפתור (`Ctrl+E`).
+
+---
+
+### ⌨️ קיצורי מקשים נפוצים
+
+| פעולה | קיצור מקשים (עברית / אנגלית) |
+| :--- | :--- |
+| **שמירת מסמך** | `Ctrl + S` / `Ctrl + ד` |
+| **שמירה בשם** | `Ctrl + Shift + S` |
+| **ייצוא ל-PDF** | `Ctrl + E` / `Ctrl + ק` |
+| **תצוגת עמודים** | `Ctrl + 1` |
+| **תצוגה מפוצלת (עורך + עמודים)** | `Ctrl + 2` |
+| **עורך טקסט בלבד** | `Ctrl + 3` |
+| **הגדלת זום** | `Ctrl + +` |
+| **הקטנת זום** | `Ctrl + -` |
+| **התאמת עמוד לחלון** | `Ctrl + 0` |
+| **הוספת עמוד חדש** | `Ctrl + Enter` |
+| **לוח פקודות ופעולות מהיר** | `Ctrl + K` |
+
+---
+
+### ❓ שאלות נפוצות (FAQ)
+
+- **האם התוכנה חינמית?**  
+  כן, לשימוש אישי, לימודי ולא-מסחרי (בהתאם לרישיון `TOK-NCCL v1.0`). שימוש מסחרי מוסדר בנפרד מול בעלי הזכויות.
+- **האם צריך חיבור לאינטרנט?**  
+  לא. TypesetOK היא תוכנה שולחנית מקומית (Offline). כל העבודה והמסמכים שלכם נשמרים אצלכם במחשב בלבד.
+- **אילו גופנים כלולים בתוכנה?**  
+  התוכנה כוללת גופנים עבריים איכותיים ברישיון חופשי (כגון Frank Ruhl Libre, Noto Rashi, David Libre ועוד), ומאפשרת שימוש בגופנים המותקנים במחשבכם.
+- **באיזה שלב נמצא הפרויקט?**  
+  התוכנה נמצאת בפיתוח פעיל (גרסה 0.10). נשמח מאוד לשמוע הערות, דיווחי תקלות ובקשות בדף ה-[Issues](https://github.com/TypesetOK/typesetok/issues).
+
+---
+
+### 🛠️ למפתחים: הרצה מקוד מקור
+
+למעוניינים לתרום לקוד, לבנות עצמאית או להריץ סביבת פיתוח:
+
+**דרישות:**
+- [Node.js 20+](https://nodejs.org)
+- [Rust 1.85+](https://www.rust-lang.org) עם Cargo
+
+**הוראות הרצה:**
+```bash
+# שכפול המאגר
+git clone https://github.com/TypesetOK/typesetok.git
+cd typesetok
+
+# התקנת תלויות צד-לקוח ובנייה
+npm install
+npm run build
+
+# הרצת בדיקות
+npm test
+cargo test --workspace
+
+# הפעלת האפליקציה השולחנית
+npm start
 ```
 
-#### 1. מודל מסמך סמנטי וטרנזקציות (`tok-core`)
-- **AST סמנטי וזיהוי ב-ULID:** מודל מסמך מבוסס צמתים סמנטיים (`DocumentRoot`, `SectionNode`, `Flow`, `ParagraphNode`) עם מזהים ייחודיים בני 128 סיביות.
-- **אינדוקס שברירי ב-$O(1)$ (`FractionalIndex`):** הכנסת פסקאות ושורות חדשות בין כל שתי נקודות קיימות ללא מספור מחדש של המסמך.
-- **טרנזקציות אטומיות ו-Rollback אוטומטי:** כל פעולה מפיקה דלתא נגדית מדויקת לתמיכה ב-Undo/Redo בלתי מוגבל, עם מנגנון ביטול וגלגול לאחור (Rollback) אוטומטי במקרה של שגיאה.
+---
 
-#### 2. טיפוגרפיה, ניקוד ועימוד עברי (`tok-typeset`)
-- **נרמול קפדני לפי ת"י 6100 (SI 6100):** אכיפת סדר יוניקוד דטרמיניסטי: `אות בסיס ← נקודת שין/שין ← דגש/מפיק ← ניקוד ← מתג ← טעמי מקרא`.
-- **מנוע שבירת שורות Knuth-Plass:** אופטימיזציה דינמית למזעור פגמים (Demerits) לאורך הפסקה, מניעת שורות רפויות ויתומות.
-- **מרווחי פסקאות ו-Margin Collapsing:** תמיכה מלאה ב-`space_before` ו-`space_after` ברמת הפסקה עם קריסת מרווחים (Margin Collapsing) תקנית בין פסקאות, איפוס מרווח בראש עמוד, מניעת גלישת רווח במעבר עמודים, וקריסה חכמה של פסקאות ריקות.
-- **יישור עברי תלת-שלבי (3-Tier Hebrew Justification):**
-  1. *רווחי מילים (Tier 1):* מתיחה מבוקרת (80% עד 130%).
-  2. *אותיות התפשטות אהלתר"ם (Tier 2):* זיהוי אותיות מתרחבות (א, ה, ל, ת, ר, ם) והרחבתן הטיפוגרפית.
-  3. *מיקרו-טרקינג (Tier 3):* התאמת מרווח גליפים עדינה ($\pm 2\%$ em).
-- **גימטריה עברית דטרמיניסטית:** אכיפת גרש תקני `U+05F3` וגרשיים `U+05F4`, ומנגנון המרות טאבו ושמות קודש (15 ← ט״ו, 16 ← ט״ז, 270 ← ע״ר, 272 ← ער״ב, 275 ← ער״ה, 298 ← חר״צ, 304 ← ד״ש, 344 ← שד״מ, 359 ← נט״ש, 698 ← תרח״צ, 744 ← תשד״מ).
-- **פותר אילוצים רב-תזרימי (Multi-Flow Solver):** עימוד עמוד ש"ס ומקראות גדולות תוך עמידה בחוקי גלישה וסנכרון פסקאות חוצה-עמודים.
+### 📄 תנאי שימוש ורישיון
 
-#### 3. מנוע קדם-דפוס נייטיב (`tok-pdf`)
-- **תאימות ISO 15930 (PDF/X-1a:2001 ו-PDF/X-4):** שחור `100% K` (DeviceCMYK), תמיכה בצבעי ספוט (Spot/Pantone), והזרקת פרופילי Fogra 39 / Fogra 51.
-- **דחיסת זרמים FlateDecode:** דחיסת zlib FlateDecode מובנית לזרמי תוכן עמודים (`/Contents`), גופני TrueType (`/FontFile2`) וטבלאות מיפוי `/ToUnicode` לפלט PDF קומפקטי.
-- **מטא-נתונים ותאריכים דטרמיניסטיים:** חילוץ `CreationDate` ו-`ModDate` מתוך ה-Manifest של המסמך בהתאם לתקן, תוך שמירה מוחלטת על שחזור ביט-אחר-ביט דטרמיניסטי.
-- **תיבות דפוס מקצועיות וסימני חיתוך:** יצירת MediaBox, BleedBox (3 מ"מ), TrimBox, CropBox וציור וקטורי של צלבי רישום וסימני חיתוך.
-- **טבלאות `/ToUnicode`:** שיבוץ טבלאות מיפוי PostScript המבטיחות חיפוש, הדגשה והעתקת טקסט מנוקד ללא שיבושים.
-
-#### 4. אחסון היברידי ועמידות קריסות (`tok-storage`)
-- **סביבת עבודה שוטפת (Workspace):** מסד נתונים פנימי ACID עם Write-Ahead Logging (WAL) לשמירה רציפה ברקע ועמידות בפני נפילות מתח.
-- **פורמט חבילה רשמי (`.tok`):** ארכיב ZIP תקני מוגן מפני Zip Slip ונגועים, המכיל מניפסט, עץ מסמך ונכסים מוטמעים.
-- **שמירה אטומית מוגנת (Atomic Safe-Save):** כתיבה לקובץ זמני, סנכרון חומרה מלא (`fsync`), והחלפה אטומית.
-- **מנהל רב-מסמכים (`.tokbook`):** סנכרון סגנונות מסטר, רציפות מספור עמודים עברי ומפתח עניינים (TOC) מאוחד.
-
-#### 5. מערכת הרחבות ותוספים מאובטחת (`tok-plugin-host` & Plugin Engine)
-- **API רשמי עשיר:** עריכת פסקאות אטומית (`tok.document`), כלי עזר לטיפוגרפיה עברית וגימטריה ב-0 השהיה (`tok.hebrew`), סרגל פקודות וטוסטים (`tok.ui`), ניווט דפים וזום (`tok.canvas`).
-- **ארגז חול ומודל הרשאות מפורש:** הצללת IPC, חסימת תקשורת רשת לא מורשית, גבול בידוד שגיאות (Error Boundary).
-- **תאימות מלאה לעמדות סייפר ומצב בטוח:** זיהוי אוטומטי של עמדות סייפר תורניות, פעולה מקומית מלאה (Offline), שמירה במחשבים מוקפאים, ומתג השבתת חירום / Safe Mode (`--safe-mode`).
-- 📘 **מדריך מקיף ודוגמאות קוד:** ראו [מדריך ומפרט ה-API המלא לפיתוח תוספים (docs/PLUGINS_API.md)](docs/PLUGINS_API.md).
+התוכנה מופצת תחת רישיון **[TOK-NCCL v1.0](LICENSE.md)** (TypesetOK Source-Available Non-Commercial Copyleft License):
+- **שימוש אישי, לימודי ותורני לא-מסחרי:** מותר וחופשי.
+- **נגזרות והרחבות:** כל גרסה נגזרת חייבת להישאר תחת אותו רישיון ובקוד מקור גלוי.
+- **שימוש מסחרי:** מחייב רישיון מסחרי נפרד מיוצרי התוכנה.
 
 ---
 
 ## 🇺🇸 English
 
-### 📖 Overview
-**TypesetOK (TOK)** is a modern, open-source Desktop Publishing (DTP) system written from the ground up in Rust for advanced Hebrew typography, sacred text typesetting (Talmud, Mikraot Gedolot, Responsa), multi-flow page rendering, and a native pre-press PDF engine.
+### 📖 What is TypesetOK?
+**TypesetOK (TOK)** is a modern desktop publishing (DTP) application designed for typesetting Hebrew books, literature, and traditional sacred texts.
 
-Traditional Hebrew typesetting relies on legacy monolithic systems. TypesetOK separates the high-performance Rust typesetting core from the desktop UI shell, ensuring fluid 120 FPS frame rates, instant typing response (<16ms caret latency), and zero-lockup handling of 1,000+ page manuscripts.
-
----
-
-### 🗺️ Monorepo Architecture Map
-
-```
-typesetok/
-├── .github/
-│   └── workflows/                  # GitHub Actions CI (fmt, clippy, matrix tests, audit)
-├── Cargo.toml                       # Rust Workspace definition (7 crates)
-├── package.json                     # TypeScript / Electron monorepo definition
-│
-├── crates/                          # Rust Engine Crates (100% Tested)
-│   ├── tok-core/                    # Semantic Document AST, ULID, Fractional Index, SI 6100, Transactions
-│   ├── tok-typeset/                 # Knuth-Plass Line Breaking, Paragraph Margins, 3-Tier Hebrew Justification, Bidi
-│   ├── tok-pdf/                     # ISO PDF/X Pre-Press Engine, FlateDecode Compression, Deterministic Dates, HTML Export
-│   ├── tok-storage/                 # ACID WAL Storage (redb), Atomic Safe-Save (.tok), Multi-Doc (.tokbook)
-│   ├── tok-ipc/                     # Binary Framed IPC Schema & Geometry Hit-Testing
-│   ├── tok-plugin-host/             # Sandboxed Extension Host (catch_unwind), Holy Name Guardian, GREP
-│   └── tok-cli/                     # Headless Preflight, Rendering & Determinism Verification Binary
-│
-└── packages/                        # TypeScript / Electron Desktop Shell
-    ├── tok-electron/                # Main Process, Native Menus, Window Management
-    ├── tok-viewer/                  # 3-Active Page DOM Virtualizer (120 FPS)
-    ├── tok-canvas/                  # Transparent Canvas Overlay & Caret (<16ms)
-    ├── tok-story-editor/            # Continuous Unpaginated Story Editor
-    └── tok-ui/                      # Workbench Application (Toolbar, Panels, Pages)
-```
+Instead of relying on legacy monolithic software or overly complex design suites, TypesetOK offers a clean, visual, and approachable desktop workspace tailored specifically to the unique needs of Hebrew typography and book publishing.
 
 ---
 
-## 🚀 Quickstart & Usage
+### ✨ Key Features
 
-### Prerequisites
-- [Rust 1.85+](https://www.rust-lang.org) (with Cargo)
-- [Node.js 20+](https://nodejs.org) (for the Electron UI shell)
+- **Hebrew Typography & Layout:** Natural right-to-left (RTL) text flow, balanced justification with traditional expanding letters (Ahalterm: א, ה, ל, ת, ר, ם), paragraph margins, and orphan control.
+- **Niqqud & Cantillation Support:** High-fidelity rendering of vocalized Hebrew text, automated Unicode ordering for letters and diacritics to avoid displacement, divine names protection, and Hebrew page numbering (gematria).
+- **Visual Workspace & Split View:** Two-page book spread canvas, integrated continuous text editor, real-time live preview, and smooth trackpad pinch-to-zoom gestures.
+- **Ready-to-Use Templates:** Pre-configured layouts for continuous books, books with footnotes, two-column booklets and bulletins, and traditional study pages.
+- **Direct PDF Export:** Generate crisp vector PDF files directly from the application ready for printing or digital reading.
+- **Local & Offline:** Operates entirely offline on your computer. Your files and manuscripts remain private and stored on your disk.
 
-### Build Rust Engine Workspace
+---
+
+### 💻 Getting Started (Windows)
+
+1. **Download:** Head to the [Releases page](https://github.com/TypesetOK/typesetok/releases) and grab either the standalone ZIP or the setup installer (`TypesetOK-Setup.exe`).
+2. **Launch:** Run `TypesetOK.exe` directly (no developer setup required).
+3. **Start Layout:** Choose a template or create a blank document, write or paste your text, adjust margins and styles, save (`Ctrl+S`), and export to PDF (`Ctrl+E`).
+
+---
+
+### 🛠️ Developer Quickstart
+
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/TypesetOK/typesetok.git
 cd typesetok
 
-# Build all workspace crates
-cargo build --workspace
-
-# Run full test suite (175 passing tests)
-cargo test --workspace
-```
-
-### 📥 הרצה ישירה ללא התקנה מוקדמת (Portable Desktop Binary)
-למשתמשי Windows המעוניינים להריץ את התוכנה ישירות ללא צורך בהתקנת Node.js או Rust:
-1. הורידו את `TypesetOK-v0.10.6-windows-desktop-app.zip` (או את אשף ההתקנה הרשמי `TypesetOK-v0.10.6-Setup.exe`) מתוך דף ה-[GitHub Releases](https://github.com/TypesetOK/typesetok/releases/tag/v0.10.6).
-2. חלצו את קובץ ה-ZIP.
-3. הפעילו ישירות בלחיצה כפולה את `TypesetOK.exe`.
-(התוכנה מגיעה כחבילת Standalone עצמאית הכוללת את מעטפת ה-UI, מנוע ה-Electron, ובינארי ה-CLI המובנה).
-
-### Launch Desktop Workbench (Development Environment)
-```bash
-# Install frontend dependencies
+# Install dependencies and build
 npm install
-
-# Build all TypeScript packages and bundle UI
 npm run build
 
-# Run frontend test suite (64 passing tests across 28 suites)
+# Run test suites
 npm test
+cargo test --workspace
 
-# Build Standalone Desktop App bundle
-npm run package:desktop
-
-# Launch TypesetOK Desktop Application
+# Launch desktop app
 npm start
 ```
 
-### CLI Headless Operations (`tok-cli`)
-
-```bash
-# Export ISO PDF/X-1a print file with crop marks and DeviceCMYK:
-cargo run -p tok-cli -- render-pdf --demo output.pdf
-
-# Export pre-paginated HTML projection:
-cargo run -p tok-cli -- render-html --demo output.html
-
-# Run 1,000-page stress benchmark & cascade measurement:
-cargo run -p tok-cli -- benchmark-typeset --pages 1000
-
-# Verify bit-for-bit output determinism (Pass 1 SHA-256 == Pass 2 SHA-256):
-cargo run -p tok-cli -- verify-determinism
-
-# Inspect .tok package archive contents:
-cargo run -p tok-cli -- inspect-package document.tok
-```
-
 ---
 
-## 📊 Verification & Benchmark Status (v0.10.6)
+### 📄 License
 
-| Metric | Architectural Target | Actual Result | Status |
-| :--- | :--- | :--- | :--- |
-| **Rust Engine Tests** | 100% Pass Across All 7 Crates | **175 / 175 Tests Passing** | **PASSED** |
-| **Frontend Shell Tests** | Gematria, Virtualizer, Tokens & Interaction Triad | **60 / 60 Tests Passing** | **PASSED** |
-| **Total Automated Tests** | Rust + TypeScript CI Matrix | **235 / 235 Tests Passing** | **PASSED** |
-| **Font Weight Support** | Bold (700) and Regular (400) Shaping & Styles | **Embedded OFL Bold Fonts & UI Wired** | **PASSED** |
-| **Stream Compression** | zlib FlateDecode for Contents, Fonts & CMaps | **Enabled (Smaller PDF Output)** | **PASSED** |
-| **Deterministic Dates** | Manifest Timestamps in PDF/X Metadata | **Pass 1 Hash == Pass 2 Hash** | **PASSED** |
-| **Margin Collapsing** | Paragraph Space Before / After Collapsing | **Full Top/Bottom/Split Collapsing** | **PASSED** |
-| **TrueType Font Subsetting** | TrueType OpenType Subsetting in PDF | **Identity-H & /ToUnicode** | **PASSED** |
-| **Spatial Hit-Testing** | Sub-pixel glyph snap & selection range | **100% RTL & Bidi Coordinated** | **PASSED** |
-| **Talmud Tzurat HaDaf** | L-Shape expansion & Recto/Verso spreads | **Tested & Validated** | **PASSED** |
-| **Clippy Linter** | 0 Warnings with `-D warnings` | **0 Warnings (Clean)** | **PASSED** |
-| **Formatting** | `cargo fmt --check` Compliant | **100% Formatted** | **PASSED** |
-| **Bit-for-Bit Determinism** | Identical SHA-256 across runs | `Pass 1 SHA == Pass 2 SHA` | **PASSED** |
-| **Massive Doc Benchmark** | 1,000 Pages Full Vocalization | **4,000 Paragraphs / 6,400 Lines** | **PASSED** |
-| **Pre-press Standard** | ISO PDF/X-1a with Fogra39 | **100% DeviceCMYK Black & Marks** | **PASSED** |
-| **DOM Virtualizer** | 3-Page Active Window `[K-1,K,K+1]` | **Active Window Verified** | **PASSED** |
-| **Electron Shell** | Native Menus, Preload IPC Bridge | **Verified & Running** | **PASSED** |
-
----
-
-## 🤝 Code of Conduct & Contributing
-
-We warmly welcome contributions from developers, typographers, and Hebrew DTP experts!
-- Please read our [**Contributing Guide (מדריך לתורמים)**](CONTRIBUTING.md) for full instructions on setup, coding standards, and pull request workflows.
-- View the project architecture and planned milestones in our [**Roadmap & Code Map (מפת קוד ויעדים)**](ROADMAP.md).
-- Review our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
-
----
-
-## 📄 License
-
-Project **TypesetOK (TOK)** is licensed under the:
-**[TypesetOK Source-Available Non-Commercial Copyleft License (TOK-NCCL v1.0)](LICENSE.md)**
-
-* 🚫 **Non-Commercial Use Only:** Commercial use, commercial DTP services, or paid book publishing require a separate commercial license from the author.
-* 🔄 **Copyleft Requirement:** All forks, modifications, or derivative plugins must remain fully open-source under the exact same license.
-* 🛡️ **No Warranty:** Software is provided "AS IS" without warranty of any kind.
+TypesetOK is licensed under the **[TOK-NCCL v1.0](LICENSE.md)** (Source-Available Non-Commercial Copyleft License):
+- **Free for Personal & Non-Commercial Use:** Personal study, community, and non-commercial publishing.
+- **Share-Alike:** Modifications and derivative works must remain under the same license.
+- **Commercial Use:** Requires a separate commercial license.
