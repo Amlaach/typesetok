@@ -35,6 +35,8 @@ pub struct ParagraphNode {
     pub text: String,
     #[serde(default)]
     pub style_patches: Vec<StylePatch>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overrides: Option<crate::overrides::LayoutLockOverrides>,
 }
 
 impl ParagraphNode {
@@ -46,7 +48,25 @@ impl ParagraphNode {
             style_id: style_id.into(),
             text: normalized,
             style_patches: Vec::new(),
+            overrides: None,
         }
+    }
+
+    pub fn with_overrides(mut self, overrides: crate::overrides::LayoutLockOverrides) -> Self {
+        self.overrides = Some(overrides);
+        self
+    }
+
+    pub fn is_frozen(&self) -> bool {
+        self.overrides.as_ref().is_some_and(|o| o.is_frozen)
+    }
+
+    pub fn has_forced_page_break_before(&self) -> bool {
+        self.overrides.as_ref().is_some_and(|o| o.force_page_break_before)
+    }
+
+    pub fn has_forced_page_break_after(&self) -> bool {
+        self.overrides.as_ref().is_some_and(|o| o.force_page_break_after)
     }
 
     pub fn rope(&self) -> Rope {

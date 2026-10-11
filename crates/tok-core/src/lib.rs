@@ -6,6 +6,7 @@ pub mod model;
 pub mod normalizer;
 pub mod numbering;
 pub mod outline;
+pub mod overrides;
 pub mod reference;
 pub mod styles;
 pub mod transaction;
@@ -24,6 +25,7 @@ pub use model::{
 pub use normalizer::{HebrewMarkCategory, HebrewNormalizer};
 pub use numbering::{GematriaPunctuation, NumberingFormatter, NumberingScheme, NumberingScope};
 pub use outline::{DocumentHierarchyNode, DocumentOutline, HierarchyLevel};
+pub use overrides::LayoutLockOverrides;
 pub use reference::{
     CrossReferenceNode, CrossReferenceRegistry, ReferenceKind, ReferenceTarget,
 };
