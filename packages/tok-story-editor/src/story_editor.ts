@@ -12,12 +12,22 @@ import {
   StorySelection,
   clearRangeInSpans,
   formatRangeInSpans,
+  insertSpanRange,
   mergeParagraphs,
+  removeSpanRange,
   splitParagraph
 } from './types';
 import { renderParagraphDom, parseParagraphDom } from './dom_converter';
 import { StoryHistory } from './history';
-export { StoryParagraph, StorySelection };
+import {
+  FindOptions,
+  FindResult,
+  findAllInParagraphs,
+  findNextInParagraphs,
+  findPrevInParagraphs
+} from './find_replace';
+export { StoryParagraph, StorySelection, FindOptions, FindResult };
+
 
 export class StoryEditor {
   private container: HTMLElement;
@@ -530,6 +540,160 @@ export class StoryEditor {
       focusOffset: prevLen
     });
   }
+
+  public findAll(options: FindOptions): FindResult[] {
+    return findAllInParagraphs(this.getStory(), options);
+  }
+
+  public findNext(options: FindOptions): FindResult | null {
+    const sel = this.getStorySelection();
+    const fromParaId = sel ? sel.paraId : '';
+    const fromOffset = sel ? sel.end : 0;
+    const match = findNextInParagraphs(this.getStory(), fromParaId, fromOffset, options);
+    if (match) {
+      this.setStorySelection({
+        paraId: match.paraId,
+        start: match.start,
+        end: match.end,
+        isCollapsed: false,
+        anchorParaId: match.paraId,
+        anchorOffset: match.start,
+        focusParaId: match.paraId,
+        focusOffset: match.end
+      });
+    }
+    return match;
+  }
+
+  public findPrev(options: FindOptions): FindResult | null {
+    const sel = this.getStorySelection();
+    const fromParaId = sel ? sel.paraId : '';
+    const fromOffset = sel ? sel.start : 0;
+    const match = findPrevInParagraphs(this.getStory(), fromParaId, fromOffset, options);
+    if (match) {
+      this.setStorySelection({
+        paraId: match.paraId,
+        start: match.start,
+        end: match.end,
+        isCollapsed: false,
+        anchorParaId: match.paraId,
+        anchorOffset: match.start,
+        focusParaId: match.paraId,
+        focusOffset: match.end
+      });
+    }
+    return match;
+  }
+
+  public replaceNext(replacement: string, options: FindOptions): boolean {
+    const sel = this.getStorySelection();
+    let match: FindResult | null = null;
+
+    if (sel && !sel.isCollapsed) {
+      const p = this.getParagraph(sel.paraId);
+      if (p) {
+        const textSlice = Array.from(p.text).slice(sel.start, sel.end).join('');
+        const matches = findAllInParagraphs(
+          [{ id: p.id, styleId: p.styleId, text: textSlice }],
+          options
+        );
+        if (matches.length > 0 && matches[0].start === 0 && matches[0].end === (sel.end - sel.start)) {
+          match = {
+            paraId: sel.paraId,
+            paraIndex: 0,
+            start: sel.start,
+            end: sel.end,
+            matchedText: textSlice
+          };
+        }
+      }
+    }
+
+    if (!match) {
+      match = this.findNext(options);
+    }
+
+    if (!match) return false;
+
+    const targetMatch = match;
+    const repLen = Array.from(replacement).length;
+
+    this.executeTransaction('החלפה', () => {
+      const pEl = this.editorEl.querySelector<HTMLElement>(`p[data-para-id="${CSS.escape(targetMatch.paraId)}"]`);
+      if (pEl) {
+        const p = parseParagraphDom(pEl);
+        const updated = this.replaceRangeInParagraph(p, targetMatch.start, targetMatch.end, replacement);
+        const newEl = renderParagraphDom(updated);
+        pEl.replaceWith(newEl);
+      }
+    });
+
+    this.setStorySelection({
+      paraId: targetMatch.paraId,
+      start: targetMatch.start,
+      end: targetMatch.start + repLen,
+      isCollapsed: false,
+      anchorParaId: targetMatch.paraId,
+      anchorOffset: targetMatch.start,
+      focusParaId: targetMatch.paraId,
+      focusOffset: targetMatch.start + repLen
+    });
+
+    return true;
+  }
+
+  public replaceAll(replacement: string, options: FindOptions): number {
+    const allMatches = findAllInParagraphs(this.getStory(), options);
+    if (allMatches.length === 0) return 0;
+
+    const byPara = new Map<string, FindResult[]>();
+    for (const m of allMatches) {
+      const list = byPara.get(m.paraId) || [];
+      list.push(m);
+      byPara.set(m.paraId, list);
+    }
+
+    this.executeTransaction('החלף הכל', () => {
+      for (const [paraId, matches] of byPara.entries()) {
+        const pEl = this.editorEl.querySelector<HTMLElement>(`p[data-para-id="${CSS.escape(paraId)}"]`);
+        if (!pEl) continue;
+
+        let p = parseParagraphDom(pEl);
+        matches.sort((a, b) => b.start - a.start);
+
+        for (const m of matches) {
+          p = this.replaceRangeInParagraph(p, m.start, m.end, replacement);
+        }
+
+        const newEl = renderParagraphDom(p);
+        pEl.replaceWith(newEl);
+      }
+    });
+
+    return allMatches.length;
+  }
+
+  private replaceRangeInParagraph(
+    p: StoryParagraph,
+    start: number,
+    end: number,
+    replacement: string
+  ): StoryParagraph {
+    const chars = Array.from(p.text);
+    const repChars = Array.from(replacement);
+    const newChars = [...chars.slice(0, start), ...repChars, ...chars.slice(end)];
+    const newText = newChars.join('');
+
+    const afterRemove = removeSpanRange(p.spans || [], start, end, chars.length);
+    const newSpans = insertSpanRange(afterRemove, start, repChars.length, [], chars.length - (end - start));
+
+    return {
+      ...p,
+      text: newText,
+      spans: newSpans
+    };
+  }
+
 
 
   private notifyHistoryChange(): void {
