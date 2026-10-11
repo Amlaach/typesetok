@@ -74,6 +74,26 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+export const ENGINE_FONT_STACK = "'Frank Ruhl Libre', 'Noto Rashi Hebrew', 'Noto Serif Hebrew', 'David Libre', serif";
+
+export function formatEngineFont(family?: string, isPrimary = true): { fontFamily: string; fontWeight?: number } {
+  if (!family) {
+    return {
+      fontFamily: isPrimary
+        ? `'Frank Ruhl Libre', ${ENGINE_FONT_STACK}`
+        : `'Noto Rashi Hebrew', ${ENGINE_FONT_STACK}`
+    };
+  }
+
+  const isBold = family.endsWith(' Bold') || family.includes('Bold');
+  const baseFamily = family.replace(/\s+Bold$/i, '').trim();
+
+  return {
+    fontFamily: `'${baseFamily}', ${ENGINE_FONT_STACK}`,
+    fontWeight: isBold ? 700 : undefined
+  };
+}
+
 /**
  * Converts Rust PageLayoutBox array to tok-viewer PageDescriptor array.
  * Uses exact text positions, line heights, baselines, paragraph IDs,
@@ -139,14 +159,16 @@ export function layoutToPageDescriptors(pages: PageLayoutBox[]): PageDescriptor[
       const isPrimary = baseFlowId === 'gemara' || baseFlowId === 'main' || baseFlowId === 'primary';
 
       const linesHtml = (frame.lines || []).map((line) => {
-        const lineTopPx = Math.max(0, (line.baseline_y - line.height * 0.8) * scaleY);
-        const lineH = Math.max(10, line.height * scaleY);
-        const fontFam = (line.fonts && line.fonts.length > 0)
-          ? line.fonts[0]
-          : (isPrimary ? 'var(--tok-font-hebrew-body)' : 'var(--tok-font-hebrew-rashi)');
+        // Exact physical top offset from Rust layout engine: baseline_y - height
+        const topOffsetPt = Math.max(0, line.baseline_y - line.height);
+        const lineTopPx = topOffsetPt * scaleY;
+        const lineHPx = Math.max(1, line.height * scaleY);
+
+        const engineFont = formatEngineFont(line.fonts?.[0], isPrimary);
+        const fontStyle = `font-family: ${engineFont.fontFamily};` + (engineFont.fontWeight ? ` font-weight: ${engineFont.fontWeight};` : '');
         const paraAttr = line.paragraph_id ? ` data-para-id="${escapeHtml(String(line.paragraph_id))}"` : '';
 
-        return `<div class="tok-line-box tok-line" data-line-index="${line.line_index}"${paraAttr} data-baseline-y="${line.baseline_y}" style="position: absolute; top: ${lineTopPx.toFixed(1)}px; left: 0; right: 0; height: ${lineH.toFixed(1)}px; line-height: ${lineH.toFixed(1)}px; font-family: ${fontFam}; direction: ${line.is_rtl ? 'rtl' : 'ltr'}; white-space: nowrap !important; overflow: visible; contain: layout style;">${escapeHtml(line.text)}</div>`;
+        return `<div class="tok-line-box tok-line" data-line-index="${line.line_index}"${paraAttr} data-baseline-y="${line.baseline_y}" data-line-height="${line.height}" data-line-width="${line.width}" style="position: absolute; top: ${lineTopPx.toFixed(2)}px; left: 0; right: 0; height: ${lineHPx.toFixed(2)}px; line-height: ${lineHPx.toFixed(2)}px; ${fontStyle} direction: ${line.is_rtl ? 'rtl' : 'ltr'}; white-space: nowrap !important; overflow: visible; contain: layout style;">${escapeHtml(line.text)}</div>`;
       }).join('\n');
 
       const emptyNotice = (!frame.lines || frame.lines.length === 0)
