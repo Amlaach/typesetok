@@ -43,4 +43,12 @@ pub use multi_flow::{
     MultiFlowSolver, SolvedFlowAllocation, SpreadSide,
 };
 pub use shaper::{PositionedGlyph, ShapedRun, TextShaper};
+pub use solver::{
+    ColumnFrameVariables, ColumnSpec, ColumnWidthDistribution, ConstraintRelation,
+    ConstraintStrength, ConstraintVariable, FootnoteBandConfig, FootnoteBandVariables,
+    GeometricConstraint, GeometricConstraintSolver, LShapeConfig, LShapeExpansionVariables,
+    LinearExpression, LinearTerm, MultiColumnConstraintModel, PageConstraintModel,
+    PageGeometryConfig, RectVariables, SolvedColumnAllocation, SolvedRect, SolverError,
+};
+
 
