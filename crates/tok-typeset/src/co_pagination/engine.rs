@@ -12,7 +12,7 @@ use super::sync::{ActiveSyncResult, ActiveSynchronizer, AnchorKey, SynchronizerC
 use super::template::{SpreadMathematics, TemplateConfig};
 use crate::engine::TypesettingEngine;
 use crate::geometry::{LineBox, PageLayoutBox, PhysicalRect, TextFrameBox};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use tok_core::id::FractionalIndex;
 use tok_core::model::ParagraphNode;
 
@@ -63,6 +63,40 @@ pub struct CoPaginationResult {
     pub all_anchors_remedied: bool,
 }
 
+/// Determines the optimal split line count for a paragraph across consecutive pages,
+/// strictly enforcing orphan control (minimum lines on current page) and widow control
+/// (minimum lines carried over to next page).
+pub fn calculate_typographic_split(
+    total_lines: usize,
+    available_lines: usize,
+    orphan_threshold: usize,
+    widow_threshold: usize,
+) -> Option<usize> {
+    if total_lines <= available_lines {
+        return Some(total_lines);
+    }
+    if available_lines < orphan_threshold {
+        return None;
+    }
+    let mut take = available_lines;
+    let remainder = total_lines - take;
+
+    if remainder < widow_threshold {
+        let needed_for_widow = widow_threshold - remainder;
+        if take >= orphan_threshold + needed_for_widow {
+            take -= needed_for_widow;
+        } else {
+            return None;
+        }
+    }
+
+    if take >= orphan_threshold && total_lines - take >= widow_threshold {
+        Some(take)
+    } else {
+        None
+    }
+}
+
 pub struct CoPaginationEngine;
 
 impl CoPaginationEngine {
@@ -86,6 +120,7 @@ impl CoPaginationEngine {
         let mut total_rashi_lines = 0;
         let mut total_tosafot_lines = 0;
         let mut all_anchors_remedied = true;
+        let mut seen_anchors: HashSet<AnchorKey> = HashSet::new();
 
         let mut page_number = 1;
 
@@ -124,12 +159,60 @@ impl CoPaginationEngine {
                     config.main_line_height,
                 );
 
-                if !tentative_gemara_lines.is_empty()
-                    && tentative_gemara_lines.len() + chunk_lines.len() > max_gemara_lines
-                {
-                    // Gemara itself overflows: push chunk back and finish page
-                    remaining_chunks.push_front(chunk);
-                    break;
+                if tentative_gemara_lines.len() + chunk_lines.len() > max_gemara_lines {
+                    let available_lines = max_gemara_lines.saturating_sub(tentative_gemara_lines.len());
+                    if !tentative_gemara_lines.is_empty() && available_lines < 2 {
+                        // Orphan prevention: push chunk back and finish page
+                        remaining_chunks.push_front(chunk);
+                        break;
+                    }
+
+                    if let Some(take) = calculate_typographic_split(chunk_lines.len(), available_lines, 2, 2) {
+                        let this_lines = &chunk_lines[..take];
+                        let remainder_lines = &chunk_lines[take..];
+
+                        let mut this_anchors = Vec::new();
+                        let mut remainder_anchors = Vec::new();
+                        for (a_key, phrase) in chunk.anchors {
+                            let in_this = this_lines.iter().any(|l| l.text.contains(&phrase));
+                            let in_rem = remainder_lines.iter().any(|l| l.text.contains(&phrase));
+                            if in_this {
+                                this_anchors.push((a_key.clone(), phrase.clone()));
+                            }
+                            if in_rem || (!in_this && !in_rem) {
+                                remainder_anchors.push((a_key, phrase));
+                            }
+                        }
+
+                        for (a_key, phrase) in &this_anchors {
+                            let mut anchor_line_rel = 0;
+                            for (l_idx, line) in this_lines.iter().enumerate() {
+                                if line.text.contains(phrase) {
+                                    anchor_line_rel = l_idx;
+                                    break;
+                                }
+                            }
+                            let abs_l = tentative_gemara_lines.len() + anchor_line_rel;
+                            let abs_y = current_g_y + (anchor_line_rel as f32 + 1.0) * config.main_line_height;
+                            tentative_gemara_anchors.insert(a_key.clone(), (abs_l, abs_y));
+                        }
+
+                        tentative_gemara_lines.extend_from_slice(this_lines);
+                        page_chunks.push(CoPaginatedChunk {
+                            text: this_lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join(" "),
+                            anchors: this_anchors,
+                        });
+
+                        let remainder_text = remainder_lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join(" ");
+                        remaining_chunks.push_front(CoPaginatedChunk {
+                            text: remainder_text,
+                            anchors: remainder_anchors,
+                        });
+                        break;
+                    } else if !tentative_gemara_lines.is_empty() {
+                        remaining_chunks.push_front(chunk);
+                        break;
+                    }
                 }
 
                 // Check commentary demand for this chunk's anchors
@@ -194,12 +277,20 @@ impl CoPaginationEngine {
             let mut rashi_line_counter = 0;
             let mut sync_results = Vec::new();
 
-            // Collect Rashi items matching this page's anchors
+            // Record all anchors appearing on this page
+            for k in tentative_gemara_anchors.keys() {
+                seen_anchors.insert(k.clone());
+            }
+
+            // Collect Rashi items matching this page's anchors or earlier carry-overs
             let mut this_page_rashi = Vec::new();
             let mut unplaced_rashi = VecDeque::new();
 
             while let Some(item) = remaining_rashi.pop_front() {
-                if tentative_gemara_anchors.contains_key(&item.target_anchor)
+                let is_anchor_here = tentative_gemara_anchors.contains_key(&item.target_anchor);
+                let is_carry_over = seen_anchors.contains(&item.target_anchor);
+                if is_anchor_here
+                    || is_carry_over
                     || (page_chunks.is_empty() && this_page_rashi.len() < max_commentary_lines)
                 {
                     this_page_rashi.push(item);
@@ -241,10 +332,21 @@ impl CoPaginationEngine {
                     config.commentary_line_height,
                 );
 
-                if rashi_line_counter + p_lines.len() > max_commentary_lines + 2 && !page_rashi_lines.is_empty() {
-                    // Commentary overflows: push this item back to remaining for next page
-                    remaining_rashi.push_front(item);
-                    break;
+                if rashi_line_counter + p_lines.len() > max_commentary_lines {
+                    let available_lines = max_commentary_lines.saturating_sub(rashi_line_counter);
+                    if let Some(take) = calculate_typographic_split(p_lines.len(), available_lines, 2, 2) {
+                        let this_lines = p_lines[..take].to_vec();
+                        let remainder_lines = &p_lines[take..];
+                        let remainder_text = remainder_lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join(" ");
+                        remaining_rashi.push_front(CoPaginatedCommentary {
+                            target_anchor: item.target_anchor.clone(),
+                            text: remainder_text,
+                        });
+                        p_lines = this_lines;
+                    } else if !page_rashi_lines.is_empty() {
+                        remaining_rashi.push_front(item);
+                        break;
+                    }
                 }
 
                 // Evaluate active synchronization
@@ -279,7 +381,10 @@ impl CoPaginationEngine {
             let mut unplaced_tosafot = VecDeque::new();
 
             while let Some(item) = remaining_tosafot.pop_front() {
-                if tentative_gemara_anchors.contains_key(&item.target_anchor)
+                let is_anchor_here = tentative_gemara_anchors.contains_key(&item.target_anchor);
+                let is_carry_over = seen_anchors.contains(&item.target_anchor);
+                if is_anchor_here
+                    || is_carry_over
                     || (page_chunks.is_empty() && this_page_tosafot.len() < max_commentary_lines)
                 {
                     this_page_tosafot.push(item);
@@ -306,9 +411,21 @@ impl CoPaginationEngine {
                     config.commentary_line_height,
                 );
 
-                if tosafot_line_counter + p_lines.len() > max_commentary_lines + 2 && !page_tosafot_lines.is_empty() {
-                    remaining_tosafot.push_front(item);
-                    break;
+                if tosafot_line_counter + p_lines.len() > max_commentary_lines {
+                    let available_lines = max_commentary_lines.saturating_sub(tosafot_line_counter);
+                    if let Some(take) = calculate_typographic_split(p_lines.len(), available_lines, 2, 2) {
+                        let this_lines = p_lines[..take].to_vec();
+                        let remainder_lines = &p_lines[take..];
+                        let remainder_text = remainder_lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join(" ");
+                        remaining_tosafot.push_front(CoPaginatedCommentary {
+                            target_anchor: item.target_anchor.clone(),
+                            text: remainder_text,
+                        });
+                        p_lines = this_lines;
+                    } else if !page_tosafot_lines.is_empty() {
+                        remaining_tosafot.push_front(item);
+                        break;
+                    }
                 }
 
                 if let Some(&(_, g_y)) = tentative_gemara_anchors.get(&item.target_anchor) {
@@ -510,5 +627,90 @@ mod tests {
         // Facing spreads alternate Recto -> Verso
         assert_eq!(result.pages[0].math.side, crate::multi_flow::SpreadSide::Recto);
         assert_eq!(result.pages[1].math.side, crate::multi_flow::SpreadSide::Verso);
+    }
+
+    #[test]
+    fn test_calculate_typographic_split_orphan_and_widow_protection() {
+        // All fit
+        assert_eq!(calculate_typographic_split(5, 6, 2, 2), Some(5));
+        assert_eq!(calculate_typographic_split(5, 5, 2, 2), Some(5));
+
+        // Available < orphan threshold (2): reject
+        assert_eq!(calculate_typographic_split(5, 1, 2, 2), None);
+        assert_eq!(calculate_typographic_split(3, 1, 2, 2), None);
+
+        // Remainder would be widow (1 line left for next page)
+        // 5 total, 4 available -> take 3 (leaving 2 for next page)
+        assert_eq!(calculate_typographic_split(5, 4, 2, 2), Some(3));
+
+        // 3 total, 2 available -> remainder is 1, but reducing take to 1 violates orphan on page 1 -> reject (None)
+        assert_eq!(calculate_typographic_split(3, 2, 2, 2), None);
+
+        // 4 total, 2 available -> take 2, remainder 2 -> Some(2)
+        assert_eq!(calculate_typographic_split(4, 2, 2, 2), Some(2));
+
+        // 6 total, 4 available -> take 4, remainder 2 -> Some(4)
+        assert_eq!(calculate_typographic_split(6, 4, 2, 2), Some(4));
+
+        // 6 total, 5 available -> remainder is 1 -> adjust take to 4 -> Some(4)
+        assert_eq!(calculate_typographic_split(6, 5, 2, 2), Some(4));
+    }
+
+    #[test]
+    fn test_co_pagination_orphan_widow_stream_splitting() {
+        let engine = test_engine();
+        let config = TemplateConfig {
+            page_width_pt: 595.0,
+            page_height_pt: 200.0, // Short page to force frequent splits
+            margin_inner_pt: 20.0,
+            margin_outer_pt: 20.0,
+            margin_top_pt: 20.0,
+            margin_bottom_pt: 20.0,
+            gutter_pt: 10.0,
+            main_line_height: 18.0,
+            commentary_line_height: 13.5,
+            ..Default::default()
+        };
+        let sync_config = SynchronizerConfig::default();
+
+        let rashi_long = (0..25)
+            .map(|i| format!("דיבור המתחיל קורין אות {} פירוש מפורט הדן בדין המשנה", i))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let doc = CoPaginationDocument {
+            main_chunks: vec![
+                CoPaginatedChunk {
+                    text: "גמרא קטע א מאימתי קורין את שמע בערבית משעה שהכהנים נכנסים לאכול".to_string(),
+                    anchors: vec![(AnchorKey::new("k1"), "קורין".to_string())],
+                },
+                CoPaginatedChunk {
+                    text: "גמרא קטע ב תנו רבנן מעשה ברבי אליעזר שהיה מסב בבני ברק כל אותו הלילה".to_string(),
+                    anchors: vec![(AnchorKey::new("k2"), "רבנן".to_string())],
+                },
+            ],
+            rashi_items: vec![
+                CoPaginatedCommentary {
+                    target_anchor: AnchorKey::new("k1"),
+                    text: rashi_long,
+                },
+            ],
+            tosafot_items: vec![],
+        };
+
+        let result = CoPaginationEngine::co_paginate(&config, &sync_config, &doc, &engine);
+        assert!(result.total_pages >= 2, "Expected multiple pages");
+        // Verify no page has a 1-line orphan commentary when commentary was split
+        for page in &result.pages {
+            if page.rashi_lines_count > 0 {
+                // If rashi is placed, verify it doesn't leave single orphan line on multi-page split
+                assert!(
+                    page.rashi_lines_count >= 2,
+                    "Expected at least 2 lines on page {} to prevent orphan/widow defect, got {}",
+                    page.page_number,
+                    page.rashi_lines_count
+                );
+            }
+        }
     }
 }
