@@ -53,6 +53,9 @@ export const strings: Translations = {
   // Quick Menu
   menuNewDocument: { he: 'הקמת מסמך חדש...', en: 'New Document...' },
   menuOpenDocument: { he: 'פתיחת מסמך…', en: 'Open Document (.tok)...' },
+  menuImportDocument: { he: 'ייבוא מסמך (Word, MD, טקסט)...', en: 'Import Document (Word, MD, TXT)...' },
+  importDocument: { he: 'ייבא מסמך...', en: 'Import Document...' },
+  importDocumentDesc: { he: 'ייבוא קובץ Word (.docx), Markdown (.md) או טקסט פשוט (.txt)', en: 'Import Word (.docx), Markdown (.md) or plain text (.txt)' },
   menuSave: { he: 'שמירת מסמך', en: 'Save Document' },
   menuSaveAs: { he: 'שמירה בשם...', en: 'Save As...' },
   menuNormalizeNiqqud: { he: 'נרמול ניקוד וטעמים (ת״י 6100)', en: 'Normalize Niqqud & Cantillation (SI 6100)' },
@@ -365,6 +368,8 @@ export const strings: Translations = {
   toastSaved: { he: 'המסמך נשמר בהצלחה בפורמט .tok', en: 'Document saved in .tok format' },
   toastSaveError: { he: 'שגיאה בשמירת המסמך: {error}', en: 'Error saving document: {error}' },
   toastOpenError: { he: 'שגיאה בפתיחת המסמך: {error}', en: 'Error opening document: {error}' },
+  toastImportSuccess: { he: 'המסמך יובא בהצלחה: {title} ({count} פסקאות)', en: 'Document imported successfully: {title} ({count} paragraphs)' },
+  toastImportError: { he: 'שגיאה בייבוא המסמך: {error}', en: 'Error importing document: {error}' },
   toastExporting: { he: 'מייצא לקובץ לדפוס ISO PDF/X-1a...', en: 'Exporting print-ready ISO PDF/X-1a...' },
   toastExportDone: { he: 'הייצוא לדפוס הושלם בהצלחה!', en: 'Print export completed!' },
   toastExportError: { he: 'שגיאת ייצוא: {error}', en: 'Export error: {error}' },

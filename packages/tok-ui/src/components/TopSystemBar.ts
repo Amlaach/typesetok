@@ -22,6 +22,7 @@ const MENU_ITEMS: MenuItem[] = [
   { labelKey: 'topBarProjects', shortcut: 'Ctrl+Shift+P', action: 'open-projects' },
   { labelKey: 'menuNewDocument', shortcut: 'Ctrl+N', action: 'new-document' },
   { labelKey: 'menuOpenDocument', shortcut: 'Ctrl+O', action: 'open-document' },
+  { labelKey: 'menuImportDocument', shortcut: 'Ctrl+I', action: 'import-document' },
   { labelKey: 'menuSave', shortcut: 'Ctrl+S', action: 'save-document' },
   { labelKey: 'menuSaveAs', shortcut: 'Ctrl+Shift+S', action: 'save-as' },
   { type: 'separator' },

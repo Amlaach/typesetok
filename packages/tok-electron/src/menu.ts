@@ -35,6 +35,11 @@ export function buildApplicationMenu(mainWindow: BrowserWindow): Menu {
             }
           },
         },
+        {
+          label: 'ייבא מסמך (Word, Markdown, טקסט)...',
+          accelerator: 'CmdOrCtrl+I',
+          click: () => send('import-document'),
+        },
         { type: 'separator' },
         {
           label: 'שמור',

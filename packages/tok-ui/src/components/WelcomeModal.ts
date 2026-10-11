@@ -7,6 +7,7 @@ export interface WelcomeModalCallbacks {
   onSelectTemplate: (templateId: string) => void;
   /** Open a .tok file; `path` is set when a file was dropped on the screen or selected. */
   onOpenProject: (path?: string) => void;
+  onImportDocument?: () => void;
   onClose: () => void;
   onOpenSettings?: () => void;
   onOpenAbout?: () => void;
@@ -322,6 +323,19 @@ export class WelcomeModal {
       this.callbacks.onSelectTemplate('blank');
     });
     grid.appendChild(blank);
+
+    const importCard = el('button', 'tok-template-card tok-template-import', { type: 'button', role: 'listitem', 'data-focus-key': 'template-import' });
+    const importIconWrap = el('span', 'tok-plus', { 'aria-hidden': 'true', style: 'background:rgba(59,130,246,0.15);color:#60A5FA;' });
+    importIconWrap.appendChild(icon('file', 20));
+    importCard.appendChild(importIconWrap);
+    importCard.appendChild(el('span', 'tok-template-title', undefined, t('importDocument')));
+    importCard.appendChild(el('span', 'tok-template-desc', undefined, t('importDocumentDesc')));
+    importCard.addEventListener('click', () => {
+      this.hide();
+      this.callbacks.onImportDocument?.();
+    });
+    grid.appendChild(importCard);
+
     main.appendChild(grid);
     card.appendChild(main);
 
@@ -331,6 +345,18 @@ export class WelcomeModal {
     sideHead.appendChild(el('h2', undefined, { id: 'tok-recent-h' }, t('recentProjects')));
 
     const headActions = el('div', undefined, { style: 'display:flex;align-items:center;gap:6px;' });
+
+    const importBtn = button(t('importDocument'), {
+      className: 'tok-btn tok-btn-sm',
+      icon: 'file',
+      iconSize: 15,
+      attrs: { 'data-focus-key': 'import', title: t('importDocumentDesc') },
+      onClick: () => {
+        this.hide();
+        this.callbacks.onImportDocument?.();
+      }
+    });
+    headActions.appendChild(importBtn);
 
     const openBtn = button(t('openProject'), {
       className: 'tok-btn tok-btn-sm',

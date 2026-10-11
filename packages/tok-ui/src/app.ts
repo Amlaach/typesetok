@@ -28,8 +28,10 @@ import {
 } from './engine/FlowPaginator';
 import {
   documentStateToDocumentRoot,
-  documentRootToDocumentState
+  documentRootToDocumentState,
+  importResultToDocumentState
 } from './engine/documentBridge';
+import { importDocument, ImportResult } from './engine/textImporter';
 import { layoutToPageDescriptors } from './engine/typesetBridge';
 
 import { toHebrewGematria } from './gematria';
@@ -586,6 +588,13 @@ export class TypesetOkApp {
         return;
       }
 
+      // Ctrl+I: Import Document
+      if (!e.shiftKey && (code === 'KeyI' || key === 'i' || key === 'ן')) {
+        e.preventDefault();
+        this.handleSystemAction('import-document');
+        return;
+      }
+
       // Ctrl+E or Ctrl+P: Export PDF
       if (!e.shiftKey && (code === 'KeyE' || key === 'e' || key === 'ק' || code === 'KeyP' || key === 'p' || key === 'פ')) {
         e.preventDefault();
@@ -714,6 +723,7 @@ export class TypesetOkApp {
       this.welcomeModalInstance = new WelcomeModal({
         onSelectTemplate: (tmpl) => this.handleTemplateSelect(tmpl),
         onOpenProject: (path) => this.handleSystemAction('open-document', path),
+        onImportDocument: () => this.handleSystemAction('import-document'),
         onClose: () => {},
         onOpenSettings: () => this.settingsModal.show(),
         onOpenAbout: () => this.aboutModal.show(),
@@ -1455,6 +1465,15 @@ export class TypesetOkApp {
         action: () => this.handleSystemAction('export-pdf')
       },
       {
+        id: 'cmd-import-doc',
+        icon: 'file',
+        category: t('cmdCatProjects'),
+        title: t('importDocument'),
+        subtitle: t('importDocumentDesc'),
+        shortcut: 'Ctrl+I',
+        action: () => this.handleSystemAction('import-document')
+      },
+      {
         id: 'cmd-close-document',
         icon: 'close',
         category: t('cmdCatProjects'),
@@ -1973,6 +1992,122 @@ export class TypesetOkApp {
     this.showToast(tf('toastOpenFile', { path: baseName }));
   }
 
+  public async promptAndImportDocument(explicitPath?: string): Promise<void> {
+    const win = window as any;
+    let targetPath = explicitPath;
+
+    if (!targetPath) {
+      if (win.tokIpc?.showImportDialog) {
+        targetPath = await win.tokIpc.showImportDialog();
+      } else if (win.tokIpc?.showOpenDialog) {
+        targetPath = await win.tokIpc.showOpenDialog({
+          filters: [
+            { name: 'כל המסמכים הנתמכים (*.docx, *.md, *.txt)', extensions: ['docx', 'md', 'txt'] },
+            { name: 'Microsoft Word (*.docx)', extensions: ['docx'] },
+            { name: 'Markdown (*.md)', extensions: ['md'] },
+            { name: 'טקסט פשוט (*.txt)', extensions: ['txt'] }
+          ]
+        });
+      }
+    }
+
+    if (!targetPath) {
+      if (typeof document !== 'undefined' && !win.tokIpc) {
+        this.promptWebFileImport();
+      }
+      return;
+    }
+
+    try {
+      let result: ImportResult;
+      if (win.tokIpc?.readImportFile) {
+        const fileInfo = await win.tokIpc.readImportFile(targetPath);
+        let content: string | Uint8Array;
+        if (fileInfo.isBinary) {
+          const binStr = atob(fileInfo.dataBase64);
+          const len = binStr.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binStr.charCodeAt(i);
+          }
+          content = bytes;
+        } else {
+          content = fileInfo.text || '';
+        }
+        result = importDocument(content, { fileName: fileInfo.fileName });
+      } else {
+        throw new Error('IPC reader not available');
+      }
+
+      this.applyImportedDocument(result, targetPath);
+    } catch (err: any) {
+      console.error('[TOK] Import error:', err);
+      this.showToast(tf('toastImportError', { error: err?.userMessage || err?.message || String(err) }), true);
+    }
+  }
+
+  private promptWebFileImport(): void {
+    if (typeof document === 'undefined') return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.docx,.md,.txt';
+    input.style.display = 'none';
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const isDocx = file.name.endsWith('.docx');
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          let content: string | Uint8Array;
+          if (isDocx) {
+            content = new Uint8Array(reader.result as ArrayBuffer);
+          } else {
+            content = reader.result as string;
+          }
+          const result = importDocument(content, { fileName: file.name });
+          this.applyImportedDocument(result);
+        } catch (e: any) {
+          this.showToast(tf('toastImportError', { error: e?.userMessage || e?.message || String(e) }), true);
+        }
+      };
+      if (isDocx) {
+        reader.readAsArrayBuffer(file);
+      } else {
+        reader.readAsText(file);
+      }
+    });
+    document.body.appendChild(input);
+    input.click();
+    setTimeout(() => input.remove(), 1000);
+  }
+
+  public applyImportedDocument(result: ImportResult, filePath?: string): void {
+    this.resetDocumentSession();
+    this.documentTitle = result.title;
+    this.currentFilePath = filePath || '';
+    this.topBar.setDocumentTitle(this.documentTitle, true);
+    this.setDirty(true);
+    this.hasOpenDocument = true;
+    this.welcomeModal.setHasOpenDocument(true);
+
+    this.documentState = importResultToDocumentState(result, this.documentState.templateType || 'prose');
+    this.activeFlowId = 'gemara';
+    this.storyEditor.loadStory(this.documentState.flows.gemara);
+    this.activePageIndex = 0;
+    this.structureBar.setActivePage(0);
+    this.repaginateAndSync(true);
+
+    addRecentProject({
+      name: (this.documentTitle || 'imported') + '.tok',
+      path: filePath,
+      pages: this.pages.length || 1,
+      lastSavedAt: new Date().toISOString()
+    });
+
+    this.showToast(tf('toastImportSuccess', { title: result.title, count: result.paragraphs.length }));
+  }
+
   public setViewMode(mode: ViewMode): void {
     const wasSplit = this.currentViewMode === 'split';
     this.currentViewMode = mode;
@@ -2106,6 +2241,11 @@ export class TypesetOkApp {
         } else {
           this.showToast(tf('toastOpenFile', { path: '' }));
         }
+        break;
+      }
+      case 'import-document': {
+        if (!this.confirmDiscardUnsaved()) return;
+        this.promptAndImportDocument(typeof data === 'string' ? data : undefined);
         break;
       }
       case 'save-document': {
