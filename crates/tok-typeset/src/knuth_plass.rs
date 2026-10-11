@@ -273,13 +273,22 @@ impl KnuthPlassBreaker {
         }
 
         let metrics_valid = items.iter().all(|item| match item {
-            LayoutItem::Box { width, .. } => width.is_finite(),
+            LayoutItem::Box { width, .. } => width.is_finite() && *width >= 0.0,
             LayoutItem::Glue {
                 width,
                 stretch,
                 shrink,
-            } => width.is_finite() && stretch.is_finite() && shrink.is_finite(),
-            LayoutItem::Penalty { width, penalty, .. } => width.is_finite() && !penalty.is_nan(),
+            } => {
+                width.is_finite()
+                    && stretch.is_finite()
+                    && shrink.is_finite()
+                    && *width >= 0.0
+                    && *stretch >= 0.0
+                    && *shrink >= 0.0
+            }
+            LayoutItem::Penalty { width, penalty, .. } => {
+                width.is_finite() && penalty.is_finite() && *width >= 0.0
+            }
         });
         if !tolerance.is_finite() || tolerance < 0.0 || !metrics_valid {
             return Vec::new();
@@ -570,7 +579,7 @@ impl<'a> BreakContext<'a> {
         let best_final = nodes
             .iter()
             .filter(|n| n.position == final_break)
-            .min_by(|a, b| a.total_demerits.partial_cmp(&b.total_demerits).unwrap());
+            .min_by(|a, b| a.total_demerits.total_cmp(&b.total_demerits));
 
         if best_final.is_some() && nodes.len() > 1 {
             Some(nodes)
@@ -586,7 +595,7 @@ impl<'a> BreakContext<'a> {
             .iter()
             .enumerate()
             .filter(|(_, n)| n.position == final_break)
-            .min_by(|(_, a), (_, b)| a.total_demerits.partial_cmp(&b.total_demerits).unwrap())
+            .min_by(|(_, a), (_, b)| a.total_demerits.total_cmp(&b.total_demerits))
             .map(|(i, _)| i);
 
         let mut current = best_final_idx;
@@ -1042,5 +1051,75 @@ mod tests {
             .map(|l| l.items.iter().filter(|it| matches!(it, LayoutItem::Box { .. })).count())
             .sum();
         assert_eq!(total_words, words.len());
+    }
+
+    #[test]
+    fn test_knuth_plass_degenerate_and_overconstrained_metrics() {
+        // Negative box width is rejected
+        let neg_box = LayoutItem::Box {
+            width: -10.0,
+            text: "test".to_string(),
+            glyphs: vec![],
+        };
+        assert!(KnuthPlassBreaker::break_paragraph(&[neg_box], 100.0, 2.0).is_empty());
+
+        // Negative glue shrink is rejected
+        let neg_shrink = LayoutItem::Glue {
+            width: 10.0,
+            stretch: 5.0,
+            shrink: -2.0,
+        };
+        assert!(KnuthPlassBreaker::break_paragraph(&[word(50.0), neg_shrink], 100.0, 2.0).is_empty());
+
+        // Infinite penalty is rejected
+        let inf_penalty = LayoutItem::Penalty {
+            width: 0.0,
+            penalty: f32::INFINITY,
+            flagged: false,
+        };
+        assert!(KnuthPlassBreaker::break_paragraph(&[word(50.0), inf_penalty], 100.0, 2.0).is_empty());
+
+        // Target width zero or negative returns empty without panic
+        let items = paragraph(&[40.0, 40.0]);
+        assert!(KnuthPlassBreaker::break_paragraph(&items, 0.0, 2.0).is_empty());
+        assert!(KnuthPlassBreaker::break_paragraph(&items, -50.0, 2.0).is_empty());
+
+        // Extreme overconstraint: 50pt words into 5pt column
+        // Emergency pass must succeed and preserve every word across lines
+        let extreme_narrow = 5.0;
+        let lines = KnuthPlassBreaker::break_paragraph(&items, extreme_narrow, 2.0);
+        assert_eq!(lines.len(), 2);
+        let total_words: usize = lines
+            .iter()
+            .map(|l| l.items.iter().filter(|it| matches!(it, LayoutItem::Box { .. })).count())
+            .sum();
+        assert_eq!(total_words, 2);
+    }
+
+    #[test]
+    fn test_knuth_plass_multiple_forced_breaks() {
+        // Multiple consecutive forced breaks (empty lines)
+        let items = vec![
+            word(30.0),
+            forced(),
+            forced(),
+            word(40.0),
+            forced(),
+        ];
+        let lines = KnuthPlassBreaker::break_paragraph(&items, 100.0, 2.0);
+        assert!(!lines.is_empty());
+        let total_words: usize = lines
+            .iter()
+            .map(|l| l.items.iter().filter(|it| matches!(it, LayoutItem::Box { .. })).count())
+            .sum();
+        assert_eq!(total_words, 2);
+    }
+
+    #[test]
+    fn test_knuth_plass_glue_only() {
+        let items = vec![space(), space()];
+        let lines = KnuthPlassBreaker::break_paragraph(&items, 100.0, 2.0);
+        // Valid glue-only sequence completes without panic
+        assert!(!lines.is_empty());
     }
 }
