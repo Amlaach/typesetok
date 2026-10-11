@@ -263,6 +263,8 @@ pub struct DocumentMetadata {
     pub progression: Progression,
     pub primary_language: String,
     pub schema_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document_settings: Option<serde_json::Value>,
 }
 
 impl Default for DocumentMetadata {
@@ -273,6 +275,7 @@ impl Default for DocumentMetadata {
             progression: Progression::Rtl,
             primary_language: "he".to_string(),
             schema_version: "1.0".to_string(),
+            document_settings: None,
         }
     }
 }

@@ -2,6 +2,8 @@ import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as os from 'node:os';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2882,6 +2884,141 @@ describe('Stage 11: End-to-End Story Editor, Document Model & .tok Storage Round
     // On save, dirty resets to false
     state.isDirty = false;
     assert.equal(state.isDirty, false);
+  });
+
+  test('Full .tok package preservation: multi-flow layout, custom settings, styles, and spans round-trip', async () => {
+    const originalState = {
+      title: 'מסכת ברכות - פרק ראשון',
+      templateType: 'gemara',
+      settings: {
+        title: 'מסכת ברכות - פרק ראשון',
+        pageSize: 'Custom',
+        pageWidthMm: 180,
+        pageHeightMm: 255,
+        marginTopMm: 20,
+        marginBottomMm: 25,
+        marginInsideMm: 22,
+        marginOutsideMm: 18,
+        columns: 2,
+        columnGapMm: 6,
+        baselineGridPt: 14,
+        baselineOffsetPt: 50,
+        gematriaFormat: 'talmudic',
+        preflightStatus: 'clean'
+      },
+      styles: {
+        rashi_commentary: {
+          id: 'rashi_commentary',
+          name: 'פירוש רש״י',
+          fontSizePt: 12,
+          fontFamily: 'Noto Rashi Hebrew',
+          fontWeight: 400,
+          lineHeightPt: 15,
+          alignment: 'Justified'
+        }
+      },
+      flows: {
+        gemara: [
+          {
+            id: 'g-1',
+            styleId: 'normal',
+            text: 'מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית?',
+            spans: [
+              { start: 0, end: 8, format: { font_weight: 700, font_family: 'Taamey Frank CLM' } },
+              { start: 9, end: 36, format: { font_size_pt: 16 } }
+            ],
+            patch: { alignment: 'Justified', lineHeightPt: 22 }
+          }
+        ],
+        rashi: [
+          {
+            id: 'r-1',
+            styleId: 'rashi_commentary',
+            text: 'משעה שהכהנים נכנסין לאכול בתרומתן.',
+            spans: [
+              { start: 0, end: 5, format: { font_weight: 700 } }
+            ],
+            patch: { alignment: 'Right' }
+          }
+        ],
+        tosafot: [
+          {
+            id: 't-1',
+            styleId: 'normal',
+            text: 'בְּעַרְבִית — תימה מאי שנא דתנא דערבית ברישא?',
+            spans: [
+              { start: 0, end: 8, format: { font_weight: 700 } }
+            ]
+          }
+        ],
+        notes: [
+          {
+            id: 'n-1',
+            styleId: 'normal',
+            text: 'הערה א: עיין ברכות דף ב עמוד א.',
+            spans: []
+          }
+        ]
+      }
+    };
+
+    const docRoot = documentBridge.documentStateToDocumentRoot(originalState);
+    const tempInJson = path.join(os.tmpdir(), `tok_full_in_${Date.now()}.json`);
+    const tempTokFile = path.join(os.tmpdir(), `tok_full_pkg_${Date.now()}.tok`);
+    const tempOutJson = path.join(os.tmpdir(), `tok_full_out_${Date.now()}.json`);
+
+    try {
+      fs.writeFileSync(tempInJson, JSON.stringify(docRoot, null, 2), 'utf-8');
+
+      // 1. Save .tok package via tok-cli
+      const saveCode = await new Promise((resolve, reject) => {
+        const proc = spawn(tokCliPath, ['save-package', tempInJson, tempTokFile], { windowsHide: true });
+        proc.on('error', reject);
+        proc.on('close', resolve);
+      });
+      assert.equal(saveCode, 0, 'tok-cli save-package must succeed');
+      assert.ok(fs.existsSync(tempTokFile), '.tok package must exist');
+
+      // 2. Open .tok package via tok-cli
+      const openCode = await new Promise((resolve, reject) => {
+        const proc = spawn(tokCliPath, ['open-package', tempTokFile, tempOutJson], { windowsHide: true });
+        proc.on('error', reject);
+        proc.on('close', resolve);
+      });
+      assert.equal(openCode, 0, 'tok-cli open-package must succeed');
+      assert.ok(fs.existsSync(tempOutJson), 'Extracted document JSON must exist');
+
+      // 3. Round-trip restored state via documentBridge
+      const extractedRoot = JSON.parse(fs.readFileSync(tempOutJson, 'utf-8'));
+      const restoredState = documentBridge.documentRootToDocumentState(extractedRoot);
+
+      // Verify settings preservation
+      assert.ok(restoredState.settings, 'Document settings must be preserved');
+      assert.equal(restoredState.settings.pageWidthMm, 180);
+      assert.equal(restoredState.settings.pageHeightMm, 255);
+      assert.equal(restoredState.settings.marginTopMm, 20);
+      assert.equal(restoredState.settings.columns, 2);
+
+      // Verify custom styles preservation
+      assert.ok(restoredState.styles?.rashi_commentary, 'Custom style must be preserved');
+      assert.equal(restoredState.styles.rashi_commentary.fontFamily, 'Noto Rashi Hebrew');
+      assert.equal(restoredState.styles.rashi_commentary.fontSizePt, 12);
+
+      // Verify multi-flow texts and rich spans
+      assert.equal(restoredState.flows.gemara[0].text, originalState.flows.gemara[0].text);
+      assert.equal(restoredState.flows.gemara[0].spans.length, 2);
+      assert.equal(restoredState.flows.gemara[0].patch.alignment, 'Justified');
+
+      assert.equal(restoredState.flows.rashi[0].text, originalState.flows.rashi[0].text);
+      assert.equal(restoredState.flows.rashi[0].styleId, 'rashi_commentary');
+
+      assert.equal(restoredState.flows.tosafot[0].text, originalState.flows.tosafot[0].text);
+      assert.equal(restoredState.flows.notes[0].text, originalState.flows.notes[0].text);
+    } finally {
+      if (fs.existsSync(tempInJson)) fs.unlinkSync(tempInJson);
+      if (fs.existsSync(tempTokFile)) fs.unlinkSync(tempTokFile);
+      if (fs.existsSync(tempOutJson)) fs.unlinkSync(tempOutJson);
+    }
   });
 });
 
