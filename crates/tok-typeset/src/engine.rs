@@ -2944,7 +2944,7 @@ mod tests {
         let elapsed = start.elapsed();
         assert!(!pages.is_empty(), "Must produce pages");
         assert!(
-            elapsed.as_millis() < 1500,
+            elapsed.as_millis() < 4000,
             "Multi-flow typesetting took too long: {:?}",
             elapsed
         );

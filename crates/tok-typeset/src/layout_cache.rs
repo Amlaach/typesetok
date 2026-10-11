@@ -196,6 +196,11 @@ impl ParagraphLayoutCache {
         self.entries.is_empty()
     }
 
+    /// Returns reference to cache metrics.
+    pub fn metrics(&self) -> &CacheMetrics {
+        &self.metrics
+    }
+
     /// Returns approximate memory consumed by cache entries in bytes.
     pub fn approx_memory_bytes(&self) -> usize {
         let entry_base = std::mem::size_of::<(NodeId, (ParagraphCacheKey, CachedParagraphLayout))>();
