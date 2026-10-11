@@ -18,6 +18,7 @@ import {
   TextSpan
 } from 'tok-story-editor';
 import { DocumentSettings } from '../types';
+import { ImportResult } from './textImporter';
 
 export const CROCKFORD_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
@@ -598,3 +599,51 @@ export function documentRootToDocumentState(root: DocumentRootJson): MultiFlowDo
     styles: Object.keys(stylesMap).length > 0 ? stylesMap : undefined
   };
 }
+
+/**
+ * Converts an imported document result into a MultiFlowDocumentState ready for typesetting and editing.
+ */
+export function importResultToDocumentState(
+  importResult: ImportResult,
+  templateType: TemplateType = 'prose',
+  options?: { targetFlow?: string; settings?: DocumentSettings }
+): MultiFlowDocumentState {
+  const targetFlow = options?.targetFlow || 'gemara';
+  const flowMap: MultiFlowDocumentState['flows'] = {
+    gemara: [],
+    rashi: [],
+    tosafot: [],
+    notes: []
+  };
+
+  flowMap[targetFlow] = [...importResult.paragraphs];
+
+  return {
+    title: importResult.title || 'מסמך מיובא',
+    templateType,
+    flows: flowMap,
+    settings: options?.settings
+  };
+}
+
+/**
+ * Converts an imported document result directly into a full tok-core DocumentRootJson.
+ */
+export function importResultToDocumentRoot(
+  importResult: ImportResult,
+  templateType: TemplateType = 'prose',
+  settings?: DocumentSettings
+): DocumentRootJson {
+  const state = importResultToDocumentState(importResult, templateType, { settings });
+  const root = documentStateToDocumentRoot(state, settings ? { author: 'TypesetOK' } : undefined);
+  if (root.metadata) {
+    if (importResult.detectedLanguage) {
+      root.metadata.primary_language = importResult.detectedLanguage;
+    }
+    if (importResult.detectedDirection) {
+      root.metadata.progression = importResult.detectedDirection === 'rtl' ? 'Rtl' : 'Ltr';
+    }
+  }
+  return root;
+}
+
