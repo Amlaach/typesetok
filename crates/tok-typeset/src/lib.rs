@@ -2,6 +2,7 @@ pub mod bidi;
 pub mod co_pagination;
 pub mod engine;
 pub mod font;
+pub mod footnote_paginator;
 pub mod gematria;
 pub mod geometry;
 pub mod hebrew_justify;
@@ -32,6 +33,9 @@ pub use co_pagination::{
 };
 pub use engine::{TypesettingEngine, TypesettingEngineConfig};
 pub use font::{FontData, FontManager, FontMetrics};
+pub use footnote_paginator::{
+    DynamicFootnotePaginator, FootnotePageSlice, FootnotePaginatorConfig,
+};
 pub use gematria::{GematriaEngine, HEBREW_GERESH, HEBREW_GERSHAYIM};
 pub use geometry::{
     BreakToken, GlyphBox, LineBox, PageLayoutBox, PhysicalPoint, PhysicalRect, TextFrameBox,
