@@ -372,6 +372,76 @@ function createWindow(): void {
 
   collectRendererTimingsAndMaybeQuit(win);
 
+  let isForceClosing = false;
+  let isClosingPromptActive = false;
+
+  win.on('close', async (e) => {
+    if (isForceClosing) return;
+    e.preventDefault();
+
+    if (isClosingPromptActive) {
+      logger.info('[MAIN] Close request ignored: close prompt already active');
+      return;
+    }
+
+    isClosingPromptActive = true;
+
+    try {
+      if (win.isDestroyed() || win.webContents.isDestroyed()) {
+        isForceClosing = true;
+        win.close();
+        return;
+      }
+
+      // Query renderer for dirty / unsaved changes
+      const isDirty = await win.webContents.executeJavaScript(
+        'Boolean((window as any).appInstance?.getDocumentState?.()?.isDirty || (window as any).__tokIsDirty)'
+      ).catch(() => false);
+
+      if (!isDirty) {
+        isForceClosing = true;
+        win.close();
+        return;
+      }
+
+      const choice = await dialog.showMessageBox(win, {
+        type: 'warning',
+        buttons: ['שמור וצא', 'צא ללא שמירה', 'ביטול'],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+        title: 'TypesetOK',
+        message: 'במסמך קיימים שינויים שלא נשמרו.',
+        detail: 'האם ברצונך לשמור את השינויים לפני סגירת התוכנה?'
+      });
+
+      if (choice.response === 0) {
+        // Save before exit
+        await win.webContents.executeJavaScript(
+          'Boolean((window as any).appInstance?.handleSystemAction?.("save-document"))'
+        ).catch(() => false);
+
+        // Allow save I/O to flush
+        setTimeout(() => {
+          isForceClosing = true;
+          if (!win.isDestroyed()) win.close();
+        }, 300);
+      } else if (choice.response === 1) {
+        // Discard without saving
+        isForceClosing = true;
+        win.close();
+      } else {
+        // Cancel: keep window open
+        logger.info('[MAIN] Window close cancelled by user');
+        isClosingPromptActive = false;
+      }
+    } catch (err: any) {
+      logger.warn('[MAIN] Exception in window close guard; closing safely', { error: err?.message });
+      isForceClosing = true;
+      if (!win.isDestroyed()) win.close();
+    }
+  });
+
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null;
   });
