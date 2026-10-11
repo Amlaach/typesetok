@@ -538,6 +538,13 @@ export class TypesetOkApp {
         return;
       }
 
+      // Ctrl+W: Close Document
+      if (!e.shiftKey && (code === 'KeyW' || key === 'w' || key === 'ן')) {
+        e.preventDefault();
+        this.closeDocument();
+        return;
+      }
+
       // Ctrl+N: New Document
       if (!e.shiftKey && (code === 'KeyN' || key === 'n' || key === 'מ')) {
         e.preventDefault();
@@ -1386,6 +1393,15 @@ export class TypesetOkApp {
         action: () => this.handleSystemAction('export-pdf')
       },
       {
+        id: 'cmd-close-document',
+        icon: 'close',
+        category: t('cmdCatProjects'),
+        title: 'סגירת מסמך',
+        subtitle: 'סגירת המסמך הפעיל וחזרה למסך הפתיחה',
+        shortcut: 'Ctrl+W',
+        action: () => this.closeDocument()
+      },
+      {
         id: 'cmd-new-page',
         icon: 'pages',
         category: t('cmdCatPages'),
@@ -1669,7 +1685,40 @@ export class TypesetOkApp {
     }, 250);
   }
 
+  /**
+   * Resets active asynchronous operations, timers, and editor state prior to loading a new document session.
+   */
+  public resetDocumentSession(): void {
+    this.cancelPendingRepaginate();
+    if (this.wordCountTimer) {
+      clearTimeout(this.wordCountTimer);
+      this.wordCountTimer = null;
+    }
+    if (this.findBar) {
+      this.toggleFindReplaceBar(false);
+    }
+    this.inspector?.setMode('zero');
+    this.actionHud?.hide();
+  }
+
+  /**
+   * Closes the active document after confirming unsaved changes, returning to the welcome project picker.
+   */
+  public closeDocument(): boolean {
+    if (!this.confirmDiscardUnsaved()) return false;
+    if (this.documentTitle) {
+      updateProjectClosedTime(this.documentTitle);
+    }
+    this.resetDocumentSession();
+    this.hasOpenDocument = false;
+    this.setDirty(false);
+    this.welcomeModal.setHasOpenDocument(false);
+    this.welcomeModal.show();
+    return true;
+  }
+
   private handleTemplateSelect(templateId: string): void {
+    this.resetDocumentSession();
     const name = TEMPLATE_TITLES[templateId] || BLANK_TEMPLATE_TITLE;
     this.documentTitle = name;
     this.documentState.title = name;
@@ -1764,6 +1813,7 @@ export class TypesetOkApp {
   }
 
   private loadDocumentRoot(docRoot: any, filePath: string, title?: string): Promise<void> {
+    this.resetDocumentSession();
     const baseName = filePath.split(/[\\/]/).pop() || filePath;
     const newState = documentRootToDocumentState(docRoot);
     this.documentState = newState;
@@ -1905,11 +1955,15 @@ export class TypesetOkApp {
    */
   public handleSystemAction(action: string, data?: unknown): void {
     switch (action) {
+      case 'close-document':
+        this.closeDocument();
+        break;
       case 'new-document':
         if (!this.confirmDiscardUnsaved()) return;
         if (this.documentTitle) {
           updateProjectClosedTime(this.documentTitle);
         }
+        this.resetDocumentSession();
         this.welcomeModal.show();
         break;
       case 'open-projects':
