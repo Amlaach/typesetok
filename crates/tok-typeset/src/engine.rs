@@ -901,17 +901,16 @@ impl TypesettingEngine {
                                 let page = &mut new_pages[page_idx];
                                 for frame in &mut page.frames {
                                     let mut new_frame_lines = Vec::with_capacity(frame.lines.len());
-                                    let mut curr_y = 0.0;
                                     let mut new_lines_iter = new_lines.iter().cloned();
 
                                     for old_line in &frame.lines {
-                                        let mut line = if old_line.paragraph_id == Some(target_id) {
-                                            new_lines_iter.next().unwrap_or_else(|| old_line.clone())
+                                        let line = if old_line.paragraph_id == Some(target_id) {
+                                            let mut n = new_lines_iter.next().unwrap_or_else(|| old_line.clone());
+                                            n.baseline_y = old_line.baseline_y;
+                                            n
                                         } else {
                                             old_line.clone()
                                         };
-                                        line.baseline_y = curr_y + line.height;
-                                        curr_y += line.height;
                                         new_frame_lines.push(line);
                                     }
                                     frame.lines = new_frame_lines;
@@ -1697,20 +1696,19 @@ impl TypesettingEngine {
                                             if frame.flow_id == flow.id.0 {
                                                 let mut new_frame_lines =
                                                     Vec::with_capacity(frame.lines.len());
-                                                let mut curr_y = 0.0;
                                                 let mut new_lines_iter = new_lines.clone().into_iter();
                                                 for old_line in &frame.lines {
-                                                    let mut line = if old_line.paragraph_id
+                                                    let line = if old_line.paragraph_id
                                                         == Some(target_id)
                                                     {
-                                                        new_lines_iter
+                                                        let mut n = new_lines_iter
                                                             .next()
-                                                            .unwrap_or_else(|| old_line.clone())
+                                                            .unwrap_or_else(|| old_line.clone());
+                                                        n.baseline_y = old_line.baseline_y;
+                                                        n
                                                     } else {
                                                         old_line.clone()
                                                     };
-                                                    line.baseline_y = curr_y + line.height;
-                                                    curr_y += line.height;
                                                     new_frame_lines.push(line);
                                                 }
                                                 frame.lines = new_frame_lines;
