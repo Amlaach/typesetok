@@ -459,4 +459,247 @@ mod tests {
         assert!(score_heading >= 10_000.0);
         assert!(score_clean < score_heading);
     }
+
+    fn make_test_line(idx: usize, height: f32) -> LineBox {
+        LineBox {
+            line_index: idx,
+            paragraph_id: None,
+            baseline_y: height,
+            height,
+            width: 200.0,
+            glyphs: Vec::new(),
+            text: format!("line {}", idx),
+            is_rtl: true,
+            fonts: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_global_page_breaker_all_fit_single_page() {
+        let breaker = GlobalPageBreaker::new(500.0);
+        let lines = (0..5)
+            .map(|i| PaginationLineInput {
+                line: make_test_line(i, 20.0),
+                section_idx: 0,
+                paragraph_idx: 0,
+                paragraph_id: Some(FractionalIndex::new("p1")),
+                line_in_paragraph: i,
+                total_lines_in_paragraph: 5,
+                keep_with_next: false,
+                orphan_control: 2,
+                widow_control: 2,
+                space_before: 0.0,
+                space_after: 0.0,
+            })
+            .collect::<Vec<_>>();
+
+        let pages = breaker.break_pages(&lines);
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].lines.len(), 5);
+        assert_eq!(pages[0].total_height, 100.0);
+    }
+
+    #[test]
+    fn test_global_page_breaker_heading_not_stranded() {
+        // Page target height = 100.0
+        // P1 has 3 lines of 20pt = 60pt.
+        // Heading H1 has 1 line of 25pt, space_before = 5.0, keep_with_next = true -> total = 90pt.
+        // P2 has 3 lines of 20pt. First line of P2 would overflow (90 + 20 = 110pt > 100pt).
+        // Greedy breaking would place H1 alone at the bottom of Page 1!
+        // GlobalPageBreaker must push H1 to Page 2.
+        let breaker = GlobalPageBreaker::new(100.0);
+
+        let mut inputs = Vec::new();
+        // P1: 3 lines
+        for i in 0..3 {
+            inputs.push(PaginationLineInput {
+                line: make_test_line(i, 20.0),
+                section_idx: 0,
+                paragraph_idx: 0,
+                paragraph_id: Some(FractionalIndex::new("p1")),
+                line_in_paragraph: i,
+                total_lines_in_paragraph: 3,
+                keep_with_next: false,
+                orphan_control: 2,
+                widow_control: 2,
+                space_before: 0.0,
+                space_after: 5.0,
+            });
+        }
+        // H1: 1 line heading
+        inputs.push(PaginationLineInput {
+            line: make_test_line(3, 25.0),
+            section_idx: 0,
+            paragraph_idx: 1,
+            paragraph_id: Some(FractionalIndex::new("h1")),
+            line_in_paragraph: 0,
+            total_lines_in_paragraph: 1,
+            keep_with_next: true,
+            orphan_control: 1,
+            widow_control: 1,
+            space_before: 5.0,
+            space_after: 5.0,
+        });
+        // P2: 3 lines
+        for i in 0..3 {
+            inputs.push(PaginationLineInput {
+                line: make_test_line(4 + i, 20.0),
+                section_idx: 0,
+                paragraph_idx: 2,
+                paragraph_id: Some(FractionalIndex::new("p2")),
+                line_in_paragraph: i,
+                total_lines_in_paragraph: 3,
+                keep_with_next: false,
+                orphan_control: 2,
+                widow_control: 2,
+                space_before: 5.0,
+                space_after: 0.0,
+            });
+        }
+
+        let pages = breaker.break_pages(&inputs);
+        assert_eq!(pages.len(), 2);
+        // Page 1 should contain P1's 3 lines ONLY (heading was pushed to page 2)
+        assert_eq!(pages[0].lines.len(), 3);
+        // Page 2 should begin with the heading (line index 0 on page 2 is line 3 'h1')
+        assert_eq!(pages[1].lines.len(), 4);
+        assert_eq!(pages[1].lines[0].text, "line 3");
+    }
+
+    #[test]
+    fn test_global_page_breaker_orphan_protection() {
+        // Page target height = 100.0
+        // P1 has 4 lines of 20pt = 80pt.
+        // P2 has 3 lines of 15pt. Line 0 of P2 fits (80 + 15 = 95pt <= 100pt).
+        // Greedy breaking would leave Line 0 of P2 as an orphan at the bottom of Page 1.
+        // GlobalPageBreaker must avoid orphan and break before P2.
+        let breaker = GlobalPageBreaker::new(100.0);
+        let mut inputs = Vec::new();
+
+        for i in 0..4 {
+            inputs.push(PaginationLineInput {
+                line: make_test_line(i, 20.0),
+                section_idx: 0,
+                paragraph_idx: 0,
+                paragraph_id: Some(FractionalIndex::new("p1")),
+                line_in_paragraph: i,
+                total_lines_in_paragraph: 4,
+                keep_with_next: false,
+                orphan_control: 2,
+                widow_control: 2,
+                space_before: 0.0,
+                space_after: 0.0,
+            });
+        }
+        for i in 0..3 {
+            inputs.push(PaginationLineInput {
+                line: make_test_line(4 + i, 15.0),
+                section_idx: 0,
+                paragraph_idx: 1,
+                paragraph_id: Some(FractionalIndex::new("p2")),
+                line_in_paragraph: i,
+                total_lines_in_paragraph: 3,
+                keep_with_next: false,
+                orphan_control: 2,
+                widow_control: 2,
+                space_before: 0.0,
+                space_after: 0.0,
+            });
+        }
+
+        let pages = breaker.break_pages(&inputs);
+        assert_eq!(pages.len(), 2);
+        // Page 1 has 4 lines (P1)
+        assert_eq!(pages[0].lines.len(), 4);
+        // Page 2 has all 3 lines of P2 (no 1-line orphan on page 1)
+        assert_eq!(pages[1].lines.len(), 3);
+        assert_eq!(pages[1].lines[0].text, "line 4");
+    }
+
+    #[test]
+    fn test_global_page_breaker_widow_protection() {
+        // Page target height = 100.0
+        // P1 has 3 lines of 20pt = 60pt.
+        // P2 has 3 lines of 18pt = 54pt. Lines 0 and 1 of P2 fit (60 + 36 = 96pt <= 100pt).
+        // But taking 2 lines leaves line 2 as a widow on page 2!
+        // GlobalPageBreaker must avoid widow and keep P2 together on page 2.
+        let breaker = GlobalPageBreaker::new(100.0);
+        let mut inputs = Vec::new();
+
+        for i in 0..3 {
+            inputs.push(PaginationLineInput {
+                line: make_test_line(i, 20.0),
+                section_idx: 0,
+                paragraph_idx: 0,
+                paragraph_id: Some(FractionalIndex::new("p1")),
+                line_in_paragraph: i,
+                total_lines_in_paragraph: 3,
+                keep_with_next: false,
+                orphan_control: 2,
+                widow_control: 2,
+                space_before: 0.0,
+                space_after: 0.0,
+            });
+        }
+        for i in 0..3 {
+            inputs.push(PaginationLineInput {
+                line: make_test_line(3 + i, 18.0),
+                section_idx: 0,
+                paragraph_idx: 1,
+                paragraph_id: Some(FractionalIndex::new("p2")),
+                line_in_paragraph: i,
+                total_lines_in_paragraph: 3,
+                keep_with_next: false,
+                orphan_control: 2,
+                widow_control: 2,
+                space_before: 0.0,
+                space_after: 0.0,
+            });
+        }
+
+        let pages = breaker.break_pages(&inputs);
+        assert_eq!(pages.len(), 2);
+        // Page 1 has P1 (3 lines)
+        assert_eq!(pages[0].lines.len(), 3);
+        // Page 2 has all 3 lines of P2 (no 1-line widow on page 2)
+        assert_eq!(pages[1].lines.len(), 3);
+    }
+
+    #[test]
+    fn test_global_page_breaker_top_of_page_margin_collapsing() {
+        let breaker = GlobalPageBreaker::new(50.0);
+        let inputs = vec![
+            PaginationLineInput {
+                line: make_test_line(0, 30.0),
+                section_idx: 0,
+                paragraph_idx: 0,
+                paragraph_id: Some(FractionalIndex::new("p1")),
+                line_in_paragraph: 0,
+                total_lines_in_paragraph: 1,
+                keep_with_next: false,
+                orphan_control: 1,
+                widow_control: 1,
+                space_before: 20.0,
+                space_after: 20.0,
+            },
+            PaginationLineInput {
+                line: make_test_line(1, 30.0),
+                section_idx: 0,
+                paragraph_idx: 1,
+                paragraph_id: Some(FractionalIndex::new("p2")),
+                line_in_paragraph: 0,
+                total_lines_in_paragraph: 1,
+                keep_with_next: false,
+                orphan_control: 1,
+                widow_control: 1,
+                space_before: 20.0,
+                space_after: 20.0,
+            },
+        ];
+
+        let pages = breaker.break_pages(&inputs);
+        assert_eq!(pages.len(), 2);
+        // On Page 2, line 1 is at top of page, so top margin collapses to 0.0
+        assert_eq!(pages[1].lines[0].baseline_y, 30.0);
+    }
 }
