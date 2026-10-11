@@ -388,4 +388,117 @@ mod tests {
         assert_eq!(profile.width_for_line(14), expected_expanded);
         assert_eq!(profile.width_for_line(20), expected_expanded);
     }
+
+    #[test]
+    fn test_spread_mathematics_solver_proportions_recto_and_verso() {
+        let config = TemplateConfig::default();
+        let recto = SpreadMathematics::for_page(&config, 1);
+        let verso = SpreadMathematics::for_page(&config, 2);
+
+        for (math, label) in [(&recto, "Recto"), (&verso, "Verso")] {
+            assert_eq!(math.columns.len(), 3, "Expected 3 columns on {}", label);
+            let c0 = &math.columns[0];
+            let c1 = &math.columns[1];
+            let c2 = &math.columns[2];
+
+            // Strict non-overlap and contiguous gutter spacing
+            assert!(
+                (c0.x_pt + c0.width_pt + math.gutter_pt - c1.x_pt).abs() < 1e-3,
+                "Col 0 to Col 1 gutter continuity failed on {}",
+                label
+            );
+            assert!(
+                (c1.x_pt + c1.width_pt + math.gutter_pt - c2.x_pt).abs() < 1e-3,
+                "Col 1 to Col 2 gutter continuity failed on {}",
+                label
+            );
+
+            // Right alignment with content boundary
+            let right_edge = c2.x_pt + c2.width_pt;
+            let expected_right = math.margin_left_pt + math.content_width_pt;
+            assert!(
+                (right_edge - expected_right).abs() < 1e-3,
+                "Right boundary alignment failed on {}",
+                label
+            );
+
+            // Conservation of width
+            let total_cols_w = c0.width_pt + c1.width_pt + c2.width_pt;
+            let available_w = math.content_width_pt - 2.0 * math.gutter_pt;
+            assert!(
+                (total_cols_w - available_w).abs() < 1e-3,
+                "Width conservation failed on {}",
+                label
+            );
+
+            // Proportions: 40% main, 28% rashi, 32% tosafot
+            let rashi_w = math.inner_column_width_pt;
+            let main_w = math.main_column_width_pt;
+            let tosafot_w = math.outer_column_width_pt;
+
+            let rashi_ratio = rashi_w / main_w;
+            let tosafot_ratio = tosafot_w / main_w;
+
+            assert!(
+                (rashi_ratio - (0.28 / 0.40)).abs() < 1e-3,
+                "Rashi-to-Main ratio failed on {}: got {}",
+                label,
+                rashi_ratio
+            );
+            assert!(
+                (tosafot_ratio - (0.32 / 0.40)).abs() < 1e-3,
+                "Tosafot-to-Main ratio failed on {}: got {}",
+                label,
+                tosafot_ratio
+            );
+        }
+    }
+
+    #[test]
+    fn test_spread_mathematics_academic_dual_stream_solver() {
+        let config = TemplateConfig {
+            kind: TemplateKind::AcademicDualStream,
+            page_width_pt: 500.0,
+            page_height_pt: 700.0,
+            margin_inner_pt: 30.0,
+            margin_outer_pt: 30.0,
+            margin_top_pt: 30.0,
+            margin_bottom_pt: 30.0,
+            gutter_pt: 10.0,
+            ..Default::default()
+        };
+        let math = SpreadMathematics::for_page(&config, 1);
+        assert_eq!(math.columns.len(), 2);
+        // AcademicDualStream: 60% main, 40% inner commentary
+        let available_w = 440.0 - 10.0; // 430.0
+        assert!((math.columns[0].width_pt - available_w * 0.60).abs() < 1e-2);
+        assert!((math.columns[1].width_pt - available_w * 0.40).abs() < 1e-2);
+    }
+
+    #[test]
+    fn test_spread_mathematics_custom_proportions_solver() {
+        let config = TemplateConfig {
+            kind: TemplateKind::Custom {
+                main_ratio: 0.50,
+                inner_commentary_ratio: 0.25,
+                outer_commentary_ratio: 0.25,
+            },
+            page_width_pt: 600.0,
+            page_height_pt: 800.0,
+            margin_inner_pt: 40.0,
+            margin_outer_pt: 40.0,
+            margin_top_pt: 40.0,
+            margin_bottom_pt: 40.0,
+            gutter_pt: 12.0,
+            ..Default::default()
+        };
+        let math = SpreadMathematics::for_page(&config, 1);
+        assert_eq!(math.columns.len(), 3);
+        let main_w = math.main_column_width_pt;
+        let inner_w = math.inner_column_width_pt;
+        let outer_w = math.outer_column_width_pt;
+
+        assert!((main_w - 2.0 * inner_w).abs() < 1e-2);
+        assert!((inner_w - outer_w).abs() < 1e-2);
+    }
 }
