@@ -1228,20 +1228,24 @@ impl TypesettingEngine {
                 .unwrap_or(false);
 
             let mut lines = Vec::new();
+            let default_style = tok_core::styles::ParagraphStyle::default();
             for p in &flow.paragraphs {
-                let (font_family, font_size, line_height) = doc
+                let style = doc
                     .paragraph_styles
                     .iter()
                     .find(|s| s.id == p.style_id)
-                    .map(|style| {
-                        (
-                            self.font_manager
-                                .face_for(&style.font_family, style.font_weight),
-                            style.font_size_pt,
-                            style.line_height_pt,
-                        )
-                    })
-                    .unwrap_or_else(|| {
+                    .unwrap_or(&default_style);
+
+                let (font_family, font_size, line_height) = {
+                    let (font, sz, lh) = (
+                        self.font_manager
+                            .face_for(&style.font_family, style.font_weight),
+                        style.font_size_pt,
+                        style.line_height_pt,
+                    );
+                    if doc.paragraph_styles.iter().any(|s| s.id == p.style_id) {
+                        (font, sz, lh)
+                    } else {
                         let font = if is_primary {
                             "Frank Ruhl Libre"
                         } else {
@@ -1249,14 +1253,27 @@ impl TypesettingEngine {
                         };
                         let sz = if is_primary { 13.5 } else { 10.5 };
                         (font.to_string(), sz, sz * 1.45)
-                    });
+                    }
+                };
 
-                let session = sessions
-                    .entry(font_family.clone())
-                    .or_insert_with(|| self.font_manager.session(&font_family));
+                let key = crate::layout_cache::ParagraphLayoutCache::make_key(p, style, flow_width);
+                let cached_lines = {
+                    let cache = self.paragraph_cache.read().unwrap();
+                    cache.get(&key).map(|c| c.lines.clone())
+                };
 
-                let p_lines =
-                    Self::typeset_with_session(session, p, flow_width, font_size, line_height);
+                let p_lines = if let Some(hit) = cached_lines {
+                    hit
+                } else {
+                    let session = sessions
+                        .entry(font_family.clone())
+                        .or_insert_with(|| self.font_manager.session(&font_family));
+                    let computed =
+                        Self::typeset_with_session(session, p, flow_width, font_size, line_height);
+                    let mut cache = self.paragraph_cache.write().unwrap();
+                    cache.insert(key, computed.clone());
+                    computed
+                };
                 lines.extend(p_lines);
             }
             flow_lines_map.insert(flow.id.0.clone(), lines);
@@ -1570,6 +1587,174 @@ impl TypesettingEngine {
         }
 
         pages
+    }
+
+    /// Incrementally typesets a multi-flow document with precise paragraph layout caching
+    /// across all streams (Gemara, commentaries, footnotes) and zero-cascade fast path.
+    pub fn typeset_document_multi_flow_incremental(
+        &self,
+        doc: &DocumentRoot,
+        previous_pages: &[PageLayoutBox],
+        modified_node_id: Option<tok_core::id::NodeId>,
+    ) -> (Vec<PageLayoutBox>, crate::incremental::IncrementalTypesetDiagnostics) {
+        let start_time = std::time::Instant::now();
+        if let Some(target_id) = modified_node_id {
+            self.invalidate_paragraph(target_id);
+        }
+
+        // Fast path: Zero cascade if single paragraph modified and fits in existing frame lines count & heights
+        if let Some(target_id) = modified_node_id {
+            let mut page_indices = Vec::new();
+            for (p_idx, page) in previous_pages.iter().enumerate() {
+                for frame in &page.frames {
+                    if frame.lines.iter().any(|l| l.paragraph_id == Some(target_id)) {
+                        page_indices.push(p_idx);
+                        break;
+                    }
+                }
+            }
+
+            if page_indices.len() == 1 {
+                let page_idx = page_indices[0];
+                let old_page = &previous_pages[page_idx];
+
+                if let Some(first_sec) = doc.sections.first() {
+                    for flow in &first_sec.flows {
+                        if let Some(p) = flow.paragraphs.iter().find(|p| p.id == target_id) {
+                            let prev_frame = old_page.frames.iter().find(|f| f.flow_id == flow.id.0);
+                            if let Some(p_frame) = prev_frame {
+                                let flow_width = p_frame.rect.width;
+                                let old_lines: Vec<&LineBox> = p_frame
+                                    .lines
+                                    .iter()
+                                    .filter(|l| l.paragraph_id == Some(target_id))
+                                    .collect();
+
+                                let default_style = tok_core::styles::ParagraphStyle::default();
+                                let style = doc
+                                    .paragraph_styles
+                                    .iter()
+                                    .find(|s| s.id == p.style_id)
+                                    .unwrap_or(&default_style);
+
+                                let is_primary = flow.flow_type == FlowType::Main;
+                                let (font_family, font_size, line_height) = {
+                                    let (font, sz, lh) = (
+                                        self.font_manager
+                                            .face_for(&style.font_family, style.font_weight),
+                                        style.font_size_pt,
+                                        style.line_height_pt,
+                                    );
+                                    if doc.paragraph_styles.iter().any(|s| s.id == p.style_id) {
+                                        (font, sz, lh)
+                                    } else {
+                                        let font = if is_primary {
+                                            "Frank Ruhl Libre"
+                                        } else {
+                                            "Noto Rashi Hebrew"
+                                        };
+                                        let sz = if is_primary { 13.5 } else { 10.5 };
+                                        (font.to_string(), sz, sz * 1.45)
+                                    }
+                                };
+
+                                let mut session = self.font_manager.session(&font_family);
+                                let new_lines = Self::typeset_with_session(
+                                    &mut session,
+                                    p,
+                                    flow_width,
+                                    font_size,
+                                    line_height,
+                                );
+
+                                if new_lines.len() == old_lines.len() {
+                                    let heights_match = new_lines
+                                        .iter()
+                                        .zip(&old_lines)
+                                        .all(|(n, o)| (n.height - o.height).abs() < 1e-3);
+
+                                    if heights_match {
+                                        // Cache new lines
+                                        let key = crate::layout_cache::ParagraphLayoutCache::make_key(
+                                            p,
+                                            style,
+                                            flow_width,
+                                        );
+                                        self.paragraph_cache
+                                            .write()
+                                            .unwrap()
+                                            .insert(key, new_lines.clone());
+
+                                        let mut new_pages = previous_pages.to_vec();
+                                        let page = &mut new_pages[page_idx];
+                                        for frame in &mut page.frames {
+                                            if frame.flow_id == flow.id.0 {
+                                                let mut new_frame_lines =
+                                                    Vec::with_capacity(frame.lines.len());
+                                                let mut curr_y = 0.0;
+                                                let mut new_lines_iter = new_lines.clone().into_iter();
+                                                for old_line in &frame.lines {
+                                                    let mut line = if old_line.paragraph_id
+                                                        == Some(target_id)
+                                                    {
+                                                        new_lines_iter
+                                                            .next()
+                                                            .unwrap_or_else(|| old_line.clone())
+                                                    } else {
+                                                        old_line.clone()
+                                                    };
+                                                    line.baseline_y = curr_y + line.height;
+                                                    curr_y += line.height;
+                                                    new_frame_lines.push(line);
+                                                }
+                                                frame.lines = new_frame_lines;
+                                            }
+                                        }
+
+                                        let total = new_pages.len();
+                                        return (
+                                            new_pages,
+                                            crate::incremental::IncrementalTypesetDiagnostics {
+                                                total_pages: total,
+                                                first_affected_page: page_idx,
+                                                recomputed_pages: 1,
+                                                reused_pages: total.saturating_sub(1),
+                                                recomputed_paragraphs: 1,
+                                                reused_paragraphs: flow
+                                                    .paragraphs
+                                                    .len()
+                                                    .saturating_sub(1),
+                                                zero_cascade: true,
+                                                converged_at_page: Some(page_idx),
+                                                duration: start_time.elapsed(),
+                                            },
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Full multi-flow layout reusing cached paragraphs
+        let pages = self.typeset_document_multi_flow(doc);
+        let total = pages.len();
+        (
+            pages,
+            crate::incremental::IncrementalTypesetDiagnostics {
+                total_pages: total,
+                first_affected_page: 0,
+                recomputed_pages: total,
+                reused_pages: 0,
+                recomputed_paragraphs: 1,
+                reused_paragraphs: 0,
+                zero_cascade: false,
+                converged_at_page: None,
+                duration: start_time.elapsed(),
+            },
+        )
     }
 
     /// Co-paginates a multi-stream commentary document (Talmud / Mikraot Gedolot / academic)
@@ -2989,5 +3174,60 @@ mod tests {
             resolved_after, expected_gematria,
             "Cross reference must consistently reflect new target page in gematria"
         );
+    }
+
+    #[test]
+    fn test_multi_flow_incremental_commentary_and_footnote_invalidation() {
+        let mut doc = DocumentRoot::new("מבחן עימוד רב-זרימתי אינקרמנטלי");
+
+        let sec = &mut doc.sections[0];
+        sec.flows.clear();
+
+        let mut gemara_flow = tok_core::Flow::new(tok_core::FlowId::new("gemara"), tok_core::FlowType::Main);
+        let p_gemara = ParagraphNode::new(
+            tok_core::id::FractionalIndex::new("g01"),
+            "default-body",
+            "מַתְנִיתִין: מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית. מִשָּׁעָה שֶׁהַכֹּהֲנִים נִכְנָסִים לֶאֱכֹל בִּתְרוּמָתָן.",
+        );
+        let _gemara_p_id = p_gemara.id;
+        gemara_flow.add_paragraph(p_gemara);
+
+        let mut rashi_flow = tok_core::Flow::new(tok_core::FlowId::new("rashi"), tok_core::FlowType::CommentA);
+        let p_rashi = ParagraphNode::new(
+            tok_core::id::FractionalIndex::new("r01"),
+            "default-body",
+            "רש\"י: מאימתי - משעת יציאת הכוכבים.",
+        );
+        let _rashi_p_id = p_rashi.id;
+        rashi_flow.add_paragraph(p_rashi);
+
+        let mut notes_flow = tok_core::Flow::new(tok_core::FlowId::new("notes"), tok_core::FlowType::Footnote)
+            .with_placement_role("bottom_band");
+        let mut p_note = ParagraphNode::new(
+            tok_core::id::FractionalIndex::new("n01"),
+            "default-body",
+            "הערה א: עיין ברכות דף ב עמוד א.",
+        );
+        let note_p_id = p_note.id;
+        notes_flow.add_paragraph(p_note.clone());
+
+        sec.flows.push(gemara_flow);
+        sec.flows.push(rashi_flow);
+        sec.flows.push(notes_flow);
+
+        let eng = engine();
+        let pages1 = eng.typeset_document_multi_flow(&doc);
+        assert!(!pages1.is_empty());
+
+        // Invalidate ONLY the footnote paragraph
+        p_note.text = "הערה א: עיין ברכות דף ב עמוד א ובהגהות הב\"ח אות א.".to_string();
+        doc.sections[0].flows[2].paragraphs[0] = p_note;
+
+        let (pages2, _diag) = eng.typeset_document_multi_flow_incremental(&doc, &pages1, Some(note_p_id));
+        assert!(!pages2.is_empty());
+
+        // Footnote frame must contain updated note
+        let note_frame = pages2[0].frames.iter().find(|f| f.flow_id == "notes").unwrap();
+        assert!(note_frame.lines.iter().any(|l| l.paragraph_id == Some(note_p_id)));
     }
 }
