@@ -76,6 +76,16 @@ pub struct ParagraphStyle {
     pub space_before_pt: f32,
     pub space_after_pt: f32,
     pub first_line_indent_pt: f32,
+    /// Indent on the side where lines start (right in RTL, left in LTR).
+    /// Absent in documents written before Stage 11.
+    #[serde(default)]
+    pub indent_start_pt: f32,
+    /// Indent on the side where lines end (left in RTL, right in LTR).
+    #[serde(default)]
+    pub indent_end_pt: f32,
+    /// Base paragraph direction. `None` follows `DocumentMetadata::progression`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<Progression>,
     pub alignment: TextAlignment,
     pub ahalterm_stretch: AhaltermStretchMode,
     pub color: Color,
@@ -96,12 +106,58 @@ impl Default for ParagraphStyle {
             space_before_pt: 0.0,
             space_after_pt: 2.0,
             first_line_indent_pt: 0.0,
+            indent_start_pt: 0.0,
+            indent_end_pt: 0.0,
+            direction: None,
             alignment: TextAlignment::Justified,
             ahalterm_stretch: AhaltermStretchMode::AutoVariable,
             color: Color::default(),
             keep_with_next: false,
             orphan_control: 2,
             widow_control: 2,
+        }
+    }
+}
+
+impl ParagraphStyle {
+    /// Applies a local paragraph override on top of this (named) style.
+    /// Only the fields the patch sets are changed.
+    pub fn apply_patch(&mut self, patch: &StylePatch) {
+        if let Some(v) = &patch.font_family {
+            self.font_family = v.clone();
+        }
+        if let Some(v) = patch.font_weight {
+            self.font_weight = v;
+        }
+        if let Some(v) = patch.font_size_pt {
+            self.font_size_pt = v;
+        }
+        if let Some(v) = patch.line_height_pt {
+            self.line_height_pt = v;
+        }
+        if let Some(v) = patch.space_before_pt {
+            self.space_before_pt = v;
+        }
+        if let Some(v) = patch.space_after_pt {
+            self.space_after_pt = v;
+        }
+        if let Some(v) = patch.first_line_indent_pt {
+            self.first_line_indent_pt = v;
+        }
+        if let Some(v) = patch.indent_start_pt {
+            self.indent_start_pt = v;
+        }
+        if let Some(v) = patch.indent_end_pt {
+            self.indent_end_pt = v;
+        }
+        if let Some(v) = patch.direction {
+            self.direction = Some(v);
+        }
+        if let Some(v) = patch.alignment {
+            self.alignment = v;
+        }
+        if let Some(v) = &patch.color {
+            self.color = v.clone();
         }
     }
 }
@@ -118,6 +174,8 @@ pub struct CharacterStyle {
     pub color: Option<Color>,
 }
 
+/// A local paragraph-level override (direct formatting) applied on top of the
+/// paragraph's named style. Patches are applied in order; later ones win.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct StylePatch {
     pub font_family: Option<String>,
@@ -126,6 +184,54 @@ pub struct StylePatch {
     pub alignment: Option<TextAlignment>,
     pub tracking_em: Option<f32>,
     pub color: Option<Color>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_weight: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space_before_pt: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space_after_pt: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_line_indent_pt: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indent_start_pt: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indent_end_pt: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<Progression>,
+}
+
+impl StylePatch {
+    pub fn is_empty(&self) -> bool {
+        *self == StylePatch::default()
+    }
+}
+
+/// Direct character formatting carried by a [`TextSpan`]. Every field is
+/// optional: `None` means "inherit from the paragraph".
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct CharacterFormat {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub character_style_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_size_pt: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_weight: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub italic: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub underline: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tracking_em: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<Color>,
+}
+
+impl CharacterFormat {
+    pub fn is_empty(&self) -> bool {
+        *self == CharacterFormat::default()
+    }
 }
 
 #[cfg(test)]
@@ -139,5 +245,67 @@ mod tests {
         json.as_object_mut().unwrap().remove("font_weight");
         let style: ParagraphStyle = serde_json::from_value(json).unwrap();
         assert_eq!(style.font_weight, FONT_WEIGHT_REGULAR);
+    }
+
+    #[test]
+    fn pre_stage_11_style_loads_without_indents_or_direction() {
+        let mut json = serde_json::to_value(ParagraphStyle::default()).unwrap();
+        let obj = json.as_object_mut().unwrap();
+        obj.remove("indent_start_pt");
+        obj.remove("indent_end_pt");
+        obj.remove("direction");
+        let style: ParagraphStyle = serde_json::from_value(json).unwrap();
+        assert_eq!(style.indent_start_pt, 0.0);
+        assert_eq!(style.indent_end_pt, 0.0);
+        assert_eq!(style.direction, None);
+    }
+
+    #[test]
+    fn legacy_style_patch_json_still_parses() {
+        let legacy = r#"{"font_family":null,"font_size_pt":12.0,"line_height_pt":null,
+            "alignment":"Center","tracking_em":null,"color":null}"#;
+        let patch: StylePatch = serde_json::from_str(legacy).unwrap();
+        assert_eq!(patch.font_size_pt, Some(12.0));
+        assert_eq!(patch.alignment, Some(TextAlignment::Center));
+        assert_eq!(patch.direction, None);
+        assert_eq!(patch.font_weight, None);
+    }
+
+    #[test]
+    fn apply_patch_only_overrides_set_fields() {
+        let mut style = ParagraphStyle::default();
+        let patch = StylePatch {
+            font_size_pt: Some(14.0),
+            font_weight: Some(FONT_WEIGHT_BOLD),
+            alignment: Some(TextAlignment::Center),
+            indent_start_pt: Some(18.0),
+            direction: Some(Progression::Ltr),
+            ..StylePatch::default()
+        };
+        style.apply_patch(&patch);
+        assert_eq!(style.font_size_pt, 14.0);
+        assert_eq!(style.font_weight, FONT_WEIGHT_BOLD);
+        assert_eq!(style.alignment, TextAlignment::Center);
+        assert_eq!(style.indent_start_pt, 18.0);
+        assert_eq!(style.direction, Some(Progression::Ltr));
+        // Untouched fields keep the named style's values.
+        assert_eq!(style.font_family, "Frank Ruhl Libre");
+        assert_eq!(style.line_height_pt, 14.5);
+        assert!(StylePatch::default().is_empty());
+        assert!(!patch.is_empty());
+    }
+
+    #[test]
+    fn character_format_serializes_only_set_fields() {
+        let fmt = CharacterFormat {
+            font_weight: Some(FONT_WEIGHT_BOLD),
+            italic: Some(true),
+            ..CharacterFormat::default()
+        };
+        let json = serde_json::to_string(&fmt).unwrap();
+        assert_eq!(json, r#"{"font_weight":700,"italic":true}"#);
+        let back: CharacterFormat = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, fmt);
+        assert!(CharacterFormat::default().is_empty());
     }
 }

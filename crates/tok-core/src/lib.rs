@@ -9,6 +9,7 @@ pub mod numbering;
 pub mod outline;
 pub mod overrides;
 pub mod reference;
+pub mod spans;
 pub mod styles;
 pub mod transaction;
 
@@ -31,8 +32,11 @@ pub use overrides::LayoutLockOverrides;
 pub use reference::{
     CrossReferenceNode, CrossReferenceRegistry, ReferenceKind, ReferenceTarget,
 };
+pub use spans::{
+    insert_range, is_canonical, normalize_spans, remove_range, spans_in_range, TextSpan,
+};
 pub use styles::{
-    AhaltermStretchMode, CharacterStyle, Color, ParagraphStyle, Progression, StylePatch,
-    TextAlignment,
+    AhaltermStretchMode, CharacterFormat, CharacterStyle, Color, ParagraphStyle, Progression,
+    StylePatch, TextAlignment,
 };
 pub use transaction::{AtomicOperation, CompoundTransaction, TransactionStack};
