@@ -2467,7 +2467,335 @@ describe('Phase 6: Document Classification & Layout Template Synthesis', () => {
   });
 });
 
+describe('Stage 11: End-to-End Story Editor, Document Model & .tok Storage Round-Trip', () => {
+  let documentBridge;
+  let tokCliPath;
+  let storyEditorModule;
 
+  before(async () => {
+    const bridgePath = path.resolve('packages/tok-ui/dist/engine/documentBridge.js');
+    assert.ok(fs.existsSync(bridgePath), 'documentBridge.js must be built');
+    documentBridge = await import(`file://${bridgePath.replace(/\\/g, '/')}`);
 
+    const editorPath = path.resolve('packages/tok-story-editor/dist/index.js');
+    assert.ok(fs.existsSync(editorPath), 'tok-story-editor dist must be built');
+    storyEditorModule = await import(`file://${editorPath.replace(/\\/g, '/')}`);
 
+    tokCliPath = findTokCli();
+  });
+
+  test('Story Editor to Document Model bidirectional sync with Spans and Style Patches', () => {
+    // 1. Construct rich text paragraph data representing story editor state
+    const originalState = {
+      title: 'ספר היצירה עם פירוש מודרני',
+      templateType: 'gemara',
+      flows: {
+        gemara: [
+          {
+            id: 'g-1',
+            styleId: 'style-gemara-main',
+            text: 'בִּשְׁלֹשִׁים וּשְׁתַּיִם נְתִיבוֹת פְּלִיאוֹת חָכְמָה חָקַק יָהּ ה׳ צְבָאוֹת.',
+            spans: [
+              { start: 0, end: 14, format: { fontWeight: 700, fontFamily: 'FrankRuehl', fontSizePt: 16 } },
+              { start: 15, end: 32, format: { italic: true } },
+              { start: 33, end: 42, format: { underline: true, trackingEm: 1.5 } }
+            ],
+            patch: {
+              alignment: 'Justified',
+              lineHeightPt: 1.45,
+              spaceBeforePt: 8,
+              spaceAfterPt: 12
+            }
+          },
+          {
+            id: 'g-2',
+            styleId: 'style-gemara-main',
+            text: 'וּבָרָא אֶת עוֹלָמוֹ בִּשְׁלֹשָׁה סְפָרִים: בְּסֵפֶר וּסְפָר וְסִפּוּר.',
+            spans: [
+              { start: 0, end: 17, format: { fontWeight: 700 } },
+              { start: 18, end: 35, format: { italic: true } }
+            ],
+            patch: {
+              alignment: 'Right',
+              firstLineIndentPt: 15
+            }
+          }
+        ],
+        rashi: [
+          {
+            id: 'r-1',
+            styleId: 'style-rashi-body',
+            text: 'בשלושים ושתים נתיבות - אלו כ״ב אותיות ועשר ספירות (Sefer Yetzirah Chapter 1).',
+            spans: [
+              { start: 0, end: 20, format: { fontWeight: 700 } },
+              { start: 49, end: 75, format: { fontFamily: 'DejaVu Sans', italic: true } }
+            ],
+            patch: {
+              alignment: 'Justified',
+              lineHeightPt: 1.2
+            }
+          }
+        ]
+      }
+    };
+
+    // 2. Convert to DocumentRoot via documentBridge
+    const docRoot = documentBridge.documentStateToDocumentRoot(originalState, { author: 'רבי אברהם' });
+    assert.ok(documentBridge.isValidUlid(docRoot.id), 'Root ID must be valid ULID');
+    assert.equal(docRoot.metadata.title, originalState.title);
+    assert.equal(docRoot.metadata.author, 'רבי אברהם');
+
+    const sec = docRoot.sections[0];
+    assert.ok(sec, 'Document must have at least one section');
+    const gemaraFlow = sec.flows.find((f) => f.id === 'gemara');
+    assert.ok(gemaraFlow, 'Gemara flow must be present');
+    assert.equal(gemaraFlow.paragraphs.length, 2);
+
+    // Verify ParagraphNodes retained rich spans and patches
+    const p0 = gemaraFlow.paragraphs[0];
+    assert.equal(p0.spans.length, 3, 'First paragraph must retain 3 text spans');
+    assert.equal(p0.spans[0].format.font_weight, 700);
+    assert.equal(p0.spans[0].format.font_family, 'FrankRuehl');
+    assert.equal(p0.spans[0].format.font_size_pt, 16);
+    assert.equal(p0.style_patches[0].alignment, 'Justified');
+    assert.equal(p0.style_patches[0].line_height_pt, 1.45);
+    assert.equal(p0.style_patches[0].space_before_pt, 8);
+    assert.equal(p0.style_patches[0].space_after_pt, 12);
+
+    const rashiFlow = sec.flows.find((f) => f.id === 'rashi');
+    assert.ok(rashiFlow, 'Rashi flow must be present');
+    const rp0 = rashiFlow.paragraphs[0];
+    assert.equal(rp0.spans.length, 2);
+    assert.equal(rp0.spans[1].format.font_family, 'DejaVu Sans');
+
+    // 3. Convert back to MultiFlowDocumentState
+    const restoredState = documentBridge.documentRootToDocumentState(docRoot);
+    assert.equal(restoredState.title, originalState.title);
+    assert.equal(restoredState.flows.gemara.length, 2);
+    assert.deepEqual(restoredState.flows.gemara[0].spans, originalState.flows.gemara[0].spans);
+    assert.deepEqual(restoredState.flows.gemara[0].patch, originalState.flows.gemara[0].patch);
+    assert.deepEqual(restoredState.flows.rashi[0].spans, originalState.flows.rashi[0].spans);
+    assert.deepEqual(restoredState.flows.rashi[0].patch, originalState.flows.rashi[0].patch);
+  });
+
+  test('Save and reopen .tok package preserves rich spans, patches, and Hebrew Niqqud losslessly', async () => {
+    assert.ok(tokCliPath, tokCliMissingMessage());
+    const { spawn } = await import('node:child_process');
+    const os = await import('node:os');
+
+    const originalState = {
+      title: 'בדיקת שימור סגנונות עשירים בקובץ tok',
+      templateType: 'gemara',
+      flows: {
+        gemara: [
+          {
+            id: 'g-rich-1',
+            styleId: 'style-gemara-main',
+            text: 'שְׁמַע יִשְׂרָאֵל ה׳ אֱלֹהֵינוּ ה׳ אֶחָד׃ (Deuteronomy 6:4)',
+            spans: [
+              { start: 0, end: 11, format: { fontWeight: 700, fontSizePt: 18, fontFamily: 'FrankRuehl' } },
+              { start: 12, end: 32, format: { fontWeight: 700, italic: true } },
+              { start: 33, end: 50, format: { italic: true, fontFamily: 'Times New Roman' } }
+            ],
+            patch: {
+              alignment: 'Center',
+              lineHeightPt: 1.5,
+              spaceBeforePt: 10,
+              spaceAfterPt: 15
+            }
+          }
+        ],
+        notes: [
+          {
+            id: 'n-rich-1',
+            styleId: 'style-footnotes',
+            text: 'הערה: קבלת עול מלכות שמים בכוונה עצומה.',
+            spans: [
+              { start: 0, end: 5, format: { fontWeight: 700, underline: true } }
+            ],
+            patch: {
+              alignment: 'Right',
+              lineHeightPt: 1.1
+            }
+          }
+        ]
+      }
+    };
+
+    const docRoot = documentBridge.documentStateToDocumentRoot(originalState);
+    const tempInJson = path.join(os.tmpdir(), `tok_rich_in_${Date.now()}.json`);
+    const tempTokFile = path.join(os.tmpdir(), `tok_rich_pkg_${Date.now()}.tok`);
+    const tempOutJson = path.join(os.tmpdir(), `tok_rich_out_${Date.now()}.json`);
+
+    try {
+      fs.writeFileSync(tempInJson, JSON.stringify(docRoot, null, 2), 'utf-8');
+
+      // 1. Save .tok package via tok-cli
+      const saveCode = await new Promise((resolve, reject) => {
+        const proc = spawn(tokCliPath, ['save-package', tempInJson, tempTokFile], { windowsHide: true });
+        proc.on('error', reject);
+        proc.on('close', resolve);
+      });
+      assert.equal(saveCode, 0, 'tok-cli save-package must succeed');
+      assert.ok(fs.existsSync(tempTokFile), '.tok package must exist');
+
+      // 2. Open .tok package via tok-cli
+      const openCode = await new Promise((resolve, reject) => {
+        const proc = spawn(tokCliPath, ['open-package', tempTokFile, tempOutJson], { windowsHide: true });
+        proc.on('error', reject);
+        proc.on('close', resolve);
+      });
+      assert.equal(openCode, 0, 'tok-cli open-package must succeed');
+      assert.ok(fs.existsSync(tempOutJson), 'Extracted document JSON must exist');
+
+      // 3. Parse extracted JSON and assert data integrity
+      const extractedRoot = JSON.parse(fs.readFileSync(tempOutJson, 'utf-8'));
+      const sec = extractedRoot.sections[0];
+      const gFlow = sec.flows.find((f) => f.id === 'gemara');
+      const p = gFlow.paragraphs[0];
+
+      assert.equal(p.text, originalState.flows.gemara[0].text, 'Text with Niqqud must be identical');
+      assert.ok(p.spans && p.spans.length === 3, 'Spans length must be preserved');
+      assert.equal(p.spans[0].format.font_weight, 700);
+      assert.equal(p.spans[0].format.font_family, 'FrankRuehl');
+      assert.equal(p.spans[0].format.font_size_pt, 18);
+      assert.equal(p.spans[1].format.font_weight, 700);
+      assert.equal(p.spans[2].format.italic, true);
+      assert.equal(p.spans[2].format.font_family, 'Times New Roman');
+
+      assert.equal(p.style_patches[0].alignment, 'Center');
+      assert.equal(p.style_patches[0].line_height_pt, 1.5);
+      assert.equal(p.style_patches[0].space_before_pt, 10);
+      assert.equal(p.style_patches[0].space_after_pt, 15);
+
+      // 4. Restore state via bridge and verify full equality
+      const restoredState = documentBridge.documentRootToDocumentState(extractedRoot);
+      assert.deepEqual(restoredState.flows.gemara[0].spans, originalState.flows.gemara[0].spans);
+      assert.deepEqual(restoredState.flows.gemara[0].patch, originalState.flows.gemara[0].patch);
+    } finally {
+      if (fs.existsSync(tempInJson)) fs.unlinkSync(tempInJson);
+      if (fs.existsSync(tempTokFile)) fs.unlinkSync(tempTokFile);
+      if (fs.existsSync(tempOutJson)) fs.unlinkSync(tempOutJson);
+    }
+  });
+
+  test('Real typesetting engine successfully lays out document containing rich text spans and patches', async () => {
+    assert.ok(tokCliPath, tokCliMissingMessage());
+    const { spawn } = await import('node:child_process');
+    const os = await import('node:os');
+
+    const richDocState = {
+      title: 'עימוד עשיר עם ספנים והזחות',
+      templateType: 'gemara',
+      flows: {
+        gemara: [
+          {
+            id: 'g-layout-1',
+            styleId: 'style-gemara-main',
+            text: 'מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית? מִשָּׁעָה שֶׁהַכֹּהֲנִים נִכְנָסִים לֶאֱכֹל בִּתְרוּמָתָן, עַד סוֹף הָאַשְׁמוּרָה הָרִאשׁוֹנָה, דִּבְרֵי רַבִּי אֱלִיעֶזֶר.',
+            spans: [
+              { start: 0, end: 27, format: { fontWeight: 700, fontSizePt: 14 } },
+              { start: 28, end: 60, format: { italic: true } }
+            ],
+            patch: {
+              alignment: 'Justified',
+              lineHeightPt: 1.3
+            }
+          },
+          {
+            id: 'g-layout-2',
+            styleId: 'style-gemara-main',
+            text: 'וַחֲכָמִים אוֹמְרִים: עַד חֲצוֹת. רַבָּן גַּמְלִיאֵל אוֹמֵר: עַד שֶׁיַּעֲלֶה עַמּוּד הַשָּׁחַר.',
+            spans: [
+              { start: 0, end: 16, format: { fontWeight: 700 } }
+            ],
+            patch: {
+              alignment: 'Justified'
+            }
+          }
+        ]
+      }
+    };
+
+    const docRoot = documentBridge.documentStateToDocumentRoot(richDocState);
+    const tempInJson = path.join(os.tmpdir(), `tok_typeset_in_${Date.now()}.json`);
+    const tempOutJson = path.join(os.tmpdir(), `tok_typeset_out_${Date.now()}.json`);
+
+    try {
+      fs.writeFileSync(tempInJson, JSON.stringify(docRoot, null, 2), 'utf-8');
+
+      const exitCode = await new Promise((resolve) => {
+        const proc = spawn(tokCliPath, ['typeset-document', tempInJson, tempOutJson], { windowsHide: true });
+        proc.on('close', resolve);
+      });
+
+      assert.equal(exitCode, 0, 'tok-cli typeset-document must succeed on document with rich spans and patches');
+      const pages = JSON.parse(fs.readFileSync(tempOutJson, 'utf-8'));
+      assert.ok(pages.length >= 1, 'At least 1 page must be produced');
+
+      const p0 = pages[0];
+      assert.ok(p0.frames.length >= 1, 'At least 1 frame must be allocated');
+      const gemaraFrame = p0.frames.find((f) => f.flow_id === 'gemara') || p0.frames[0];
+      assert.ok(gemaraFrame.lines.length >= 2, `Gemara frame must contain placed lines, got ${gemaraFrame.lines.length}`);
+      for (const line of gemaraFrame.lines) {
+        assert.ok(line.text.length > 0, 'Placed line text must not be empty');
+        assert.ok(line.width > 0, 'Placed line width must be positive');
+      }
+    } finally {
+      if (fs.existsSync(tempInJson)) fs.unlinkSync(tempInJson);
+      if (fs.existsSync(tempOutJson)) fs.unlinkSync(tempOutJson);
+    }
+  });
+
+  test('Story Editor editing operations generate valid transaction history that serializes cleanly', () => {
+    const { formatRangeInSpans, normalizeSpans } = storyEditorModule;
+
+    let text = 'שלום עולם שלום ירושלים';
+    let spans = [];
+
+    // Apply bold to 'שלום' (0..4)
+    spans = formatRangeInSpans(spans, 0, 4, { fontWeight: 700 });
+    assert.equal(spans.length, 1);
+    assert.deepEqual(spans[0], { start: 0, end: 4, format: { fontWeight: 700 } });
+
+    // Apply italic to 'עולם שלום' (5..14)
+    spans = formatRangeInSpans(spans, 5, 14, { italic: true });
+    assert.equal(spans.length, 2);
+
+    // Apply bold to overlapping range (10..22)
+    spans = formatRangeInSpans(spans, 10, 22, { fontWeight: 700 });
+    spans = normalizeSpans(spans);
+
+    // Verify all spans are sorted, disjoint, and valid within text length
+    for (let i = 0; i < spans.length; i++) {
+      assert.ok(spans[i].start < spans[i].end);
+      assert.ok(spans[i].end <= text.length);
+      if (i > 0) {
+        assert.ok(spans[i - 1].end <= spans[i].start);
+      }
+    }
+
+    // Convert paragraph with these spans to DocumentRoot and verify roundtrip
+    const state = {
+      title: 'היסטוריית עריכה',
+      templateType: 'gemara',
+      flows: {
+        gemara: [
+          {
+            id: 'm-1',
+            styleId: 'normal',
+            text,
+            spans,
+            patch: { alignment: 'Right' }
+          }
+        ]
+      }
+    };
+
+    const docRoot = documentBridge.documentStateToDocumentRoot(state);
+    const restored = documentBridge.documentRootToDocumentState(docRoot);
+    assert.deepEqual(restored.flows.gemara[0].spans, spans);
+    assert.deepEqual(restored.flows.gemara[0].patch, { alignment: 'Right' });
+  });
+});
 

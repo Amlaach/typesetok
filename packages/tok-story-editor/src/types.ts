@@ -88,7 +88,7 @@ export function areFormatsEqual(a?: CharacterFormat | null, b?: CharacterFormat 
 }
 
 /** Brings a span list into canonical form: sorted, clamped, merged, no overlaps. */
-export function normalizeSpans(spans: TextSpan[], textLen: number): TextSpan[] {
+export function normalizeSpans(spans: TextSpan[], textLen: number = Infinity): TextSpan[] {
   let out: TextSpan[] = [];
   for (const span of spans) {
     const start = Math.max(0, Math.min(textLen, span.start));
@@ -202,7 +202,7 @@ export function formatRangeInSpans(
   start: number,
   end: number,
   format: CharacterFormat,
-  textLen: number
+  textLen: number = Infinity
 ): TextSpan[] {
   if (start >= end || isFormatEmpty(format)) return [...spans];
   const copy = spans.map((s) => ({ ...s, format: { ...s.format } }));
@@ -215,7 +215,7 @@ export function clearRangeInSpans(
   spans: TextSpan[],
   start: number,
   end: number,
-  textLen: number
+  textLen: number = Infinity
 ): TextSpan[] {
   if (start >= end) return [...spans];
   const out: TextSpan[] = [];
