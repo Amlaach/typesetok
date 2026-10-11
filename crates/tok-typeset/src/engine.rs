@@ -1904,5 +1904,140 @@ mod tests {
         assert!((ratio_a - 0.30).abs() < 0.05, "Ratio A should be approx 0.30, got {}", ratio_a);
         assert!((ratio_b - 0.70).abs() < 0.05, "Ratio B should be approx 0.70, got {}", ratio_b);
     }
+
+    #[test]
+    fn test_typeset_document_prevents_stranded_headings() {
+        use tok_core::styles::ParagraphStyle;
+
+        let mut config = TypesettingEngineConfig::default();
+        config.page_width_pt = 300.0;
+        config.page_height_pt = 150.0;
+        config.margin_top_pt = 20.0;
+        config.margin_bottom_pt = 20.0;
+        config.margin_inner_pt = 20.0;
+        config.margin_outer_pt = 20.0;
+        let eng = TypesettingEngine::new(config);
+
+        let mut doc = DocumentRoot::new("בדיקת מניעת כותרת יתומה");
+        let mut s_body = ParagraphStyle::default();
+        s_body.id = "body".to_string();
+        s_body.font_size_pt = 12.0;
+        s_body.line_height_pt = 18.0;
+        s_body.space_before_pt = 0.0;
+        s_body.space_after_pt = 0.0;
+
+        let mut s_heading = ParagraphStyle::default();
+        s_heading.id = "heading".to_string();
+        s_heading.font_size_pt = 14.0;
+        s_heading.line_height_pt = 22.0;
+        s_heading.space_before_pt = 10.0;
+        s_heading.space_after_pt = 6.0;
+        s_heading.keep_with_next = true;
+
+        doc.paragraph_styles = vec![s_body, s_heading];
+
+        let flow = doc.sections[0].main_flow_mut().unwrap();
+        // 4 single-line body paragraphs (each 18pt = 72pt)
+        for i in 0..4 {
+            flow.add_paragraph(ParagraphNode::new(
+                FractionalIndex::new(format!("a_{}", i)),
+                "body",
+                "פסקה קצרה",
+            ));
+        }
+        // Heading with keep_with_next = true (22pt + 10pt space_before = 32pt -> total 104pt <= 110pt)
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("b_0"),
+            "heading",
+            "פרק ראשון: דיני פריסה גיאומטרית",
+        ));
+        // Next paragraph (18pt -> 104 + 18 = 122pt > 110pt)
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("c_0"),
+            "body",
+            "המשך גוף הטקסט שלא נכנס בעמוד הראשון",
+        ));
+
+        let pages = eng.typeset_document(&doc);
+        assert!(pages.len() >= 2, "Document should split across at least 2 pages");
+
+        // The heading MUST NOT be on page 1!
+        let page1_lines = &pages[0].frames[0].lines;
+        let page2_lines = &pages[1].frames[0].lines;
+        assert!(
+            !page1_lines.iter().any(|l| l.text.contains("פרק ראשון")),
+            "Heading must not be stranded on Page 1!"
+        );
+        assert!(
+            page2_lines[0].text.contains("פרק ראשון"),
+            "Heading should be pushed to Page 2 at top of page, got: {}",
+            page2_lines[0].text
+        );
+    }
+
+    #[test]
+    fn test_typeset_document_orphan_and_widow_control() {
+        use tok_core::styles::ParagraphStyle;
+
+        let mut config = TypesettingEngineConfig::default();
+        config.page_width_pt = 300.0;
+        config.page_height_pt = 160.0;
+        config.margin_top_pt = 20.0;
+        config.margin_bottom_pt = 20.0;
+        config.margin_inner_pt = 20.0;
+        config.margin_outer_pt = 20.0;
+        let eng = TypesettingEngine::new(config);
+
+        let mut doc = DocumentRoot::new("בדיקת מניעת שורות יתומות");
+        let mut s_body = ParagraphStyle::default();
+        s_body.id = "body".to_string();
+        s_body.font_size_pt = 12.0;
+        s_body.line_height_pt = 20.0;
+        s_body.space_before_pt = 0.0;
+        s_body.space_after_pt = 0.0;
+        s_body.orphan_control = 2;
+        s_body.widow_control = 2;
+
+        doc.paragraph_styles = vec![s_body];
+
+        let flow = doc.sections[0].main_flow_mut().unwrap();
+        // 5 single-line paragraphs fill 5 * 20 = 100pt (content height = 120pt, remaining = 20pt)
+        for i in 0..5 {
+            flow.add_paragraph(ParagraphNode::new(
+                FractionalIndex::new(format!("p1_{}", i)),
+                "body",
+                "פסקה קצרה למילוי העמוד",
+            ));
+        }
+        // Paragraph 2 is long (3 lines: 3 * 20 = 60pt). Line 0 (20pt) fits in remaining 20pt.
+        // A naive greedy breaker would place Line 0 on Page 1 (leaving a 1-line orphan!).
+        flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("p2"),
+            "body",
+            "פסקה שנייה ארוכה מאוד שמתפרסת על פני מספר שורות שלמות כדי לבדוק האם מנוע העימוד מונע היווצרות שורות יתומות בתחתית העמוד הראשון כפי שנדרש.",
+        ));
+
+        let p2_id = flow.paragraphs.last().unwrap().id;
+
+        let pages = eng.typeset_document(&doc);
+        assert!(pages.len() >= 2);
+
+        // Check each page line counts for paragraph 2
+        for (p_idx, page) in pages.iter().enumerate() {
+            let lines = &page.frames[0].lines;
+            let p2_lines_on_page: Vec<_> = lines
+                .iter()
+                .filter(|l| l.paragraph_id == Some(p2_id))
+                .collect();
+            if !p2_lines_on_page.is_empty() {
+                assert!(
+                    p2_lines_on_page.len() >= 2 || p_idx == pages.len() - 1,
+                    "Page {} has only {} lines of paragraph 2 (violating orphan_control)",
+                    p_idx + 1,
+                    p2_lines_on_page.len()
+                );
+            }
+        }
+    }
 }
 
