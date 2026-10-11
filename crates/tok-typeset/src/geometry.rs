@@ -116,6 +116,8 @@ pub struct BreakToken {
     pub section_index: usize,
     pub paragraph_index: usize,
     pub char_offset: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paragraph_id: Option<tok_core::id::NodeId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

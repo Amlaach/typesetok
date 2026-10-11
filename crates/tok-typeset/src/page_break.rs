@@ -227,6 +227,7 @@ impl GlobalPageBreaker {
                     section_index: next_item.section_idx,
                     paragraph_index: next_item.paragraph_idx,
                     char_offset: next_item.char_offset,
+                    paragraph_id: next_item.paragraph_id,
                 })
             } else {
                 None

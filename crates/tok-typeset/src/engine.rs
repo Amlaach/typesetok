@@ -1460,6 +1460,7 @@ impl TypesettingEngine {
                             .map(|g| g.cluster as usize)
                             .min()
                             .unwrap_or(0),
+                        paragraph_id: line.paragraph_id,
                     })
                 })
             } else {
@@ -2753,6 +2754,58 @@ mod tests {
                 assert_eq!(l1.text, l2.text);
                 assert_eq!(l1.baseline_y, l2.baseline_y);
             }
+        }
+    }
+
+    #[test]
+    fn test_incremental_page_number_and_gematria_consistency() {
+        let mut doc = DocumentRoot::new("מבחן עקביות מספור עמודים וגמטריא");
+        {
+            let flow = doc.sections[0].main_flow_mut().unwrap();
+            for i in 0..60 {
+                let p = ParagraphNode::new(
+                    tok_core::id::FractionalIndex::new(format!("k{:03}", i)),
+                    "default-body",
+                    "טֶקְסְט אָרֹךְ עִם כַּמָּה מִשְׁפָּטִים כְּדֵי לְמַלֵּא עַמּוּדִים בְּדִיּוּק וּלְאַפְשֵׁר בְּדִיקַת מַעֲבָרֵי עַמּוּד וּמִסְפּוּר עִבְרִי תַּקִּין.",
+                );
+                flow.add_paragraph(p);
+            }
+        }
+
+        let eng = engine();
+        let pages1 = eng.typeset_document(&doc);
+        assert!(pages1.len() >= 2);
+
+        // Verify initial page numbers and gematria
+        for (idx, page) in pages1.iter().enumerate() {
+            assert_eq!(page.page_index, idx);
+            assert_eq!(page.page_number_gematria, GematriaEngine::to_hebrew_numeral(idx + 1));
+        }
+
+        // Insert 80 new paragraphs at beginning to cause page expansion
+        {
+            let flow = doc.sections[0].main_flow_mut().unwrap();
+            for i in 0..80 {
+                let p = ParagraphNode::new(
+                    tok_core::id::FractionalIndex::new(format!("a{:03}", i)),
+                    "default-body",
+                    "פִּסְקָה חֲדָשָׁה שֶׁנּוֹסְפָה בִּתְחִלַּת הַמִּסְמָךְ וְגּוֹרֶמֶת לִגְלִישַׁת עַמּוּדִים קָדִימָה.",
+                );
+                flow.add_paragraph(p);
+            }
+        }
+
+        let (pages2, _diag) = eng.typeset_document_incremental(&doc, &pages1, None);
+        assert!(pages2.len() > pages1.len(), "Page count must expand");
+
+        // Verify that after incremental reflow, every page has correct monotonic numbering and gematria
+        for (idx, page) in pages2.iter().enumerate() {
+            assert_eq!(page.page_index, idx, "Page index must be strictly monotonic");
+            assert_eq!(
+                page.page_number_gematria,
+                GematriaEngine::to_hebrew_numeral(idx + 1),
+                "Gematria folio must match 1-based page index"
+            );
         }
     }
 }

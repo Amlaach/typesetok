@@ -109,6 +109,7 @@ impl IncrementalPageBreaker {
                 section_index: new_lines[start_idx].section_idx,
                 paragraph_index: new_lines[start_idx].paragraph_idx,
                 char_offset: new_lines[start_idx].char_offset,
+                paragraph_id: new_lines[start_idx].paragraph_id,
             };
 
             // Check for convergence with previous slices only after repaginating the affected page
