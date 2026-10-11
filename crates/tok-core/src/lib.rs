@@ -3,6 +3,7 @@ pub mod error;
 pub mod id;
 pub mod model;
 pub mod normalizer;
+pub mod numbering;
 pub mod outline;
 pub mod reference;
 pub mod styles;
@@ -16,6 +17,7 @@ pub use model::{
     SectionNode,
 };
 pub use normalizer::{HebrewMarkCategory, HebrewNormalizer};
+pub use numbering::{GematriaPunctuation, NumberingFormatter, NumberingScheme, NumberingScope};
 pub use outline::{DocumentHierarchyNode, DocumentOutline, HierarchyLevel};
 pub use reference::{
     CrossReferenceNode, CrossReferenceRegistry, ReferenceKind, ReferenceTarget,
