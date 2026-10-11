@@ -46,10 +46,15 @@ export interface StoryParagraph {
 
 export interface StorySelection {
   paraId: string;
-  start: number; // char offset
-  end: number;   // char offset
+  start: number; // char offset within paraId
+  end: number;   // char offset within paraId
   isCollapsed: boolean;
+  anchorParaId?: string;
+  anchorOffset?: number;
+  focusParaId?: string;
+  focusOffset?: number;
 }
+
 
 /** Check if format has any non-empty properties */
 export function isFormatEmpty(fmt?: CharacterFormat | null): boolean {

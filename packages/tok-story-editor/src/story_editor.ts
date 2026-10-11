@@ -5,15 +5,21 @@
  * Allows authors to write and edit long texts with Niqqud without the overhead of page pagination.
  */
 
-import { StoryParagraph } from './types';
+import { StoryParagraph, StorySelection } from './types';
 import { renderParagraphDom, parseParagraphDom } from './dom_converter';
-export { StoryParagraph };
+import { StoryHistory } from './history';
+export { StoryParagraph, StorySelection };
 
 export class StoryEditor {
   private container: HTMLElement;
   private editorEl: HTMLDivElement;
+  private history: StoryHistory = new StoryHistory();
+  private lastSavedParagraphs: StoryParagraph[] = [];
+  private lastSelection: StorySelection | null = null;
   private onTextChangeCallback?: (paraId: string, newText: string) => void;
-  private onSelectionChange = () => this.markCurrentParagraph();
+  private onStoryChangeCallback?: (paragraphs: StoryParagraph[]) => void;
+  private historyChangeCallbacks: Array<(canUndo: boolean, canRedo: boolean) => void> = [];
+  private onSelectionChange = () => this.handleSelectionChange();
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -41,6 +47,33 @@ export class StoryEditor {
       this.handleInput();
     });
 
+    this.editorEl.addEventListener('keydown', (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        if (e.key === 'z' || e.key === 'Z') {
+          if (e.shiftKey) {
+            e.preventDefault();
+            this.redo();
+          } else {
+            e.preventDefault();
+            this.undo();
+          }
+        } else if (e.key === 'y' || e.key === 'Y') {
+          e.preventDefault();
+          this.redo();
+        }
+      }
+    });
+
+    this.editorEl.addEventListener('beforeinput', (e: InputEvent) => {
+      if (e.inputType === 'historyUndo') {
+        e.preventDefault();
+        this.undo();
+      } else if (e.inputType === 'historyRedo') {
+        e.preventDefault();
+        this.redo();
+      }
+    });
+
     // Highlight the paragraph that holds the caret.
     document.addEventListener('selectionchange', this.onSelectionChange);
   }
@@ -60,6 +93,14 @@ export class StoryEditor {
     this.editorEl.style.fontSize = `${px}px`;
   }
 
+  private handleSelectionChange(): void {
+    this.markCurrentParagraph();
+    const sel = this.getStorySelection();
+    if (sel) {
+      this.lastSelection = sel;
+    }
+  }
+
   private markCurrentParagraph(): void {
     const sel = window.getSelection();
     let node: Node | null = sel && sel.anchorNode && this.editorEl.contains(sel.anchorNode) ? sel.anchorNode : null;
@@ -71,13 +112,22 @@ export class StoryEditor {
     current?.classList.add('tok-current');
   }
 
-  public loadStory(paragraphs: StoryParagraph[]): void {
+  private renderParagraphs(paragraphs: StoryParagraph[]): void {
     const frag = document.createDocumentFragment();
     for (const p of paragraphs) {
       const pEl = renderParagraphDom(p);
       frag.appendChild(pEl);
     }
     this.editorEl.replaceChildren(frag);
+  }
+
+  public loadStory(paragraphs: StoryParagraph[], resetHistory = true): void {
+    this.renderParagraphs(paragraphs);
+    this.lastSavedParagraphs = JSON.parse(JSON.stringify(paragraphs));
+    if (resetHistory) {
+      this.history.clear();
+    }
+    this.notifyHistoryChange();
   }
 
   /** Current paragraphs as edited with semantic spans and style patches. */
@@ -97,23 +147,268 @@ export class StoryEditor {
     this.onTextChangeCallback = cb;
   }
 
-  private handleInput(): void {
-    const sel = window.getSelection();
-    if (!sel || !sel.anchorNode) return;
+  public onStoryChange(cb: (paragraphs: StoryParagraph[]) => void): void {
+    this.onStoryChangeCallback = cb;
+  }
 
-    let node: Node | null = sel.anchorNode;
+  public onHistoryChange(cb: (canUndo: boolean, canRedo: boolean) => void): () => void {
+    this.historyChangeCallbacks.push(cb);
+    cb(this.canUndo(), this.canRedo());
+    return () => {
+      this.historyChangeCallbacks = this.historyChangeCallbacks.filter((c) => c !== cb);
+    };
+  }
+
+  public canUndo(): boolean {
+    return this.history.canUndo();
+  }
+
+  public canRedo(): boolean {
+    return this.history.canRedo();
+  }
+
+  public getUndoCount(): number {
+    return this.history.getUndoCount();
+  }
+
+  public getRedoCount(): number {
+    return this.history.getRedoCount();
+  }
+
+  public undo(): boolean {
+    const state = this.history.undo();
+    if (!state) return false;
+    this.renderParagraphs(state.paragraphs);
+    this.lastSavedParagraphs = JSON.parse(JSON.stringify(state.paragraphs));
+    if (state.selection) {
+      this.setStorySelection(state.selection);
+    }
+    this.notifyHistoryChange();
+    if (this.onTextChangeCallback) {
+      this.onTextChangeCallback('', '');
+    }
+    if (this.onStoryChangeCallback) {
+      this.onStoryChangeCallback(state.paragraphs);
+    }
+    return true;
+  }
+
+  public redo(): boolean {
+    const state = this.history.redo();
+    if (!state) return false;
+    this.renderParagraphs(state.paragraphs);
+    this.lastSavedParagraphs = JSON.parse(JSON.stringify(state.paragraphs));
+    if (state.selection) {
+      this.setStorySelection(state.selection);
+    }
+    this.notifyHistoryChange();
+    if (this.onTextChangeCallback) {
+      this.onTextChangeCallback('', '');
+    }
+    if (this.onStoryChangeCallback) {
+      this.onStoryChangeCallback(state.paragraphs);
+    }
+    return true;
+  }
+
+  public executeTransaction(description: string, fn: () => void): void {
+    const before = this.getStory();
+    const selBefore = this.getStorySelection();
+
+    fn();
+
+    this.dedupeParagraphIds();
+    const after = this.getStory();
+    const selAfter = this.getStorySelection();
+
+    this.history.record(before, after, {
+      description,
+      isTyping: false,
+      selectionBefore: selBefore || undefined,
+      selectionAfter: selAfter || undefined
+    });
+
+    this.lastSavedParagraphs = JSON.parse(JSON.stringify(after));
+    this.lastSelection = selAfter;
+    this.notifyHistoryChange();
+
+    if (this.onTextChangeCallback) {
+      this.onTextChangeCallback('', '');
+    }
+    if (this.onStoryChangeCallback) {
+      this.onStoryChangeCallback(after);
+    }
+  }
+
+  private notifyHistoryChange(): void {
+    const u = this.canUndo();
+    const r = this.canRedo();
+    for (const cb of this.historyChangeCallbacks) {
+      try {
+        cb(u, r);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }
+
+  private handleInput(): void {
+    this.dedupeParagraphIds();
+    const currentParagraphs = this.getStory();
+    const currentSel = this.getStorySelection();
+
+    this.history.record(this.lastSavedParagraphs, currentParagraphs, {
+      isTyping: true,
+      selectionBefore: this.lastSelection || undefined,
+      selectionAfter: currentSel || undefined
+    });
+
+    this.lastSavedParagraphs = JSON.parse(JSON.stringify(currentParagraphs));
+    this.lastSelection = currentSel;
+    this.notifyHistoryChange();
+
+    const sel = window.getSelection();
+    let node: Node | null = sel && sel.anchorNode;
     while (node && node !== this.editorEl && node.nodeName !== 'P') {
       node = node.parentNode;
     }
 
     if (node && node.nodeName === 'P') {
       const pEl = node as HTMLParagraphElement;
-      this.dedupeParagraphIds();
       const paraId = pEl.dataset.paraId;
       if (paraId && this.onTextChangeCallback) {
         this.onTextChangeCallback(paraId, pEl.textContent || '');
       }
+    } else if (this.onTextChangeCallback) {
+      this.onTextChangeCallback('', '');
     }
+
+    if (this.onStoryChangeCallback) {
+      this.onStoryChangeCallback(currentParagraphs);
+    }
+  }
+
+  public getStorySelection(): StorySelection | null {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.anchorNode || !sel.focusNode) return null;
+    if (!this.editorEl.contains(sel.anchorNode) || !this.editorEl.contains(sel.focusNode)) return null;
+
+    let anchorP: HTMLElement | null = null;
+    let curr: Node | null = sel.anchorNode;
+    while (curr && curr !== this.editorEl) {
+      if (curr.nodeName === 'P' && (curr as HTMLElement).dataset.paraId) {
+        anchorP = curr as HTMLElement;
+        break;
+      }
+      curr = curr.parentNode;
+    }
+
+    let focusP: HTMLElement | null = null;
+    curr = sel.focusNode;
+    while (curr && curr !== this.editorEl) {
+      if (curr.nodeName === 'P' && (curr as HTMLElement).dataset.paraId) {
+        focusP = curr as HTMLElement;
+        break;
+      }
+      curr = curr.parentNode;
+    }
+
+    if (!anchorP || !focusP) return null;
+
+    const anchorParaId = anchorP.dataset.paraId!;
+    const focusParaId = focusP.dataset.paraId!;
+    const anchorOffset = this.getOffsetInParagraph(anchorP, sel.anchorNode, sel.anchorOffset);
+    const focusOffset = this.getOffsetInParagraph(focusP, sel.focusNode, sel.focusOffset);
+
+    const isCollapsed = sel.isCollapsed;
+    const isSinglePara = anchorParaId === focusParaId;
+    const start = isSinglePara ? Math.min(anchorOffset, focusOffset) : anchorOffset;
+    const end = isSinglePara ? Math.max(anchorOffset, focusOffset) : anchorOffset;
+
+    return {
+      paraId: anchorParaId,
+      start,
+      end,
+      isCollapsed,
+      anchorParaId,
+      anchorOffset,
+      focusParaId,
+      focusOffset
+    };
+  }
+
+  public setStorySelection(selInfo: StorySelection): void {
+    const aId = selInfo.anchorParaId || selInfo.paraId;
+    const fId = selInfo.focusParaId || selInfo.paraId;
+    const aOff = selInfo.anchorOffset !== undefined ? selInfo.anchorOffset : selInfo.start;
+    const fOff = selInfo.focusOffset !== undefined ? selInfo.focusOffset : selInfo.end;
+
+    const anchorP = this.editorEl.querySelector<HTMLElement>(`p[data-para-id="${CSS.escape(aId)}"]`);
+    const focusP = this.editorEl.querySelector<HTMLElement>(`p[data-para-id="${CSS.escape(fId)}"]`);
+    if (!anchorP || !focusP) return;
+
+    const sel = window.getSelection();
+    if (!sel) return;
+
+    const anchorPoint = this.findNodeAndOffset(anchorP, aOff);
+    const focusPoint = this.findNodeAndOffset(focusP, fOff);
+
+    try {
+      if (typeof sel.setBaseAndExtent === 'function') {
+        sel.setBaseAndExtent(anchorPoint.node, anchorPoint.offset, focusPoint.node, focusPoint.offset);
+      } else {
+        const range = document.createRange();
+        range.setStart(anchorPoint.node, anchorPoint.offset);
+        range.setEnd(focusPoint.node, focusPoint.offset);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    } catch {
+      // Fallback if range fails in disconnected or synthetic tree
+    }
+  }
+
+  private getOffsetInParagraph(paraEl: HTMLElement, targetNode: Node, targetOffset: number): number {
+    let offset = 0;
+    const walker = document.createTreeWalker(paraEl, NodeFilter.SHOW_TEXT);
+    let node: Node | null = walker.nextNode();
+    while (node) {
+      if (node === targetNode) {
+        return offset + targetOffset;
+      }
+      offset += (node.textContent || '').length;
+      node = walker.nextNode();
+    }
+    if (targetNode === paraEl || targetNode.nodeType === Node.ELEMENT_NODE) {
+      let count = 0;
+      for (let i = 0; i < targetOffset && i < targetNode.childNodes.length; i++) {
+        count += targetNode.childNodes[i].textContent?.length || 0;
+      }
+      return count;
+    }
+    return offset;
+  }
+
+  private findNodeAndOffset(paraEl: HTMLElement, targetOffset: number): { node: Node; offset: number } {
+    const walker = document.createTreeWalker(paraEl, NodeFilter.SHOW_TEXT);
+    let node: Node | null = walker.nextNode();
+    let remaining = targetOffset;
+    let lastNode: Node | null = null;
+
+    while (node) {
+      lastNode = node;
+      const len = (node.textContent || '').length;
+      if (remaining <= len) {
+        return { node, offset: remaining };
+      }
+      remaining -= len;
+      node = walker.nextNode();
+    }
+
+    if (lastNode) {
+      return { node: lastNode, offset: (lastNode.textContent || '').length };
+    }
+    return { node: paraEl, offset: 0 };
   }
 
   /**
@@ -136,3 +431,4 @@ export class StoryEditor {
     });
   }
 }
+
