@@ -924,13 +924,19 @@ export class TypesetOkApp {
       size: 14,
       className: 'tok-btn tok-btn-ghost tok-btn-xs'
     });
+    undoBtn.setAttribute('aria-label', 'ביטול פעולה (Ctrl+Z)');
+    undoBtn.setAttribute('aria-disabled', 'true');
     const redoBtn = iconButton('redo', 'ביצוע חוזר (Ctrl+Y)', () => this.runEditCommand('redo'), {
       size: 14,
       className: 'tok-btn tok-btn-ghost tok-btn-xs'
     });
+    redoBtn.setAttribute('aria-label', 'ביצוע חוזר (Ctrl+Y)');
+    redoBtn.setAttribute('aria-disabled', 'true');
     this.storyEditor.onHistoryChange((canUndo, canRedo) => {
       undoBtn.disabled = !canUndo;
       redoBtn.disabled = !canRedo;
+      undoBtn.setAttribute('aria-disabled', String(!canUndo));
+      redoBtn.setAttribute('aria-disabled', String(!canRedo));
       undoBtn.style.opacity = canUndo ? '1' : '0.4';
       redoBtn.style.opacity = canRedo ? '1' : '0.4';
       this.topBar?.setHistoryState(canUndo, canRedo);
@@ -943,6 +949,8 @@ export class TypesetOkApp {
     this.storyBoldBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
       type: 'button',
       title: 'הדגשה (Ctrl+B)',
+      'aria-label': 'הדגשה (Ctrl+B)',
+      'aria-pressed': 'false',
       style: 'font-weight:700;min-width:24px;height:24px;padding:0;font-size:13px;'
     }, 'B');
     this.storyBoldBtn.addEventListener('click', () => {
@@ -954,6 +962,8 @@ export class TypesetOkApp {
     this.storyItalicBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
       type: 'button',
       title: 'נטוי (Ctrl+I)',
+      'aria-label': 'נטוי (Ctrl+I)',
+      'aria-pressed': 'false',
       style: 'font-style:italic;min-width:24px;height:24px;padding:0;font-size:13px;'
     }, 'I');
     this.storyItalicBtn.addEventListener('click', () => {
@@ -965,6 +975,8 @@ export class TypesetOkApp {
     this.storyUnderlineBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
       type: 'button',
       title: 'קו תחתי (Ctrl+U)',
+      'aria-label': 'קו תחתי (Ctrl+U)',
+      'aria-pressed': 'false',
       style: 'text-decoration:underline;min-width:24px;height:24px;padding:0;font-size:13px;'
     }, 'U');
     this.storyUnderlineBtn.addEventListener('click', () => {
@@ -976,6 +988,7 @@ export class TypesetOkApp {
     const clearFmtBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
       type: 'button',
       title: 'ניקוי עיצוב תווים (Ctrl+\\)',
+      'aria-label': 'ניקוי עיצוב תווים (Ctrl+\\)',
       style: 'min-width:24px;height:24px;padding:0;font-size:11px;font-weight:600;'
     }, 'Tx');
     clearFmtBtn.addEventListener('click', () => {
@@ -989,6 +1002,7 @@ export class TypesetOkApp {
     // Font Family selector
     this.storyFontFamilySelect = el('select', 'tok-select tok-select-xs', {
       title: 'גופן מקטע / פיסקה',
+      'aria-label': 'גופן מקטע / פיסקה',
       style: 'height:24px;font-size:11px;padding:0 4px;max-width:130px;background:var(--tok-surface-2);color:var(--tok-text);border:1px solid var(--tok-border-subtle);border-radius:3px;'
     }) as HTMLSelectElement;
     for (const font of getAvailableFonts()) {
@@ -1118,18 +1132,22 @@ export class TypesetOkApp {
 
     this.findInput = el('input', 'tok-input', {
       type: 'text',
+      'aria-label': 'חיפוש טקסט',
       placeholder: 'חיפוש טקסט...',
       style: 'width:140px;height:24px;font-size:12px;padding:0 6px;'
     }) as HTMLInputElement;
 
     this.replaceInput = el('input', 'tok-input', {
       type: 'text',
+      'aria-label': 'החלפה בטקסט',
       placeholder: 'החלפה ב...',
       style: 'width:130px;height:24px;font-size:12px;padding:0 6px;'
     }) as HTMLInputElement;
 
     let ignoreNiqqud = true;
     const matchBadge = el('span', 'tok-find-badge', {
+      role: 'status',
+      'aria-live': 'polite',
       style: 'font-size:11px;color:var(--tok-text-muted);padding:0 4px;min-width:60px;'
     });
 
@@ -1304,6 +1322,9 @@ export class TypesetOkApp {
     this.storyBoldBtn.style.background = isBold ? 'var(--tok-surface-hover)' : '';
     this.storyItalicBtn.style.background = isItalic ? 'var(--tok-surface-hover)' : '';
     this.storyUnderlineBtn.style.background = isUnderline ? 'var(--tok-surface-hover)' : '';
+    this.storyBoldBtn.setAttribute('aria-pressed', String(isBold));
+    this.storyItalicBtn.setAttribute('aria-pressed', String(isItalic));
+    this.storyUnderlineBtn.setAttribute('aria-pressed', String(isUnderline));
 
     if (this.storyFontFamilySelect) {
       const sel = this.storyEditor.getStorySelection();
