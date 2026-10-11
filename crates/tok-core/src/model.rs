@@ -35,6 +35,8 @@ pub struct ParagraphNode {
     pub text: String,
     #[serde(default)]
     pub style_patches: Vec<StylePatch>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spans: Vec<crate::spans::TextSpan>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub overrides: Option<crate::overrides::LayoutLockOverrides>,
 }
@@ -48,13 +50,70 @@ impl ParagraphNode {
             style_id: style_id.into(),
             text: normalized,
             style_patches: Vec::new(),
+            spans: Vec::new(),
             overrides: None,
         }
+    }
+
+    pub fn with_spans(mut self, spans: Vec<crate::spans::TextSpan>) -> Self {
+        let char_count = self.text.chars().count();
+        self.spans = crate::spans::normalize_spans(spans, char_count);
+        self
+    }
+
+    pub fn with_patch(mut self, patch: StylePatch) -> Self {
+        self.style_patches.push(patch);
+        self
     }
 
     pub fn with_overrides(mut self, overrides: crate::overrides::LayoutLockOverrides) -> Self {
         self.overrides = Some(overrides);
         self
+    }
+
+    pub fn effective_style<'a>(&self, styles: &'a [ParagraphStyle]) -> ParagraphStyle {
+        let mut base = styles
+            .iter()
+            .find(|s| s.id == self.style_id)
+            .cloned()
+            .unwrap_or_default();
+        for patch in &self.style_patches {
+            base.apply_patch(patch);
+        }
+        base
+    }
+
+    pub fn format_range(&mut self, start: usize, end: usize, format: crate::styles::CharacterFormat) {
+        let char_count = self.text.chars().count();
+        let s = start.min(char_count);
+        let e = end.min(char_count);
+        if s < e && !format.is_empty() {
+            let mut new_spans = self.spans.clone();
+            new_spans.push(crate::spans::TextSpan::new(s, e, format));
+            self.spans = crate::spans::normalize_spans(new_spans, char_count);
+        }
+    }
+
+    pub fn clear_formatting_range(&mut self, start: usize, end: usize) {
+        let char_count = self.text.chars().count();
+        let s = start.min(char_count);
+        let e = end.min(char_count);
+        if s < e {
+            let mut new_spans = Vec::new();
+            for span in &self.spans {
+                if span.end <= s || span.start >= e {
+                    new_spans.push(span.clone());
+                } else {
+                    if span.start < s {
+                        new_spans.push(crate::spans::TextSpan::new(span.start, s, span.format.clone()));
+                    }
+                    if span.end > e {
+                        new_spans.push(crate::spans::TextSpan::new(e, span.end, span.format.clone()));
+                    }
+                }
+            }
+            self.spans = crate::spans::normalize_spans(new_spans, char_count);
+        }
     }
 
     pub fn is_frozen(&self) -> bool {
@@ -599,5 +658,77 @@ mod tests {
         );
         assert_eq!(sec.layout_kind.as_deref(), Some("parallel_columns"));
         assert_eq!(sec.column_proportions, Some(vec![0.6, 0.4]));
+    }
+
+    #[test]
+    fn test_paragraph_spans_serialization_and_range_formatting() {
+        use crate::spans::TextSpan;
+        use crate::styles::CharacterFormat;
+
+        let mut p = ParagraphNode::new(FractionalIndex::initial(), "body", "שלום עולם יפה");
+        assert_eq!(p.spans.len(), 0);
+
+        // Format "עולם" (chars 5..9) as bold
+        p.format_range(5, 9, CharacterFormat {
+            font_weight: Some(700),
+            ..Default::default()
+        });
+        assert_eq!(p.spans, vec![TextSpan::new(5, 9, CharacterFormat {
+            font_weight: Some(700),
+            ..Default::default()
+        })]);
+
+        // Format "יפה" (chars 10..13) as italic
+        p.format_range(10, 13, CharacterFormat {
+            italic: Some(true),
+            ..Default::default()
+        });
+        assert_eq!(p.spans.len(), 2);
+
+        // Serialize and deserialize roundtrip
+        let json = serde_json::to_string(&p).expect("serialization must succeed");
+        assert!(json.contains(r#""spans""#));
+        let deserialized: ParagraphNode = serde_json::from_str(&json).expect("deserialization must succeed");
+        assert_eq!(deserialized.spans, p.spans);
+
+        // Clear formatting partially across "עולם"
+        p.clear_formatting_range(6, 9);
+        assert_eq!(p.spans[0], TextSpan::new(5, 6, CharacterFormat {
+            font_weight: Some(700),
+            ..Default::default()
+        }));
+
+        // Backwards compatibility: paragraph without spans field deserializes with empty spans
+        let legacy_json = r#"{"id":"01ARZ3NDEKTSV4RRFFQ69G5FAV","index":"a00000","style_id":"body","text":"טקסט ישן"}"#;
+        let legacy_node: ParagraphNode = serde_json::from_str(legacy_json).expect("legacy json must parse");
+        assert_eq!(legacy_node.spans, Vec::<TextSpan>::new());
+    }
+
+    #[test]
+    fn test_paragraph_effective_style_with_patches() {
+        use crate::styles::{ParagraphStyle, StylePatch, TextAlignment};
+
+        let base_style = ParagraphStyle {
+            id: "heading".to_string(),
+            font_size_pt: 16.0,
+            alignment: TextAlignment::Right,
+            ..Default::default()
+        };
+        let styles = vec![base_style];
+
+        let mut p = ParagraphNode::new(FractionalIndex::initial(), "heading", "כותרת");
+        assert_eq!(p.effective_style(&styles).font_size_pt, 16.0);
+        assert_eq!(p.effective_style(&styles).alignment, TextAlignment::Right);
+
+        // Add a patch changing alignment to Center and font size to 20
+        p = p.with_patch(StylePatch {
+            font_size_pt: Some(20.0),
+            alignment: Some(TextAlignment::Center),
+            ..Default::default()
+        });
+
+        let effective = p.effective_style(&styles);
+        assert_eq!(effective.font_size_pt, 20.0);
+        assert_eq!(effective.alignment, TextAlignment::Center);
     }
 }
