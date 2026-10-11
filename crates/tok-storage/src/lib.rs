@@ -272,4 +272,64 @@ mod tests {
             .unwrap();
         assert!(TokPackage::open(&path).is_err());
     }
+
+    #[test]
+    fn test_tok_package_preserves_rich_spans_and_style_patches() {
+        let mut root = DocumentRoot::new("עריכה עשירה");
+        let sec = &mut root.sections[0];
+        let flow = sec.main_flow_mut().unwrap();
+
+        let idx1 = FractionalIndex::initial();
+        let mut p1 = ParagraphNode::new(
+            idx1,
+            "normal",
+            "שָׁלוֹם עוֹלָם וּבְרָכָה",
+        );
+
+        let format = tok_core::styles::CharacterFormat {
+            font_weight: Some(700),
+            font_size_pt: Some(14.0),
+            italic: Some(true),
+            ..Default::default()
+        };
+        p1.format_range(7, 12, format);
+
+        let patch = tok_core::styles::StylePatch {
+            indent_start_pt: Some(20.0),
+            direction: Some(tok_core::styles::Progression::Rtl),
+            alignment: Some(tok_core::styles::TextAlignment::Justified),
+            ..Default::default()
+        };
+        p1.style_patches.push(patch);
+
+        flow.paragraphs.push(p1.clone());
+
+
+        let doc = DocumentModel::new(root);
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let tok_path = tmp_dir.path().join("rich_document.tok");
+
+        let mut package = TokPackage::new();
+        package.save_atomic(&doc, &tok_path).expect("Must save rich document package");
+
+
+        let (loaded_doc, _) = TokPackage::open(&tok_path).expect("Must open rich document package");
+        let loaded_sec = &loaded_doc.root().sections[0];
+        let loaded_p = &loaded_sec.main_flow().unwrap().paragraphs[0];
+
+        assert_eq!(loaded_p.text, p1.text);
+
+        assert_eq!(loaded_p.spans.len(), 1);
+        assert_eq!(loaded_p.spans[0].start, 7);
+        assert_eq!(loaded_p.spans[0].end, 12);
+        assert_eq!(loaded_p.spans[0].format.font_weight, Some(700));
+        assert_eq!(loaded_p.spans[0].format.font_size_pt, Some(14.0));
+        assert_eq!(loaded_p.spans[0].format.italic, Some(true));
+
+        assert_eq!(loaded_p.style_patches.len(), 1);
+        assert_eq!(loaded_p.style_patches[0].indent_start_pt, Some(20.0));
+        assert_eq!(loaded_p.style_patches[0].direction, Some(tok_core::styles::Progression::Rtl));
+        assert_eq!(loaded_p.style_patches[0].alignment, Some(tok_core::styles::TextAlignment::Justified));
+    }
 }
+
