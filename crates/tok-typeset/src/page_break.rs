@@ -7,7 +7,7 @@
 //! - Widow lines at the top of the subsequent page (`widow_control`)
 //! - Excessive underfull or overfull page slack
 
-use tok_core::id::FractionalIndex;
+use tok_core::NodeId;
 
 /// Standard typographic penalties for page breaks.
 pub struct PageBreakPenalty;
@@ -31,7 +31,7 @@ pub struct BreakOpportunity {
     /// Absolute index in the flattened lines sequence.
     pub global_line_idx: usize,
     /// ID of the paragraph this line belongs to.
-    pub paragraph_id: Option<FractionalIndex>,
+    pub paragraph_id: Option<NodeId>,
     /// 0-based index of this line within its paragraph.
     pub line_in_paragraph: usize,
     /// Total lines comprising this paragraph.
@@ -112,7 +112,7 @@ pub fn score_page_break(accumulated_height: f32, target_height: f32, opportunity
     badness + penalty
 }
 
-use crate::geometry::LineBox;
+use crate::geometry::{BreakToken, LineBox};
 
 /// Input line with paragraph context and typographic constraints for pagination.
 #[derive(Debug, Clone)]
@@ -120,7 +120,7 @@ pub struct PaginationLineInput {
     pub line: LineBox,
     pub section_idx: usize,
     pub paragraph_idx: usize,
-    pub paragraph_id: Option<FractionalIndex>,
+    pub paragraph_id: Option<NodeId>,
     pub line_in_paragraph: usize,
     pub total_lines_in_paragraph: usize,
     pub keep_with_next: bool,
@@ -128,6 +128,7 @@ pub struct PaginationLineInput {
     pub widow_control: u8,
     pub space_before: f32,
     pub space_after: f32,
+    pub char_offset: usize,
 }
 
 impl PaginationLineInput {
@@ -151,6 +152,7 @@ impl PaginationLineInput {
 pub struct PageSlice {
     pub lines: Vec<LineBox>,
     pub total_height: f32,
+    pub break_token: Option<BreakToken>,
 }
 
 /// Dynamic global page breaker evaluating candidate breaks with lookahead and penalty optimization.
@@ -194,17 +196,15 @@ impl GlobalPageBreaker {
             // Position lines vertically within this page slice with top-of-page margin collapsing
             let mut page_lines = Vec::with_capacity(page_lines_input.len());
             let mut curr_y = 0.0;
-            let mut prev_space_after: f32 = 0.0;
             let mut prev_sec = None;
 
             for (l_idx, item) in page_lines_input.iter().enumerate() {
                 if prev_sec != Some(item.section_idx) {
                     prev_sec = Some(item.section_idx);
-                    prev_space_after = 0.0;
                 }
 
                 let margin = if item.line_in_paragraph == 0 && l_idx > 0 {
-                    prev_space_after.max(item.space_before)
+                    item.space_before
                 } else {
                     0.0
                 };
@@ -215,15 +215,23 @@ impl GlobalPageBreaker {
                 line.baseline_y = curr_y + line.height;
                 curr_y += line.height;
                 page_lines.push(line);
-
-                if item.line_in_paragraph + 1 == item.total_lines_in_paragraph {
-                    prev_space_after = item.space_after;
-                }
             }
+
+            let break_token = if start_idx + end_idx < lines.len() {
+                let next_item = &lines[start_idx + end_idx];
+                Some(BreakToken {
+                    section_index: next_item.section_idx,
+                    paragraph_index: next_item.paragraph_idx,
+                    char_offset: next_item.char_offset,
+                })
+            } else {
+                None
+            };
 
             pages.push(PageSlice {
                 lines: page_lines,
                 total_height,
+                break_token,
             });
 
             start_idx += end_idx;
@@ -249,17 +257,15 @@ impl GlobalPageBreaker {
 
         let mut candidates = Vec::new();
         let mut curr_h = 0.0;
-        let mut prev_space_after: f32 = 0.0;
         let mut prev_sec = None;
 
         for (idx, item) in remaining.iter().enumerate() {
             if prev_sec != Some(item.section_idx) {
                 prev_sec = Some(item.section_idx);
-                prev_space_after = 0.0;
             }
 
             let margin = if item.line_in_paragraph == 0 && idx > 0 {
-                prev_space_after.max(item.space_before)
+                item.space_before
             } else {
                 0.0
             };
@@ -272,11 +278,13 @@ impl GlobalPageBreaker {
             }
 
             curr_h = next_h;
-            if item.line_in_paragraph + 1 == item.total_lines_in_paragraph {
-                prev_space_after = item.space_after;
-            }
+            let margin_after = if item.line_in_paragraph + 1 == item.total_lines_in_paragraph {
+                item.space_after
+            } else {
+                0.0
+            };
 
-            let opp = item.to_opportunity(prev_space_after);
+            let opp = item.to_opportunity(margin_after);
             let penalty = opp.calculate_penalty();
             let score = score_page_break(curr_h, self.target_height, &opp);
 
@@ -337,7 +345,7 @@ mod tests {
     fn test_normal_break_has_zero_penalty() {
         let opp = BreakOpportunity {
             global_line_idx: 3,
-            paragraph_id: Some(FractionalIndex::new("p1")),
+            paragraph_id: Some(NodeId::new()),
             line_in_paragraph: 2, // 3rd line of 6
             total_lines_in_paragraph: 6,
             keep_with_next: false,
@@ -354,7 +362,7 @@ mod tests {
         // Line 0 of 5 -> only 1 line on current page, but orphan_control is 2
         let opp = BreakOpportunity {
             global_line_idx: 10,
-            paragraph_id: Some(FractionalIndex::new("p2")),
+            paragraph_id: Some(NodeId::new()),
             line_in_paragraph: 0,
             total_lines_in_paragraph: 5,
             keep_with_next: false,
@@ -372,7 +380,7 @@ mod tests {
         // Line 3 of 5 -> 4 lines on current page, only 1 line left for next page!
         let opp = BreakOpportunity {
             global_line_idx: 14,
-            paragraph_id: Some(FractionalIndex::new("p3")),
+            paragraph_id: Some(NodeId::new()),
             line_in_paragraph: 3,
             total_lines_in_paragraph: 5,
             keep_with_next: false,
@@ -390,7 +398,7 @@ mod tests {
         // 1-line heading with keep_with_next = true
         let opp = BreakOpportunity {
             global_line_idx: 5,
-            paragraph_id: Some(FractionalIndex::new("h1")),
+            paragraph_id: Some(NodeId::new()),
             line_in_paragraph: 0,
             total_lines_in_paragraph: 1,
             keep_with_next: true,
@@ -431,7 +439,7 @@ mod tests {
     fn test_score_page_break_combines_badness_and_penalty() {
         let opp_clean = BreakOpportunity {
             global_line_idx: 10,
-            paragraph_id: Some(FractionalIndex::new("p1")),
+            paragraph_id: Some(NodeId::new()),
             line_in_paragraph: 2,
             total_lines_in_paragraph: 5,
             keep_with_next: false,
@@ -442,7 +450,7 @@ mod tests {
         };
         let opp_heading = BreakOpportunity {
             global_line_idx: 11,
-            paragraph_id: Some(FractionalIndex::new("h1")),
+            paragraph_id: Some(NodeId::new()),
             line_in_paragraph: 0,
             total_lines_in_paragraph: 1,
             keep_with_next: true,
@@ -482,7 +490,7 @@ mod tests {
                 line: make_test_line(i, 20.0),
                 section_idx: 0,
                 paragraph_idx: 0,
-                paragraph_id: Some(FractionalIndex::new("p1")),
+                paragraph_id: Some(NodeId::new()),
                 line_in_paragraph: i,
                 total_lines_in_paragraph: 5,
                 keep_with_next: false,
@@ -490,6 +498,7 @@ mod tests {
                 widow_control: 2,
                 space_before: 0.0,
                 space_after: 0.0,
+                char_offset: 0,
             })
             .collect::<Vec<_>>();
 
@@ -516,7 +525,7 @@ mod tests {
                 line: make_test_line(i, 20.0),
                 section_idx: 0,
                 paragraph_idx: 0,
-                paragraph_id: Some(FractionalIndex::new("p1")),
+                paragraph_id: Some(NodeId::new()),
                 line_in_paragraph: i,
                 total_lines_in_paragraph: 3,
                 keep_with_next: false,
@@ -524,6 +533,7 @@ mod tests {
                 widow_control: 2,
                 space_before: 0.0,
                 space_after: 5.0,
+                char_offset: 0,
             });
         }
         // H1: 1 line heading
@@ -531,7 +541,7 @@ mod tests {
             line: make_test_line(3, 25.0),
             section_idx: 0,
             paragraph_idx: 1,
-            paragraph_id: Some(FractionalIndex::new("h1")),
+            paragraph_id: Some(NodeId::new()),
             line_in_paragraph: 0,
             total_lines_in_paragraph: 1,
             keep_with_next: true,
@@ -539,6 +549,7 @@ mod tests {
             widow_control: 1,
             space_before: 5.0,
             space_after: 5.0,
+            char_offset: 0,
         });
         // P2: 3 lines
         for i in 0..3 {
@@ -546,7 +557,7 @@ mod tests {
                 line: make_test_line(4 + i, 20.0),
                 section_idx: 0,
                 paragraph_idx: 2,
-                paragraph_id: Some(FractionalIndex::new("p2")),
+                paragraph_id: Some(NodeId::new()),
                 line_in_paragraph: i,
                 total_lines_in_paragraph: 3,
                 keep_with_next: false,
@@ -554,6 +565,7 @@ mod tests {
                 widow_control: 2,
                 space_before: 5.0,
                 space_after: 0.0,
+                char_offset: 0,
             });
         }
 
@@ -581,7 +593,7 @@ mod tests {
                 line: make_test_line(i, 20.0),
                 section_idx: 0,
                 paragraph_idx: 0,
-                paragraph_id: Some(FractionalIndex::new("p1")),
+                paragraph_id: Some(NodeId::new()),
                 line_in_paragraph: i,
                 total_lines_in_paragraph: 4,
                 keep_with_next: false,
@@ -589,6 +601,7 @@ mod tests {
                 widow_control: 2,
                 space_before: 0.0,
                 space_after: 0.0,
+                char_offset: 0,
             });
         }
         for i in 0..3 {
@@ -596,7 +609,7 @@ mod tests {
                 line: make_test_line(4 + i, 15.0),
                 section_idx: 0,
                 paragraph_idx: 1,
-                paragraph_id: Some(FractionalIndex::new("p2")),
+                paragraph_id: Some(NodeId::new()),
                 line_in_paragraph: i,
                 total_lines_in_paragraph: 3,
                 keep_with_next: false,
@@ -604,6 +617,7 @@ mod tests {
                 widow_control: 2,
                 space_before: 0.0,
                 space_after: 0.0,
+                char_offset: 0,
             });
         }
 
@@ -631,7 +645,7 @@ mod tests {
                 line: make_test_line(i, 20.0),
                 section_idx: 0,
                 paragraph_idx: 0,
-                paragraph_id: Some(FractionalIndex::new("p1")),
+                paragraph_id: Some(NodeId::new()),
                 line_in_paragraph: i,
                 total_lines_in_paragraph: 3,
                 keep_with_next: false,
@@ -639,6 +653,7 @@ mod tests {
                 widow_control: 2,
                 space_before: 0.0,
                 space_after: 0.0,
+                char_offset: 0,
             });
         }
         for i in 0..3 {
@@ -646,7 +661,7 @@ mod tests {
                 line: make_test_line(3 + i, 18.0),
                 section_idx: 0,
                 paragraph_idx: 1,
-                paragraph_id: Some(FractionalIndex::new("p2")),
+                paragraph_id: Some(NodeId::new()),
                 line_in_paragraph: i,
                 total_lines_in_paragraph: 3,
                 keep_with_next: false,
@@ -654,6 +669,7 @@ mod tests {
                 widow_control: 2,
                 space_before: 0.0,
                 space_after: 0.0,
+                char_offset: 0,
             });
         }
 
@@ -673,7 +689,7 @@ mod tests {
                 line: make_test_line(0, 30.0),
                 section_idx: 0,
                 paragraph_idx: 0,
-                paragraph_id: Some(FractionalIndex::new("p1")),
+                paragraph_id: Some(NodeId::new()),
                 line_in_paragraph: 0,
                 total_lines_in_paragraph: 1,
                 keep_with_next: false,
@@ -681,12 +697,13 @@ mod tests {
                 widow_control: 1,
                 space_before: 20.0,
                 space_after: 20.0,
+                char_offset: 0,
             },
             PaginationLineInput {
                 line: make_test_line(1, 30.0),
                 section_idx: 0,
                 paragraph_idx: 1,
-                paragraph_id: Some(FractionalIndex::new("p2")),
+                paragraph_id: Some(NodeId::new()),
                 line_in_paragraph: 0,
                 total_lines_in_paragraph: 1,
                 keep_with_next: false,
@@ -694,6 +711,7 @@ mod tests {
                 widow_control: 1,
                 space_before: 20.0,
                 space_after: 20.0,
+                char_offset: 0,
             },
         ];
 

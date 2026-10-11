@@ -15,6 +15,7 @@ use crate::layout_family::LayoutFamily;
 use crate::layout_features::DocumentLayoutFeatures;
 use crate::layout_template::LayoutTemplate;
 use crate::multi_flow::{FlowGeometrySpec, FlowPlacementRole, MultiFlowSolver, SpreadSide};
+use crate::page_break::{GlobalPageBreaker, PaginationLineInput};
 use crate::shaper::PositionedGlyph;
 use crate::solver::{GeometricConstraintSolver, PageConstraintModel, PageGeometryConfig};
 use crate::template_synthesizer::TemplateSynthesizer;
@@ -555,99 +556,76 @@ impl TypesettingEngine {
             )
             .collect();
 
-        let mut pages = Vec::new();
-        let mut current_page_lines = Vec::new();
-        let mut current_height = 0.0;
+        let mut pagination_inputs = Vec::new();
         let mut prev_space_after: f32 = 0.0;
         let mut prev_section_idx: Option<usize> = None;
 
         for (&(sec_idx, p_idx, p), p_lines) in jobs.iter().zip(laid_out) {
-            // Reset margin collapsing on section boundaries
             if prev_section_idx != Some(sec_idx) {
                 prev_section_idx = Some(sec_idx);
                 prev_space_after = 0.0;
             }
 
-            let (space_before, space_after) = doc
+            let (keep_with_next, orphan_control, widow_control, space_before, space_after) = doc
                 .paragraph_styles
                 .iter()
                 .find(|s| s.id == p.style_id)
                 .map(|style| {
                     (
+                        style.keep_with_next,
+                        style.orphan_control,
+                        style.widow_control,
                         style.space_before_pt.max(0.0),
                         style.space_after_pt.max(0.0),
                     )
                 })
-                .unwrap_or((0.0, 0.0));
+                .unwrap_or((false, 2, 2, 0.0, 0.0));
 
             if p_lines.is_empty() {
-                // Empty paragraph collapses its own margins with adjacent margins
                 prev_space_after = prev_space_after.max(space_before).max(space_after);
                 continue;
             }
 
-            let mut is_first_line = true;
-            for mut line in p_lines {
-                let margin = if is_first_line && !current_page_lines.is_empty() {
-                    prev_space_after.max(space_before)
-                } else {
-                    0.0
-                };
+            let effective_space_before = prev_space_after.max(space_before);
+            let total_lines = p_lines.len();
+            for (l_idx, line) in p_lines.into_iter().enumerate() {
+                let char_offset = line
+                    .glyphs
+                    .iter()
+                    .map(|g| g.cluster as usize)
+                    .min()
+                    .and_then(|byte| p.text.get(..byte))
+                    .map_or(0, |s| s.chars().count());
 
-                if current_height + margin + line.height > content_height
-                    && !current_page_lines.is_empty()
-                {
-                    // Page is full: commit page
-                    let page = self.new_page(
-                        pages.len() + 1,
-                        content_width,
-                        current_height,
-                        std::mem::take(&mut current_page_lines),
-                        Some(BreakToken {
-                            section_index: sec_idx,
-                            paragraph_index: p_idx,
-                            // Glyph clusters are byte offsets; the token
-                            // counts characters.
-                            char_offset: line
-                                .glyphs
-                                .iter()
-                                .map(|g| g.cluster as usize)
-                                .min()
-                                .and_then(|byte| p.text.get(..byte))
-                                .map_or(0, |s| s.chars().count()),
-                        }),
-                        flow_id,
-                    );
-                    pages.push(page);
-                    current_height = 0.0;
-                    // Top-of-page margin collapses to 0.0
-                }
-
-                let margin_to_apply = if is_first_line && !current_page_lines.is_empty() {
-                    prev_space_after.max(space_before)
-                } else {
-                    0.0
-                };
-
-                current_height += margin_to_apply;
-                line.baseline_y = current_height + line.height;
-                line.line_index = current_page_lines.len();
-                current_height += line.height;
-                current_page_lines.push(line);
-                is_first_line = false;
+                pagination_inputs.push(PaginationLineInput {
+                    line,
+                    section_idx: sec_idx,
+                    paragraph_idx: p_idx,
+                    paragraph_id: Some(p.id.clone()),
+                    line_in_paragraph: l_idx,
+                    total_lines_in_paragraph: total_lines,
+                    keep_with_next,
+                    orphan_control,
+                    widow_control,
+                    space_before: if l_idx == 0 { effective_space_before } else { 0.0 },
+                    space_after,
+                    char_offset,
+                });
             }
-
             prev_space_after = space_after;
         }
 
-        // Flush final page
-        if !current_page_lines.is_empty() {
+        let breaker = GlobalPageBreaker::new(content_height);
+        let slices = breaker.break_pages(&pagination_inputs);
+
+        let mut pages = Vec::new();
+        for (page_idx, slice) in slices.into_iter().enumerate() {
             let page = self.new_page(
-                pages.len() + 1,
+                page_idx + 1,
                 content_width,
-                current_height,
-                current_page_lines,
-                None,
+                slice.total_height,
+                slice.lines,
+                slice.break_token,
                 flow_id,
             );
             pages.push(page);
