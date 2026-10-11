@@ -2578,6 +2578,75 @@ describe('Stage 11: End-to-End Story Editor, Document Model & .tok Storage Round
     assert.deepEqual(restoredState.flows.rashi[0].patch, originalState.flows.rashi[0].patch);
   });
 
+  test('Document Settings and Custom Styles round-trip through documentBridge losslessly', () => {
+    const stateWithSettings = {
+      title: 'הגדרות עמוד וסגנונות מותאמים',
+      templateType: 'gemara',
+      settings: {
+        title: 'הגדרות עמוד וסגנונות מותאמים',
+        pageSize: '17x24',
+        pageWidthMm: 170,
+        pageHeightMm: 240,
+        marginTopMm: 25,
+        marginBottomMm: 30,
+        marginInsideMm: 22,
+        marginOutsideMm: 18,
+        columns: 2,
+        columnGapMm: 6,
+        baselineGridPt: 14,
+        baselineOffsetPt: 50,
+        gematriaFormat: 'talmudic',
+        preflightStatus: 'clean'
+      },
+      styles: {
+        'custom-heading': {
+          id: 'custom-heading',
+          name: 'כותרת מיוחדת',
+          font_family: 'Taamey Frank CLM',
+          font_weight: 700,
+          font_size_pt: 18.0,
+          line_height_pt: 24.0,
+          space_before_pt: 10.0,
+          space_after_pt: 6.0,
+          first_line_indent_pt: 0.0,
+          alignment: 'Center',
+          ahalterm_stretch: 'AutoVariable',
+          color: { DeviceCmyk: { c: 0, m: 0, y: 0, k: 1 } },
+          keep_with_next: true,
+          orphan_control: 2,
+          widow_control: 2
+        }
+      },
+      flows: {
+        gemara: [
+          {
+            id: 'p-custom-1',
+            styleId: 'custom-heading',
+            text: 'פרק ראשון: מסכת ברכות'
+          }
+        ]
+      }
+    };
+
+    const docRoot = documentBridge.documentStateToDocumentRoot(stateWithSettings);
+    assert.ok(docRoot.metadata.document_settings, 'metadata must include document_settings');
+    assert.equal(docRoot.metadata.document_settings.marginTopMm, 25);
+    assert.equal(docRoot.metadata.document_settings.pageWidthMm, 170);
+
+    const customSty = docRoot.paragraph_styles.find((s) => s.id === 'custom-heading');
+    assert.ok(customSty, 'Custom style must be registered in paragraph_styles');
+    assert.equal(customSty.name, 'כותרת מיוחדת');
+    assert.equal(customSty.font_family, 'Taamey Frank CLM');
+
+    const restored = documentBridge.documentRootToDocumentState(docRoot);
+    assert.ok(restored.settings, 'Restored state must have settings');
+    assert.equal(restored.settings.marginTopMm, 25);
+    assert.equal(restored.settings.marginBottomMm, 30);
+    assert.equal(restored.settings.pageWidthMm, 170);
+    assert.ok(restored.styles?.['custom-heading'], 'Restored state must have custom style');
+    assert.equal(restored.styles['custom-heading'].name, 'כותרת מיוחדת');
+  });
+
   test('Save and reopen .tok package preserves rich spans, patches, and Hebrew Niqqud losslessly', async () => {
     assert.ok(tokCliPath, tokCliMissingMessage());
     const { spawn } = await import('node:child_process');

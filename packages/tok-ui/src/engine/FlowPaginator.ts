@@ -18,6 +18,7 @@ import { StoryParagraph } from 'tok-story-editor';
 import { PageDescriptor } from 'tok-viewer';
 import { toHebrewGematria } from '../gematria';
 import { isRectoPage, isRightHandPage } from '../components/SpreadCanvas';
+import { DocumentSettings } from '../types';
 
 export type TemplateType = 'gemara' | 'mikraot' | 'prose' | 'notes' | 'bulletin';
 
@@ -31,6 +32,10 @@ export interface MultiFlowDocumentState {
     notes: StoryParagraph[];
     [key: string]: StoryParagraph[];
   };
+  settings?: DocumentSettings;
+  styles?: Record<string, any>;
+  isDirty?: boolean;
+  filePath?: string | null;
 }
 
 /** Pre-defined authentic sacred texts for initial templates */

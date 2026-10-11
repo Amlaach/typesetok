@@ -17,6 +17,7 @@ import {
   StoryParagraph,
   TextSpan
 } from 'tok-story-editor';
+import { DocumentSettings } from '../types';
 
 export const CROCKFORD_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
@@ -234,6 +235,7 @@ export interface DocumentMetadataJson {
   progression: 'Rtl' | 'Ltr';
   primary_language: string;
   schema_version: string;
+  document_settings?: DocumentSettings;
 }
 
 export interface DocumentRootJson {
@@ -463,6 +465,19 @@ export function documentStateToDocumentRoot(
     });
   }
 
+  // Merge user custom styles from state if present
+  if (state.styles) {
+    for (const [sid, sty] of Object.entries(state.styles)) {
+      const idx = defaultStyles.findIndex((s) => s.id === sid);
+      if (idx >= 0) {
+        defaultStyles[idx] = { ...defaultStyles[idx], ...sty };
+      } else {
+        defaultStyles.push(sty as ParagraphStyleJson);
+        definedStyleIds.add(sid);
+      }
+    }
+  }
+
   const docTitle = (state.title || 'מסמך ללא שם').replace(/\.tok$/i, '');
 
   return {
@@ -472,7 +487,8 @@ export function documentStateToDocumentRoot(
       author: options?.author || 'TypesetOK',
       progression: 'Rtl',
       primary_language: 'he',
-      schema_version: '1.0'
+      schema_version: '1.0',
+      document_settings: state.settings
     },
     paragraph_styles: defaultStyles,
     character_styles: [],
@@ -539,9 +555,20 @@ export function documentRootToDocumentState(root: DocumentRootJson): MultiFlowDo
     templateType = 'notes';
   }
 
+  const stylesMap: Record<string, ParagraphStyleJson> = {};
+  if (Array.isArray(root.paragraph_styles)) {
+    for (const ps of root.paragraph_styles) {
+      if (ps && ps.id) {
+        stylesMap[ps.id] = ps;
+      }
+    }
+  }
+
   return {
     title,
     templateType,
-    flows: flowMap
+    flows: flowMap,
+    settings: root.metadata?.document_settings,
+    styles: Object.keys(stylesMap).length > 0 ? stylesMap : undefined
   };
 }
