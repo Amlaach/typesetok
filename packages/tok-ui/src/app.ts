@@ -968,6 +968,26 @@ export class TypesetOkApp {
     this.storyBoldBtn.style.background = isBold ? 'var(--tok-surface-hover)' : '';
     this.storyItalicBtn.style.background = isItalic ? 'var(--tok-surface-hover)' : '';
     this.storyUnderlineBtn.style.background = isUnderline ? 'var(--tok-surface-hover)' : '';
+
+    if (this.inspector && this.currentViewMode !== 'canvas') {
+      const sel = this.storyEditor.getStorySelection();
+      if (sel) {
+        const p = this.storyEditor.getParagraph(sel.paraId);
+        const patch = p?.patch || {};
+        const isBoldSel = isBold || ((patch.fontWeight || 400) >= 600);
+        const typoData: any = {
+          fontFamily: fmt.fontFamily || patch.fontFamily || (this.activeFlowId === 'gemara' ? 'Frank Ruhl Libre' : 'Noto Rashi Hebrew'),
+          fontSizePt: fmt.fontSizePt || patch.fontSizePt || (this.activeFlowId === 'gemara' ? 15 : 11),
+          fontWeight: isBoldSel ? FONT_WEIGHT_BOLD : FONT_WEIGHT_REGULAR,
+          lineHeightPt: patch.lineHeightPt || (this.activeFlowId === 'gemara' ? 20 : 15),
+          alignment: (patch.alignment?.toLowerCase() as any) || 'justify',
+          styleTokenId: p?.styleId || 'main-text',
+          styleTokenName: p?.styleId || 'טקסט ראשי',
+          isOverride: Boolean(p?.patch && Object.keys(p.patch).length > 0)
+        };
+        this.inspector.setMode('text-edit', undefined, typoData);
+      }
+    }
   }
 
 
@@ -1253,6 +1273,13 @@ export class TypesetOkApp {
         editorEl.querySelectorAll('p.tok-current').forEach((p) => p.classList.remove('tok-current'));
         paraEl.classList.add('tok-current');
         paraEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        this.storyEditor.setStorySelection({
+          paraId,
+          start: 0,
+          end: 0,
+          isCollapsed: true
+        });
+        this.updateFormattingToolbarState();
       }
     }
   }
