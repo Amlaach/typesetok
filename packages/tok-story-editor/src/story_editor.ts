@@ -75,7 +75,9 @@ export class StoryEditor {
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
 
       if (isCtrlOrCmd && !e.altKey) {
-        if (e.key === 'z' || e.key === 'Z') {
+        const code = e.code;
+        const key = e.key.toLowerCase();
+        if (code === 'KeyZ' || key === 'z' || key === 'ז') {
           e.preventDefault();
           if (e.shiftKey) {
             this.redo();
@@ -83,21 +85,25 @@ export class StoryEditor {
             this.undo();
           }
           return;
-        } else if (e.key === 'y' || e.key === 'Y') {
+        } else if (code === 'KeyY' || key === 'y' || key === 'ט') {
           e.preventDefault();
           this.redo();
           return;
-        } else if (e.key === 'b' || e.key === 'B') {
+        } else if (code === 'KeyB' || key === 'b' || key === 'נ') {
           e.preventDefault();
           this.toggleFormatSelection('bold');
           return;
-        } else if (e.key === 'i' || e.key === 'I') {
+        } else if (code === 'KeyI' || key === 'i' || key === 'ן') {
           e.preventDefault();
           this.toggleFormatSelection('italic');
           return;
-        } else if (e.key === 'u' || e.key === 'U') {
+        } else if (code === 'KeyU' || key === 'u' || key === 'ו') {
           e.preventDefault();
           this.toggleFormatSelection('underline');
+          return;
+        } else if (code === 'Backslash' || key === '\\') {
+          e.preventDefault();
+          this.clearFormattingSelection();
           return;
         }
       }

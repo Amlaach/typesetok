@@ -453,11 +453,50 @@ export class TypesetOkApp {
         )
       );
 
+      if (e.key === 'Escape') {
+        if (this.findBar && this.findBar.style.display !== 'none') {
+          e.preventDefault();
+          this.toggleFindReplaceBar(false);
+          this.storyEditor?.getElement().focus();
+          return;
+        }
+      }
+
+      // F6: Cycle focus between Story Editor and Canvas
+      if (e.key === 'F6') {
+        e.preventDefault();
+        if (this.currentViewMode === 'story' || this.currentViewMode === 'split') {
+          const editorEl = this.storyEditor?.getElement();
+          if (document.activeElement === editorEl || editorEl?.contains(document.activeElement)) {
+            this.canvas.element.focus();
+          } else {
+            editorEl?.focus();
+          }
+        }
+        return;
+      }
+
       const hasCtrl = e.ctrlKey || e.metaKey;
       if (!hasCtrl) return;
 
       const code = e.code;
       const key = e.key.toLowerCase();
+
+      // Ctrl+F / Ctrl+כ: Find & Replace
+      if (!e.shiftKey && (code === 'KeyF' || key === 'f' || key === 'כ')) {
+        e.preventDefault();
+        this.toggleFindReplaceBar(true);
+        return;
+      }
+
+      // Ctrl+H / Ctrl+י: Replace
+      if (!e.shiftKey && (code === 'KeyH' || key === 'h' || key === 'י')) {
+        e.preventDefault();
+        this.toggleFindReplaceBar(true);
+        this.replaceInput?.focus();
+        this.replaceInput?.select();
+        return;
+      }
 
       // Ctrl+Shift+P: Projects / Welcome Modal
       if (e.shiftKey && (code === 'KeyP' || key === 'p' || key === 'פ')) {
