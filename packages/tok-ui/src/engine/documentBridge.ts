@@ -18,7 +18,7 @@ import {
   TextSpan
 } from 'tok-story-editor';
 import { DocumentSettings } from '../types';
-import { ImportResult } from './textImporter';
+import type { ImportResult } from './textImporter';
 
 export const CROCKFORD_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 

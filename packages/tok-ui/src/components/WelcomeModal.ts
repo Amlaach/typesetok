@@ -311,7 +311,7 @@ export class WelcomeModal {
     primaryGrid.appendChild(blank);
 
     const importCard = el('button', 'tok-template-card tok-template-import', { type: 'button', role: 'listitem', 'data-focus-key': 'template-import' });
-    const importIconWrap = el('span', 'tok-plus', { 'aria-hidden': 'true', style: 'background:rgba(59,130,246,0.15);color:#60A5FA;' });
+    const importIconWrap = el('span', 'tok-plus', { 'aria-hidden': 'true', style: 'background:rgba(59,130,246,0.15);color:var(--tok-accent);' });
     importIconWrap.appendChild(icon('file', 20));
     importCard.appendChild(importIconWrap);
     importCard.appendChild(el('span', 'tok-template-title', undefined, t('importDocument')));
@@ -339,7 +339,7 @@ export class WelcomeModal {
       b.appendChild(art);
       const text = el('span', 'tok-template-text');
       const badge = el('span', 'tok-demo-badge', {
-        style: 'font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(234,179,8,0.15);color:#EAB308;align-self:flex-start;margin-bottom:2px;'
+        style: 'font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(234,179,8,0.15);color:var(--tok-warning, orange);align-self:flex-start;margin-bottom:2px;'
       }, t('demoBadgeText'));
       text.appendChild(badge);
       text.appendChild(el('span', 'tok-template-title', undefined, t(tmpl.titleKey)));

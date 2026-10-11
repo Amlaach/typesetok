@@ -6,7 +6,26 @@
  */
 
 import { StoryParagraph, TextSpan } from 'tok-story-editor';
-import { generateCrockfordUlid } from './documentBridge';
+
+const CROCKFORD_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+export function generateCrockfordUlid(seedTime: number = Date.now()): string {
+  let timeStr = '';
+  let t = Math.max(0, Math.floor(seedTime));
+  for (let i = 0; i < 10; i++) {
+    const mod = t % 32;
+    timeStr = CROCKFORD_ALPHABET[mod] + timeStr;
+    t = Math.floor(t / 32);
+  }
+
+  let randStr = '';
+  for (let i = 0; i < 16; i++) {
+    const rand = Math.floor(Math.random() * 32);
+    randStr += CROCKFORD_ALPHABET[rand];
+  }
+
+  return timeStr + randStr;
+}
 
 export type SupportedImportFormat = 'txt' | 'md' | 'markdown' | 'docx';
 
@@ -74,12 +93,13 @@ export function detectTextLanguage(text: string): 'he' | 'en' | 'mixed' {
 }
 
 /**
- * Extracts a clean document title from a filename by stripping extensions.
+ * Extracts a clean document title from a filename by stripping extensions and replacing underscores.
  */
 export function cleanDocumentTitle(fileName?: string): string {
-  if (!fileName) return 'מסמך מיובא';
+  if (!fileName) return 'מסמך ללא שם';
   const base = fileName.split(/[\\/]/).pop() || fileName;
-  return base.replace(/\.(txt|md|markdown|docx|tok|json)$/i, '').trim() || 'מסמך מיובא';
+  const stripped = base.replace(/\.(txt|md|markdown|docx|tok|json)$/i, '').replace(/_+/g, ' ').trim();
+  return stripped || 'מסמך ללא שם';
 }
 
 /**
@@ -200,7 +220,7 @@ export function importPlainText(
 /**
  * Parses inline markdown tokens (bold, italic, code) into plain text and rich TextSpans.
  */
-export function parseMarkdownInlineSpans(rawText: string): { cleanText: string; spans: TextSpan[] } {
+export function parseMarkdownInlineSpans(rawText: string): { text: string; cleanText: string; spans: TextSpan[] } {
   let cleanText = '';
   const spans: TextSpan[] = [];
   let i = 0;
@@ -247,7 +267,6 @@ export function parseMarkdownInlineSpans(rawText: string): { cleanText: string; 
     ) {
       const marker = rawText[i];
       const endIdx = rawText.indexOf(marker, i + 1);
-      // Make sure endIdx is not part of a double marker
       if (rawText[endIdx + 1] !== marker && rawText[endIdx - 1] !== ' ') {
         const inner = rawText.slice(i + 1, endIdx);
         const start = cleanText.length;
@@ -275,7 +294,7 @@ export function parseMarkdownInlineSpans(rawText: string): { cleanText: string; 
     i++;
   }
 
-  return { cleanText, spans };
+  return { text: cleanText, cleanText, spans };
 }
 
 /**
@@ -297,67 +316,78 @@ export function importMarkdown(
     );
   }
 
-  const rawBlocks = clean.split(/\n\s*\n+/);
+  const lines = text.split('\n');
   const paragraphs: StoryParagraph[] = [];
+  let currentParaLines: string[] = [];
   let extractedTitle: string | null = null;
 
-  for (const block of rawBlocks) {
-    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (lines.length === 0) continue;
+  function flushParagraph() {
+    if (currentParaLines.length === 0) return;
+    const joined = currentParaLines.join(' ').trim();
+    currentParaLines = [];
+    if (!joined) return;
+    const { cleanText, spans } = parseMarkdownInlineSpans(joined);
+    paragraphs.push(createStoryParagraph(cleanText, options?.defaultStyleId || 'default-body', spans));
+  }
 
-    const firstLine = lines[0];
+  for (let idx = 0; idx < lines.length; idx++) {
+    const rawLine = lines[idx];
+    const trimmed = rawLine.trim();
 
-    // Heading 1: # Heading
-    if (firstLine.startsWith('# ')) {
-      const headingText = firstLine.slice(2).trim();
+    if (!trimmed) {
+      flushParagraph();
+      continue;
+    }
+
+    // Heading 1
+    if (/^#\s+/.test(trimmed)) {
+      flushParagraph();
+      const headingText = trimmed.replace(/^#\s+/, '').trim();
       if (!extractedTitle) extractedTitle = headingText;
       const { cleanText, spans } = parseMarkdownInlineSpans(headingText);
       paragraphs.push(createStoryParagraph(cleanText, 'heading-1', spans));
       continue;
     }
 
-    // Heading 2: ## Heading
-    if (firstLine.startsWith('## ')) {
-      const headingText = firstLine.slice(3).trim();
+    // Heading 2
+    if (/^##\s+/.test(trimmed)) {
+      flushParagraph();
+      const headingText = trimmed.replace(/^##\s+/, '').trim();
       const { cleanText, spans } = parseMarkdownInlineSpans(headingText);
       paragraphs.push(createStoryParagraph(cleanText, 'heading-2', spans));
       continue;
     }
 
-    // Heading 3: ### Heading
-    if (firstLine.startsWith('### ')) {
-      const headingText = firstLine.slice(4).trim();
+    // Heading 3
+    if (/^###\s+/.test(trimmed)) {
+      flushParagraph();
+      const headingText = trimmed.replace(/^###\s+/, '').trim();
       const { cleanText, spans } = parseMarkdownInlineSpans(headingText);
       paragraphs.push(createStoryParagraph(cleanText, 'heading-3', spans));
       continue;
     }
 
-    // Blockquote: > text
-    if (firstLine.startsWith('>')) {
-      const quoteRaw = lines.map((l) => l.replace(/^>\s*/, '')).join(' ');
-      const { cleanText, spans } = parseMarkdownInlineSpans(quoteRaw);
+    // Blockquote
+    if (/^>\s*/.test(trimmed)) {
+      flushParagraph();
+      const quoteText = trimmed.replace(/^>\s*/, '').trim();
+      const { cleanText, spans } = parseMarkdownInlineSpans(quoteText);
       paragraphs.push(createStoryParagraph(cleanText, 'blockquote', spans));
       continue;
     }
 
-    // List items: - item or * item or 1. item
-    const isBulletList = lines.every((l) => /^[-*+]\s+/.test(l));
-    const isNumberedList = lines.every((l) => /^\d+\.\s+/.test(l));
-
-    if (isBulletList || isNumberedList) {
-      for (const line of lines) {
-        const itemRaw = line.replace(/^([-*+]|\d+\.)\s+/, '');
-        const { cleanText, spans } = parseMarkdownInlineSpans(itemRaw);
-        paragraphs.push(createStoryParagraph(cleanText, 'list-item', spans));
-      }
+    // List item
+    if (/^([-*+]|\d+\.)\s+/.test(trimmed)) {
+      flushParagraph();
+      const itemText = trimmed.replace(/^([-*+]|\d+\.)\s+/, '').trim();
+      const { cleanText, spans } = parseMarkdownInlineSpans(itemText);
+      paragraphs.push(createStoryParagraph(cleanText, 'list-item', spans));
       continue;
     }
 
-    // Standard paragraph: join consecutive lines with space
-    const joined = lines.join(' ');
-    const { cleanText, spans } = parseMarkdownInlineSpans(joined);
-    paragraphs.push(createStoryParagraph(cleanText, options?.defaultStyleId || 'default-body', spans));
+    currentParaLines.push(trimmed);
   }
+  flushParagraph();
 
   if (paragraphs.length === 0) {
     throw new DocumentImportError(
@@ -448,12 +478,19 @@ export function extractDocxXml(raw: Uint8Array | ArrayBuffer): string {
       } else if (compressionMethod === 8) {
         // Deflated
         try {
-          // In Node.js / Electron
-          if (typeof process !== 'undefined' && (process as any).versions?.node) {
-            const zlib = require('zlib');
+          let zlib: any = null;
+          if (typeof (globalThis as any).require === 'function') {
+            try { zlib = (globalThis as any).require('zlib'); } catch {}
+          }
+          if (!zlib && typeof process !== 'undefined' && typeof (process as any).getBuiltinModule === 'function') {
+            try { zlib = (process as any).getBuiltinModule('node:zlib') || (process as any).getBuiltinModule('zlib'); } catch {}
+          }
+
+          if (zlib && typeof zlib.inflateRawSync === 'function') {
             const inflated = zlib.inflateRawSync(entryBytes);
             return new TextDecoder('utf-8').decode(inflated);
           }
+          throw new Error('zlib decompression is not available in current environment');
         } catch (e: any) {
           throw new DocumentImportError(
             'CORRUPTED_FILE',
