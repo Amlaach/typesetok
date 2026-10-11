@@ -401,3 +401,109 @@ fn test_multi_stream_co_pagination_anchor_continuity_and_flow_conservation() {
     assert_eq!(result.total_rashi_lines, result.pages.iter().map(|p| p.rashi_lines_count).sum::<usize>());
     assert_eq!(result.total_tosafot_lines, result.pages.iter().map(|p| p.tosafot_lines_count).sum::<usize>());
 }
+
+#[test]
+fn test_realistic_talmud_co_pagination_determinism_across_runs() {
+    let engine = create_engine();
+    let template = TemplateConfig::default();
+    let sync_config = SynchronizerConfig::default();
+    let doc = tok_typeset::fixtures::create_realistic_talmud_co_pagination_doc();
+
+    let baseline = engine.typeset_co_paginated_document(&template, &sync_config, &doc);
+    assert!(!baseline.pages.is_empty(), "Realistic Talmud doc must produce pages");
+
+    for run_idx in 1..=4 {
+        let current = engine.typeset_co_paginated_document(&template, &sync_config, &doc);
+        assert_eq!(
+            baseline.pages.len(),
+            current.pages.len(),
+            "Run {} page count differs from baseline",
+            run_idx
+        );
+        assert_eq!(baseline.total_gemara_lines, current.total_gemara_lines);
+        assert_eq!(baseline.total_rashi_lines, current.total_rashi_lines);
+        assert_eq!(baseline.total_tosafot_lines, current.total_tosafot_lines);
+
+        for (p_idx, (b_page, c_page)) in baseline.pages.iter().zip(&current.pages).enumerate() {
+            assert_eq!(b_page.page_number, c_page.page_number);
+            assert_eq!(b_page.math.side, c_page.math.side);
+            assert_eq!(b_page.gemara_lines_count, c_page.gemara_lines_count);
+            assert_eq!(b_page.rashi_lines_count, c_page.rashi_lines_count);
+            assert_eq!(b_page.tosafot_lines_count, c_page.tosafot_lines_count);
+
+            assert_eq!(b_page.page_layout.frames.len(), c_page.page_layout.frames.len());
+            for (f_idx, (b_f, c_f)) in b_page.page_layout.frames.iter().zip(&c_page.page_layout.frames).enumerate() {
+                assert_eq!(b_f.flow_id, c_f.flow_id);
+                assert!(
+                    (b_f.rect.x - c_f.rect.x).abs() < 1e-4,
+                    "Page {} Frame {} X differs between runs", p_idx, f_idx
+                );
+                assert!(
+                    (b_f.rect.y - c_f.rect.y).abs() < 1e-4,
+                    "Page {} Frame {} Y differs between runs", p_idx, f_idx
+                );
+                assert!(
+                    (b_f.rect.width - c_f.rect.width).abs() < 1e-4,
+                    "Page {} Frame {} Width differs between runs", p_idx, f_idx
+                );
+                assert!(
+                    (b_f.rect.height - c_f.rect.height).abs() < 1e-4,
+                    "Page {} Frame {} Height differs between runs", p_idx, f_idx
+                );
+                assert_eq!(b_f.lines.len(), c_f.lines.len());
+            }
+        }
+    }
+}
+
+#[test]
+fn test_realistic_talmud_co_pagination_no_frame_overlaps_and_bounds_validity() {
+    let engine = create_engine();
+    let template = TemplateConfig::default();
+    let sync_config = SynchronizerConfig::default();
+    let doc = tok_typeset::fixtures::create_realistic_talmud_co_pagination_doc();
+
+    let result = engine.typeset_co_paginated_document(&template, &sync_config, &doc);
+    assert!(!result.pages.is_empty());
+
+    let eps = 1e-2;
+    for page in &result.pages {
+        let frames = &page.page_layout.frames;
+
+        // 1. All frames must be within page bounds
+        for frame in frames {
+            assert!(frame.rect.x >= -eps, "Frame X must be non-negative: {:?}", frame.rect);
+            assert!(frame.rect.y >= -eps, "Frame Y must be non-negative: {:?}", frame.rect);
+            assert!(
+                frame.rect.x + frame.rect.width <= template.page_width_pt + eps,
+                "Frame must not exceed page width: {:?}", frame.rect
+            );
+            assert!(
+                frame.rect.y + frame.rect.height <= template.page_height_pt + eps,
+                "Frame must not exceed page height: {:?}", frame.rect
+            );
+        }
+
+        // 2. No two frames on the same page should overlap
+        for i in 0..frames.len() {
+            for j in (i + 1)..frames.len() {
+                let fa = &frames[i].rect;
+                let fb = &frames[j].rect;
+                let overlaps = fa.x + eps < fb.x + fb.width
+                    && fb.x + eps < fa.x + fa.width
+                    && fa.y + eps < fb.y + fb.height
+                    && fb.y + eps < fa.y + fa.height;
+                assert!(
+                    !overlaps,
+                    "Page {} frames '{}' ({:?}) and '{}' ({:?}) overlap!",
+                    page.page_number, frames[i].flow_id, fa, frames[j].flow_id, fb
+                );
+            }
+        }
+    }
+
+    // 3. Flow line conservation
+    assert_eq!(result.total_gemara_lines, result.pages.iter().map(|p| p.gemara_lines_count).sum::<usize>());
+    assert_eq!(result.total_rashi_lines, result.pages.iter().map(|p| p.rashi_lines_count).sum::<usize>());
+    assert_eq!(result.total_tosafot_lines, result.pages.iter().map(|p| p.tosafot_lines_count).sum::<usize>());
+}
