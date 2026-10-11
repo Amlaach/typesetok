@@ -1,7 +1,7 @@
 import { PageDescriptor } from 'tok-viewer';
 import { SelectionMode, TextFrameData } from '../types';
 import { t, tf, i18n } from '../i18n';
-import { el, iconButton, button } from '../ui';
+import { el, icon, iconButton, button } from '../ui';
 
 /**
  * Spread geometry for a right-to-left bound book.
@@ -335,7 +335,16 @@ export class SpreadCanvas {
 
   private renderSpreads(): void {
     this.innerContainer.innerHTML = '';
-    if (this.pages.length === 0) return;
+    if (this.pages.length === 0) {
+      const emptyState = el('div', 'tok-canvas-empty', {
+        style: 'display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:12px;color:var(--tok-text-muted);font-size:14px;padding:40px;'
+      });
+      emptyState.appendChild(icon('pages', 32));
+      emptyState.appendChild(el('div', undefined, { style: 'font-weight:600;' }, 'אין עמודים להצגה'));
+      this.innerContainer.appendChild(emptyState);
+      this.updateZoomBox();
+      return;
+    }
 
     for (const spread of groupIntoSpreads(this.pages.length)) {
       const spreadRow = el('div', spread.length === 1 ? 'tok-spread-row tok-single' : 'tok-spread-row');

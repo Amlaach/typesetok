@@ -816,11 +816,14 @@ export class TypesetOkApp {
       const docRoot = documentStateToDocumentRoot(this.documentState);
       console.log('[TOK] Exporting real document to PDF:', { title: docRoot.metadata.title, options });
 
+      this.statusBar?.setBusy(true, 'מייצא ל-PDF...');
       win.tokIpc.renderPdf({ document: docRoot, outputPath: options.fileName })
         .then(() => {
+          this.statusBar?.setBusy(false);
           this.showToast(t('toastExportDone'));
         })
         .catch((err: any) => {
+          this.statusBar?.setBusy(false);
           this.showToast(tf('toastExportError', { error: err?.message ?? String(err) }), true);
         });
     } else {
@@ -1584,6 +1587,7 @@ export class TypesetOkApp {
       this.activeTypesetAbortController.abort();
       this.activeTypesetAbortController = null;
     }
+    this.statusBar?.setBusy(false);
     this.latestTypesetRequestId++;
   }
 
@@ -1610,64 +1614,68 @@ export class TypesetOkApp {
     this.activeTypesetAbortController = abortCtrl;
 
     const requestId = ++this.latestTypesetRequestId;
+    this.statusBar?.setBusy(true, 'מעמד מחדש...');
     const win = window as any;
     let newPages: PageDescriptor[] = [];
 
-    if (win.tokIpc?.typesetDocument) {
-      try {
-        const docRoot = documentStateToDocumentRoot(this.documentState);
-        const res = await win.tokIpc.typesetDocument({ document: docRoot });
-        // Discard stale response if a newer typeset request was dispatched while this was in flight
-        if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
-          return;
+    try {
+      if (win.tokIpc?.typesetDocument) {
+        try {
+          const docRoot = documentStateToDocumentRoot(this.documentState);
+          const res = await win.tokIpc.typesetDocument({ document: docRoot });
+          // Discard stale response if a newer typeset request was dispatched while this was in flight
+          if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
+            return;
+          }
+          if (res && res.success && Array.isArray(res.pages)) {
+            newPages = layoutToPageDescriptors(res.pages);
+          }
+        } catch (err: any) {
+          if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
+            return;
+          }
+          console.warn('[TOK] Rust live typesetting failed, falling back to layout conversion:', err);
         }
-        if (res && res.success && Array.isArray(res.pages)) {
-          newPages = layoutToPageDescriptors(res.pages);
-        }
-      } catch (err: any) {
-        if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
-          return;
-        }
-        console.warn('[TOK] Rust live typesetting failed, falling back to layout conversion:', err);
       }
-    }
 
-    if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
-      return;
-    }
+      if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
+        return;
+      }
 
-    if (newPages.length === 0) {
-      const minPages = Math.max(1, this.pages.length);
-      newPages = FlowPaginator.paginateDocument(this.documentState, minPages);
-    }
+      if (newPages.length === 0) {
+        const minPages = Math.max(1, this.pages.length);
+        newPages = FlowPaginator.paginateDocument(this.documentState, minPages);
+      }
 
-    if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
-      return;
-    }
+      if (requestId !== this.latestTypesetRequestId || abortCtrl.signal.aborted) {
+        return;
+      }
 
-    this.pages = newPages;
-    this.canvas.setPages(newPages, this.activePageIndex);
-    this.refreshThumbnails();
-    if (forceReset || this.activePageIndex >= newPages.length) {
-      this.updatePageStats(0);
-    } else {
-      this.updatePageStats(this.activePageIndex);
-    }
+      this.pages = newPages;
+      this.canvas.setPages(newPages, this.activePageIndex);
+      this.refreshThumbnails();
+      if (forceReset || this.activePageIndex >= newPages.length) {
+        this.updatePageStats(0);
+      } else {
+        this.updatePageStats(this.activePageIndex);
+      }
 
-    // Update flow word counts across all flows
-    const counts: Record<string, number> = {};
-    let totalWords = 0;
-    for (const [fid, paras] of Object.entries(this.documentState.flows)) {
-      const w = paras.reduce((sum, p) => sum + countWords(p.text), 0);
-      counts[fid] = w;
-      totalWords += w;
-    }
-    this.structureBar.updateFlowWordCounts(counts);
-    this.statusBar.updateStats({ wordCount: totalWords });
-    this.updateStoryToolbar();
-
-    if (this.activeTypesetAbortController === abortCtrl) {
-      this.activeTypesetAbortController = null;
+      // Update flow word counts across all flows
+      const counts: Record<string, number> = {};
+      let totalWords = 0;
+      for (const [fid, paras] of Object.entries(this.documentState.flows)) {
+        const w = paras.reduce((sum, p) => sum + countWords(p.text), 0);
+        counts[fid] = w;
+        totalWords += w;
+      }
+      this.structureBar.updateFlowWordCounts(counts);
+      this.statusBar.updateStats({ wordCount: totalWords });
+      this.updateStoryToolbar();
+    } finally {
+      if (this.activeTypesetAbortController === abortCtrl) {
+        this.activeTypesetAbortController = null;
+        this.statusBar?.setBusy(false);
+      }
     }
   }
 
@@ -1748,72 +1756,78 @@ export class TypesetOkApp {
   }
 
   private async saveDocumentToFile(filePath: string): Promise<boolean> {
-    const win = window as any;
-    if (this.storyEditor && this.activeFlowId) {
-      this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
-    }
-    const baseName = filePath.split(/[\\/]/).pop() || filePath;
-    this.documentState.title = this.documentTitle || baseName.replace(/\.tok$/i, '');
-    this.documentState.filePath = filePath;
-
-    const docRoot = documentStateToDocumentRoot(this.documentState);
-
-    if (win.tokIpc?.saveDocument) {
-      try {
-        await win.tokIpc.saveDocument({ document: docRoot, filePath });
-        this.currentFilePath = filePath;
-        this.documentTitle = baseName;
-        this.setDirty(false);
-        this.topBar.setDocumentTitle(baseName, false);
-        addRecentProject({
-          name: baseName,
-          path: filePath,
-          pages: this.pages.length || 1,
-          lastSavedAt: new Date().toISOString()
-        });
-        this.showToast(t('toastSaved'));
-        return true;
-      } catch (err: any) {
-        console.error('[TOK] Failed to save document:', err);
-        this.showToast(tf('toastSaveError', { error: err?.message ?? String(err) }), true);
-        return false;
+    this.statusBar?.setBusy(true, 'שומר מסמך...');
+    try {
+      const win = window as any;
+      if (this.storyEditor && this.activeFlowId) {
+        this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
       }
-    } else {
-      try {
-        if (typeof document !== 'undefined' && typeof Blob !== 'undefined') {
-          const jsonStr = JSON.stringify(docRoot, null, 2);
-          const blob = new Blob([jsonStr], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = baseName.endsWith('.tok') || baseName.endsWith('.json') ? baseName : `${baseName}.tok`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          URL.revokeObjectURL(url);
+      const baseName = filePath.split(/[\\/]/).pop() || filePath;
+      this.documentState.title = this.documentTitle || baseName.replace(/\.tok$/i, '');
+      this.documentState.filePath = filePath;
+
+      const docRoot = documentStateToDocumentRoot(this.documentState);
+
+      if (win.tokIpc?.saveDocument) {
+        try {
+          await win.tokIpc.saveDocument({ document: docRoot, filePath });
+          this.currentFilePath = filePath;
+          this.documentTitle = baseName;
+          this.setDirty(false);
+          this.topBar.setDocumentTitle(baseName, false);
+          addRecentProject({
+            name: baseName,
+            path: filePath,
+            pages: this.pages.length || 1,
+            lastSavedAt: new Date().toISOString()
+          });
+          this.showToast(t('toastSaved'));
+          return true;
+        } catch (err: any) {
+          console.error('[TOK] Failed to save document:', err);
+          this.showToast(tf('toastSaveError', { error: err?.message ?? String(err) }), true);
+          return false;
         }
-        this.currentFilePath = filePath;
-        this.documentTitle = baseName;
-        this.setDirty(false);
-        this.topBar.setDocumentTitle(baseName, false);
-        addRecentProject({
-          name: baseName,
-          path: filePath,
-          pages: this.pages.length || 1,
-          lastSavedAt: new Date().toISOString()
-        });
-        this.showToast(t('toastSaved'));
-        return true;
-      } catch (err: any) {
-        console.error('[TOK] Failed to export/save file:', err);
-        this.showToast(tf('toastSaveError', { error: err?.message ?? String(err) }), true);
-        return false;
+      } else {
+        try {
+          if (typeof document !== 'undefined' && typeof Blob !== 'undefined') {
+            const jsonStr = JSON.stringify(docRoot, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = baseName.endsWith('.tok') || baseName.endsWith('.json') ? baseName : `${baseName}.tok`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+          }
+          this.currentFilePath = filePath;
+          this.documentTitle = baseName;
+          this.setDirty(false);
+          this.topBar.setDocumentTitle(baseName, false);
+          addRecentProject({
+            name: baseName,
+            path: filePath,
+            pages: this.pages.length || 1,
+            lastSavedAt: new Date().toISOString()
+          });
+          this.showToast(t('toastSaved'));
+          return true;
+        } catch (err: any) {
+          console.error('[TOK] Failed to export/save file:', err);
+          this.showToast(tf('toastSaveError', { error: err?.message ?? String(err) }), true);
+          return false;
+        }
       }
+    } finally {
+      this.statusBar?.setBusy(false);
     }
   }
 
   private loadDocumentRoot(docRoot: any, filePath: string, title?: string): Promise<void> {
     this.resetDocumentSession();
+    this.statusBar?.setBusy(true, 'טוען מסמך...');
     const baseName = filePath.split(/[\\/]/).pop() || filePath;
     const newState = documentRootToDocumentState(docRoot);
     this.documentState = newState;
@@ -1849,6 +1863,8 @@ export class TypesetOkApp {
         lastSavedAt: new Date().toISOString()
       });
       this.showToast(tf('toastOpenFile', { path: displayTitle }));
+    }).finally(() => {
+      this.statusBar?.setBusy(false);
     });
   }
 

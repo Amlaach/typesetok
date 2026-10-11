@@ -25,6 +25,8 @@ export class StatusBar {
   private flowText!: HTMLElement;
   private pfItem!: HTMLElement;
   private pfText!: HTMLElement;
+  private busyItem!: HTMLElement;
+  private busyText!: HTMLElement;
   private zoomSelect!: HTMLSelectElement;
 
   constructor(callbacks: StatusBarCallbacks) {
@@ -59,6 +61,14 @@ export class StatusBar {
 
   public getPreflightStatus(): 'clean' | 'warning' | 'error' {
     return this.preflightStatus;
+  }
+
+  public setBusy(busy: boolean, label?: string): void {
+    if (!this.busyItem || !this.busyText) return;
+    this.busyItem.style.display = busy ? 'inline-flex' : 'none';
+    if (label) {
+      this.busyText.textContent = label;
+    }
   }
 
   /** Writes the current state into the existing nodes. All values go in as text, never HTML. */
@@ -122,6 +132,18 @@ export class StatusBar {
     this.element.appendChild(flowItem);
 
     this.element.appendChild(el('span', 'tok-grow'));
+
+    this.busyItem = el('span', 'tok-status-btn', {
+      style: 'display:none;align-items:center;gap:4px;color:var(--tok-accent-text);'
+    });
+    const spinner = el('span', 'tok-spinner', {
+      'aria-hidden': 'true',
+      style: 'width:10px;height:10px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;display:inline-block;animation:spin 0.8s linear infinite;'
+    });
+    this.busyText = el('span', undefined, { style: 'font-size:11px;' }, 'מעבד...');
+    this.busyItem.appendChild(spinner);
+    this.busyItem.appendChild(this.busyText);
+    this.element.appendChild(this.busyItem);
 
     this.element.appendChild(el('span', undefined, undefined, t('statusJustificationRules')));
 
