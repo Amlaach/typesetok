@@ -37,8 +37,12 @@ export class StoryEditor {
   private lastSelection: StorySelection | null = null;
   private onTextChangeCallback?: (paraId: string, newText: string) => void;
   private onStoryChangeCallback?: (paragraphs: StoryParagraph[]) => void;
+
   private historyChangeCallbacks: Array<(canUndo: boolean, canRedo: boolean) => void> = [];
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private debounceMs = 200;
   private onSelectionChange = () => this.handleSelectionChange();
+
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -145,9 +149,28 @@ export class StoryEditor {
   }
 
   public destroy(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
     document.removeEventListener('selectionchange', this.onSelectionChange);
     this.editorEl.remove();
   }
+
+  public setDebounceMs(ms: number): void {
+    this.debounceMs = ms;
+  }
+
+  public flush(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+      if (this.onStoryChangeCallback) {
+        this.onStoryChangeCallback(this.lastSavedParagraphs);
+      }
+    }
+  }
+
 
   /** The editable element (for focusing and scrolling from the host). */
   public getElement(): HTMLElement {
@@ -197,7 +220,14 @@ export class StoryEditor {
   }
 
   /** Current paragraphs as edited with semantic spans and style patches. */
-  public getStory(): StoryParagraph[] {
+  public getStory(freshFromDom = false): StoryParagraph[] {
+    if (freshFromDom || this.lastSavedParagraphs.length === 0) {
+      this.lastSavedParagraphs = this.parseAllParagraphsDom();
+    }
+    return JSON.parse(JSON.stringify(this.lastSavedParagraphs));
+  }
+
+  public parseAllParagraphsDom(): StoryParagraph[] {
     return Array.from(this.editorEl.querySelectorAll<HTMLElement>('p[data-para-id]')).map((p) =>
       parseParagraphDom(p)
     );
@@ -205,9 +235,12 @@ export class StoryEditor {
 
   /** Retrieve a single paragraph by ID */
   public getParagraph(paraId: string): StoryParagraph | null {
+    const cached = this.lastSavedParagraphs.find((p) => p.id === paraId);
+    if (cached) return JSON.parse(JSON.stringify(cached));
     const el = this.editorEl.querySelector<HTMLElement>(`p[data-para-id="${CSS.escape(paraId)}"]`);
     return el ? parseParagraphDom(el) : null;
   }
+
 
   public onTextChange(cb: (paraId: string, newText: string) => void): void {
     this.onTextChangeCallback = cb;
@@ -709,8 +742,37 @@ export class StoryEditor {
   }
 
   private handleInput(): void {
-    this.dedupeParagraphIds();
-    const currentParagraphs = this.getStory();
+    const sel = window.getSelection();
+    let node: Node | null = sel && sel.anchorNode;
+    while (node && node !== this.editorEl && node.nodeName !== 'P') {
+      node = node.parentNode;
+    }
+
+    const pEl = node && node.nodeName === 'P' ? (node as HTMLParagraphElement) : null;
+    const currentParagraphEls = this.editorEl.querySelectorAll('p[data-para-id]');
+    let currentParagraphs: StoryParagraph[];
+    let targetParaId: string | undefined;
+    let targetText = '';
+
+    if (pEl && pEl.dataset.paraId && currentParagraphEls.length === this.lastSavedParagraphs.length) {
+      // Selective O(1) single-paragraph update: no need to re-parse entire document!
+      targetParaId = pEl.dataset.paraId;
+      targetText = pEl.textContent || '';
+      const updatedP = parseParagraphDom(pEl);
+      const idx = this.lastSavedParagraphs.findIndex((p) => p.id === targetParaId);
+      if (idx >= 0) {
+        currentParagraphs = [...this.lastSavedParagraphs];
+        currentParagraphs[idx] = updatedP;
+      } else {
+        currentParagraphs = this.parseAllParagraphsDom();
+      }
+    } else {
+      this.dedupeParagraphIds();
+      currentParagraphs = this.parseAllParagraphsDom();
+      targetParaId = pEl ? pEl.dataset.paraId : undefined;
+      targetText = pEl ? pEl.textContent || '' : '';
+    }
+
     const currentSel = this.getStorySelection();
 
     this.history.record(this.lastSavedParagraphs, currentParagraphs, {
@@ -719,30 +781,29 @@ export class StoryEditor {
       selectionAfter: currentSel || undefined
     });
 
-    this.lastSavedParagraphs = JSON.parse(JSON.stringify(currentParagraphs));
+    this.lastSavedParagraphs = currentParagraphs;
     this.lastSelection = currentSel;
     this.notifyHistoryChange();
 
-    const sel = window.getSelection();
-    let node: Node | null = sel && sel.anchorNode;
-    while (node && node !== this.editorEl && node.nodeName !== 'P') {
-      node = node.parentNode;
+    if (this.onTextChangeCallback) {
+      this.onTextChangeCallback(targetParaId || '', targetText);
     }
 
-    if (node && node.nodeName === 'P') {
-      const pEl = node as HTMLParagraphElement;
-      const paraId = pEl.dataset.paraId;
-      if (paraId && this.onTextChangeCallback) {
-        this.onTextChangeCallback(paraId, pEl.textContent || '');
-      }
-    } else if (this.onTextChangeCallback) {
-      this.onTextChangeCallback('', '');
-    }
-
-    if (this.onStoryChangeCallback) {
-      this.onStoryChangeCallback(currentParagraphs);
-    }
+    this.scheduleStoryChange(currentParagraphs);
   }
+
+  private scheduleStoryChange(paragraphs: StoryParagraph[]): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
+    this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
+      if (this.onStoryChangeCallback) {
+        this.onStoryChangeCallback(paragraphs);
+      }
+    }, this.debounceMs);
+  }
+
 
   public getStorySelection(): StorySelection | null {
     const sel = window.getSelection();
