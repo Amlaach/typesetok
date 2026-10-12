@@ -115,6 +115,24 @@
 
 ---
 
+### <img src="assets/icons/layers.svg" width="20" height="20" alt="" valign="middle" /> מבנה המערכת והארכיטקטורה
+
+TypesetOK בנויה בארכיטקטורה מודולרית המפרידה באופן קשיח בין חישובי הטיפוגרפיה לבין שכבת התצוגה השולחנית:
+
+- **ליבת עימוד וטיפוגרפיה ב-Rust (`crates/`):**
+  - `tok-core`: מודל המסמך (TDM), עץ היררכי דטרמיניסטי, היסטוריית שינויים וטרנזקציות ביטול/ביצוע חוזר (Undo/Redo).
+  - `tok-typeset`: מנוע הפריסה הראשי, עיצוב גופנים מתקדם (HarfBuzz / rustybuzz), אלגוריתם Knuth-Plass לשבירת פסקאות, ויישור עברי מסורתי.
+  - `tok-pdf`: הפקת קובצי PDF וקטוריים ישירים, הטמעת גופנים (Subsetting) ותמיכה בפורמטי קדם-דפוס.
+  - `tok-storage`: ניהול ארכיב הפרויקט (`.tok`), דחיסה, ושמירה דטרמיניסטית.
+  - `tok-cli` / `tok-ipc`: ממשק שורת פקודה ותקשורת בין-תהליכית (IPC) יעילה.
+- **מעטפת שולחן עבודה ב-TypeScript & Electron (`packages/`):**
+  - `tok-canvas`: קנבס תצוגה מהיר המציג כפולות עמודים על בסיס חישובי הפריסה המדויקים של הליבה.
+  - `tok-story-editor`: עורך טקסט רציף מודרני המאפשר עבודה שוטפת על תוכן המסמך.
+  - `tok-ui`: סביבת העבודה הראשית, סרגלי כלים, לוח פקודות (`Ctrl+K`), פאנלים וסגנונות.
+  - `tok-electron`: מעטפת האפליקציה השולחנית המקומית ל-Windows.
+
+---
+
 ### <img src="assets/icons/terminal.svg" width="20" height="20" alt="" valign="middle" /> למפתחים: הרצה מקוד מקור
 
 למעוניינים לתרום לקוד, לבנות עצמאית או להריץ סביבת פיתוח:
@@ -233,6 +251,24 @@ Instead of relying on legacy monolithic software or overly complex design suites
   The application includes high-quality open-source Hebrew typefaces (such as Frank Ruhl Libre, Noto Rashi Hebrew, David Libre, and Noto Serif Hebrew) licensed under the SIL Open Font License, and also supports local fonts installed on your operating system.
 - **What is the current project status?**  
   TypesetOK is under active development (current release **v0.3.30**). Community feedback, bug reports, and typographical suggestions are welcomed on the GitHub [Issues](https://github.com/TypesetOK/typesetok/issues) page.
+
+---
+
+### <img src="assets/icons/layers.svg" width="20" height="20" alt="" valign="middle" /> Architecture & Technology Stack
+
+TypesetOK features a decoupled architecture strictly separating high-performance typography computation from the desktop UI layer:
+
+- **High-Performance Rust Core (`crates/`):**
+  - `tok-core`: The Document Model (TDM) tree, transactional undo/redo history, and deterministic state management.
+  - `tok-typeset`: The core layout and typography engine, HarfBuzz / rustybuzz font shaping, Knuth-Plass paragraph breaking, and Hebrew justification.
+  - `tok-pdf`: Direct vector PDF generation with font subsetting and pre-press geometry boxes.
+  - `tok-storage`: Project archive container (`.tok`), compression, and asset serialization.
+  - `tok-cli` / `tok-ipc`: Native command-line interface and inter-process communication bridge.
+- **Desktop Workbench in TypeScript & Electron (`packages/`):**
+  - `tok-canvas`: High-performance facing-pages canvas accurately reflecting layout engine geometry.
+  - `tok-story-editor`: Integrated distraction-free narrative editor for continuous writing.
+  - `tok-ui`: Workbench shell, ribbon toolbars, command palette (`Ctrl+K`), inspector panels, and modals.
+  - `tok-electron`: Native Windows desktop shell running fully offline.
 
 ---
 
