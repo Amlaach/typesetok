@@ -92,6 +92,7 @@ By submitting, communicating, opening a pull request, or committing any **Contri
    - You are the sole and original author of the Contribution, or you have full legal right and authorization from your employer or copyright owner to grant the rights set forth herein;
    - Your Contribution does not infringe or misappropriate any third-party copyright, patent, trademark, trade secret, or other proprietary right;
    - Your Contribution is not subject to any third-party license or encumbrance (such as GPL, AGPL, or proprietary employer IP) that would conflict with this License.
+5. **Contributor Patent License:** You hereby grant to the Licensor, its successors, assignees, and commercial licensees, and to every recipient of the Software to the extent of the rights such recipient holds under this License, a perpetual, worldwide, non-exclusive, royalty-free, fully paid-up, irrevocable patent license to make, have made, use, sell, offer for sale, import, and otherwise transfer Your Contribution and the Software as combined with Your Contribution, under any patent claims now or hereafter owned or licensable by You or Your Affiliates that are infringed by Your Contribution alone or by its combination with the Software. You covenant not to assert, and to cause Your Affiliates not to assert, any such patent claim against the Licensor or any such recipient with respect to such activities.
 
 ---
 
