@@ -203,6 +203,19 @@ Instead of relying on legacy monolithic software or overly complex design suites
 
 ---
 
+### <img src="assets/icons/help.svg" width="20" height="20" alt="" valign="middle" /> Frequently Asked Questions (FAQ)
+
+- **Is TypesetOK free to use?**  
+  Yes, for personal study, community, educational, and non-commercial publishing under the [TOK-NCCL v1.1](LICENSE.md) license. Commercial publishing or hosted typesetting services require a dedicated commercial license from the project authors.
+- **Does it require an internet connection?**  
+  No. TypesetOK is a 100% offline desktop application. Your manuscripts, documents, and data remain strictly local on your computer.
+- **Which Hebrew fonts are included?**  
+  The application includes high-quality open-source Hebrew typefaces (such as Frank Ruhl Libre, Noto Rashi Hebrew, David Libre, and Noto Serif Hebrew) licensed under the SIL Open Font License, and also supports local fonts installed on your operating system.
+- **What is the current project status?**  
+  TypesetOK is under active development (current release **v0.3.30**). Community feedback, bug reports, and typographical suggestions are welcomed on the GitHub [Issues](https://github.com/TypesetOK/typesetok/issues) page.
+
+---
+
 ### <img src="assets/icons/terminal.svg" width="20" height="20" alt="" valign="middle" /> Developer Quickstart
 
 ```bash
