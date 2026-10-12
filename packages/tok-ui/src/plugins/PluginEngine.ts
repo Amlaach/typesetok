@@ -448,7 +448,7 @@ export class PluginEngine {
       appVersion: this.appVersion,
       isSafeMode: this.isSafeMode,
       isSaferActive: this.isSaferActive,
-      platform: typeof process !== 'undefined' ? process.platform : 'win32'
+      platform: typeof (globalThis as any).process !== 'undefined' ? (globalThis as any).process.platform : 'win32'
     };
 
     const manifest: PluginManifest = {
