@@ -6,7 +6,7 @@
 ### תוכנת עימוד שולחנית לספרים, טקסטים עבריים וספרי קודש
 **A Modern Desktop Publishing (DTP) System for Hebrew Books & Sacred Texts**
 
-[![Version](https://img.shields.io/badge/Version-0.3.15-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/Version-0.3.30-blue.svg)](package.json)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-informational.svg)]()
 [![License](https://img.shields.io/badge/License-TOK--NCCL%20v1.0-orange.svg)](LICENSE.md)
 

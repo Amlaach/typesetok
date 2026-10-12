@@ -42,13 +42,18 @@ async function loadTs(relPath) {
 }
 
 function findTokCli() {
+  const binName = process.platform === 'win32' ? 'tok-cli.exe' : 'tok-cli';
   const candidates = [
-    path.join(rootDir, 'target', 'debug', 'tok-cli.exe'),
-    path.join(rootDir, 'target', 'release', 'tok-cli.exe'),
-    path.join(rootDir, 'crates', 'target', 'debug', 'tok-cli.exe'),
-    path.join(rootDir, 'crates', 'target', 'release', 'tok-cli.exe'),
+    path.join(rootDir, 'target', 'debug', binName),
+    path.join(rootDir, 'target', 'release', binName),
+    path.join(rootDir, 'crates', 'target', 'debug', binName),
+    path.join(rootDir, 'crates', 'target', 'release', binName),
+    path.join(rootDir, 'target', 'debug', 'tok-cli'),
+    path.join(rootDir, 'target', 'release', 'tok-cli'),
+    path.join(process.env.LOCALAPPDATA || '', 'tok_target', 'debug', binName),
+    path.join(process.env.LOCALAPPDATA || '', 'tok_target', 'release', binName),
   ];
-  return candidates.find((p) => fs.existsSync(p));
+  return candidates.find((p) => p && fs.existsSync(p));
 }
 
 describe('Phase 3.1 End-to-End: Lifecycle, Import & Geometric Fidelity', async () => {

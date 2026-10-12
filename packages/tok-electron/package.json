@@ -1,6 +1,6 @@
 {
   "name": "tok-electron",
-  "version": "0.3.15",
+  "version": "0.3.30",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc"
