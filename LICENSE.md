@@ -106,6 +106,8 @@ If you, your affiliate, or any entity under your control institutes, files, init
 
 This License does not grant any right or license to use the trademarks, trade names, service marks, logos, or domain names of the Licensor, including but not limited to the names **"TypesetOK"**, **"TOK"**, or any associated logos. Any forked, modified, or derivative version of the Software must be clearly and distinctly renamed, and may not use the name "TypesetOK" or "TOK" in its title, brand, or package name without prior express written permission from the Licensor. You may not use Licensor's name to endorse or promote any product derived from the Software.
 
+The notice-preservation obligations of Section 4.3 and the restrictions of this Section 8 apply cumulatively and do not conflict: You must retain all existing copyright notices and author credits, and must state truthfully that Your work is derived from TypesetOK (for example, "Based on TypesetOK"), but such limited, factual attribution grants no right to use "TypesetOK" or "TOK" as, or as part of, a product name, brand, logo, domain name, or published package name, or in any manner suggesting endorsement by or affiliation with the Licensor. Internal source-code identifiers inherited from the Software (such as crate, module, or package names beginning with `tok-`) may be retained in Source Code solely for technical compatibility, but may not be published to any public package registry, or used as a public-facing product name, without the Licensor's prior written permission. Compliance with Section 4.3 is never a defense to a violation of this Section 8, and vice versa.
+
 ---
 
 ### 9. ABSOLUTE DISCLAIMER OF WARRANTIES
