@@ -163,12 +163,32 @@ Instead of relying on legacy monolithic software or overly complex design suites
 
 ### <img src="assets/icons/sparkle.svg" width="20" height="20" alt="" valign="middle" /> Key Features
 
-- **Hebrew Typography & Layout:** Natural right-to-left (RTL) text flow, balanced justification with traditional expanding letters (Ahalterm: א, ה, ל, ת, ר, ם), paragraph margins, and orphan control.
-- **Niqqud & Cantillation Support:** High-fidelity rendering of vocalized Hebrew text, automated Unicode ordering for letters and diacritics to avoid displacement, divine names protection, and Hebrew page numbering (gematria).
-- **Visual Workspace & Split View:** Two-page book spread canvas, integrated continuous text editor, real-time live preview, and smooth trackpad pinch-to-zoom gestures.
-- **Ready-to-Use Templates:** Pre-configured layouts for continuous books, books with footnotes, two-column booklets and bulletins, and traditional study pages.
-- **Direct PDF Export:** Generate crisp vector PDF files directly from the application ready for printing or digital reading.
-- **Local & Offline:** Operates entirely offline on your computer. Your files and manuscripts remain private and stored on your disk.
+#### 1. Hebrew Typography & Advanced Typesetting
+- **Natural Hebrew Justification:** Balanced word spacing combined with traditional expanding letters (Ahalterm: א, ה, ל, ת, ר, ם) and the Knuth-Plass optimal line-breaking algorithm to deliver harmonious, readable columns.
+- **Paragraph & Flow Control:** Precise space before/after, first-line indentation, margin collapsing, and orphan/widow suppression.
+- **Native RTL & Bidirectional Text:** Natural right-to-left layout across the entire environment, with seamless handling of embedded numbers and Latin phrases (Unicode BiDi).
+
+#### 2. High-Fidelity Niqqud, Cantillation & Sacred Texts
+- **Vocalization & Cantillation Marks:** Comprehensive rendering support for vocalized Hebrew (niqqud) and biblical cantillation accents (ta'amei ha-mikra) powered by advanced font shaping (rustybuzz / HarfBuzz).
+- **Canonical Unicode Normalization:** Automated normalization and ordering (base character, shin/sin dot, dagesh, vowel, accent) preventing glyph collisions and floating diacritics.
+- **Sacred Names Protection:** Guard against improper word splitting and line breaks across holy names (Tetragrammaton and divine names).
+- **Hebrew Page Numbering (Gematria):** Automatic traditional Hebrew numeral conversion following standard liturgical conventions (including ט״ו, ט״ז, and formal gershayim punctuation).
+
+#### 3. Visual Two-Page Spread & Live Workspace
+- **Facing Pages (Spread Canvas):** Realistic two-page book spread reflecting the layout engine's exact geometry and margins.
+- **Integrated Story Editor & Split View:** Distraction-free continuous text editing alongside a synchronized real-time typesetting canvas preview.
+- **Fluid Zoom & Navigation:** Canvas zoom controls, fit-to-window preset, and multi-touch trackpad pinch-to-zoom and two-finger panning.
+
+#### 4. Document Import & Ready-to-Use Templates
+- **Effortless Document Import:** Seamlessly import plain text (`.txt`), Markdown files, or existing TypesetOK project documents (`.tok`).
+- **Continuous Book:** Clean single-column layout for novels, essays, and continuous prose.
+- **Book with Footnotes:** Main narrative with dynamic footnote frames anchored to citations.
+- **Two-Column Booklet:** Elegant dual-column format for bulletins, pamphlets, and communal newsletters.
+- **Talmud & Rabbinic Commentary:** Multi-flow page layouts designed for central text accompanied by surrounding commentaries (Tzurat HaDaf).
+
+#### 5. Project Storage & Direct Vector PDF Export
+- **Direct PDF Generation:** Output crisp vector PDF files directly from the layout engine, complete with font subsetting, ready for digital distribution or professional printing.
+- **Unified Project Archive (`.tok`):** Comprehensive project container preserving document tree, typography settings, styles, and geometry.
 
 ---
 
@@ -176,7 +196,7 @@ Instead of relying on legacy monolithic software or overly complex design suites
 
 1. **Download:** Head to the [Releases page](https://github.com/TypesetOK/typesetok/releases) and grab either the standalone ZIP or the setup installer (`TypesetOK-Setup.exe`).
 2. **Launch:** Run `TypesetOK.exe` directly (no developer setup required).
-3. **Start Layout:** Choose a template or create a blank document, write or paste your text, adjust margins and styles, save (`Ctrl+S`), and export to PDF (`Ctrl+E`).
+3. **Start Layout:** Choose a template or create a blank document, paste, type, or import (`Ctrl+I`) your text, adjust margins and styles, save (`Ctrl+S`), and export to PDF (`Ctrl+E`).
 
 ---
 
