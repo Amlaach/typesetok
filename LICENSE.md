@@ -174,3 +174,11 @@ You agree to defend, indemnify, and hold harmless the Licensor, original authors
 
 1. **Definition and Precedence:** "Third-Party Components" means fonts, libraries, and other materials owned by persons other than the Licensor that are distributed with or used by the Software, including fonts licensed under the SIL Open Font License located under `assets/fonts/` (each accompanied by its `OFL-*.txt` license file) and open-source libraries obtained through Cargo, npm, or bundled runtimes such as Electron. Third-Party Components are not licensed by the Licensor under this License and remain governed exclusively by their own license terms, which prevail over this License with respect to those components only.
 2. **No Effect on the Software:** Section 14.1 does not permit any use of the Software or any Derivative Work outside the terms of this License. Separating, extracting, replacing, or relicensing a Third-Party Component confers no right in the Software, and the presence of a permissively licensed Third-Party Component in a combined work does not make any portion of the Software available under that permissive license.
+
+---
+
+### 15. LICENSE VERSIONS
+
+1. **Versions:** The Licensor may publish revised versions of this License, each identified by a distinct version number. Each release of the Software is governed by the version of this License that accompanies that release.
+2. **No Cherry-Picking:** Any Derivative Work that incorporates any portion of a release of the Software governed by a later version of this License is governed, as a whole, by that later version. You may not combine portions of releases governed by different versions in order to rely on the terms of an earlier version.
+3. **Share-Alike Reference:** References in Section 4 to the "exact terms of this TOK-NCCL License" mean the version of this License that governs the Derivative Work under this Section 15.
