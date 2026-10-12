@@ -1,5 +1,5 @@
 # TYPESETOK SOURCE-AVAILABLE NON-COMMERCIAL COPYLEFT LICENSE (TOK-NCCL)
-**Version 1.0 — Effective 2026**
+**Version 1.1 — Effective October 2026** (supersedes Version 1.0 for all releases accompanied by this version)
 
 Copyright (c) 2026, The TypesetOK Project and its Original Author(s) ("Licensor").
 All Rights Reserved.

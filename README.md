@@ -8,7 +8,7 @@
 
 [![Version](https://img.shields.io/badge/Version-0.3.30-blue.svg)](package.json)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-informational.svg)]()
-[![License](https://img.shields.io/badge/License-TOK--NCCL%20v1.0-orange.svg)](LICENSE.md)
+[![License](https://img.shields.io/badge/License-TOK--NCCL%20v1.1-orange.svg)](LICENSE.md)
 
 <p align="center">
   <b>[ <a href="#-עברית">עברית</a> | <a href="#-english">English</a> ]</b>
@@ -96,7 +96,7 @@
 ### ❓ שאלות נפוצות (FAQ)
 
 - **האם התוכנה חינמית?**  
-  כן, לשימוש אישי, לימודי ולא-מסחרי (בהתאם לרישיון `TOK-NCCL v1.0`). שימוש מסחרי מוסדר בנפרד מול בעלי הזכויות.
+  כן, לשימוש אישי, לימודי ולא-מסחרי (בהתאם לרישיון `TOK-NCCL v1.1`). שימוש מסחרי מוסדר בנפרד מול בעלי הזכויות.
 - **האם צריך חיבור לאינטרנט?**  
   לא. TypesetOK היא תוכנה שולחנית מקומית (Offline). כל העבודה והמסמכים שלכם נשמרים אצלכם במחשב בלבד.
 - **אילו גופנים כלולים בתוכנה?**  
@@ -136,7 +136,7 @@ npm start
 
 ### 📄 תנאי שימוש ורישיון
 
-התוכנה מופצת תחת רישיון **[TOK-NCCL v1.0](LICENSE.md)** (TypesetOK Source-Available Non-Commercial Copyleft License):
+התוכנה מופצת תחת רישיון **[TOK-NCCL v1.1](LICENSE.md)** (TypesetOK Source-Available Non-Commercial Copyleft License):
 - **שימוש אישי, לימודי ותורני לא-מסחרי:** מותר וחופשי.
 - **נגזרות והרחבות:** כל גרסה נגזרת חייבת להישאר תחת אותו רישיון ובקוד מקור גלוי.
 - **שימוש מסחרי:** מחייב רישיון מסחרי נפרד מיוצרי התוכנה.
@@ -194,7 +194,7 @@ npm start
 
 ### 📄 License
 
-TypesetOK is licensed under the **[TOK-NCCL v1.0](LICENSE.md)** (Source-Available Non-Commercial Copyleft License):
+TypesetOK is licensed under the **[TOK-NCCL v1.1](LICENSE.md)** (Source-Available Non-Commercial Copyleft License):
 - **Free for Personal & Non-Commercial Use:** Personal study, community, and non-commercial publishing.
 - **Share-Alike:** Modifications and derivative works must remain under the same license.
 - **Commercial Use:** Requires a separate commercial license.
