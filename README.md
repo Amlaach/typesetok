@@ -6,12 +6,15 @@
 ### תוכנת עימוד שולחנית לספרים, טקסטים עבריים וספרי קודש
 **A Modern Desktop Publishing (DTP) System for Hebrew Books & Sacred Texts**
 
-[![Version](https://img.shields.io/badge/Version-0.3.30-blue.svg)](package.json)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20x64-informational.svg)]()
-[![License](https://img.shields.io/badge/License-TOK--NCCL%20v1.1-orange.svg)](LICENSE.md)
+[![Version](https://img.shields.io/badge/Version-0.3.30-2563eb.svg)](package.json)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078d4.svg?logo=windows&logoColor=white)]()
+[![Engine](https://img.shields.io/badge/Engine-Rust%201.85%2B-dea584.svg?logo=rust&logoColor=white)](crates/tok-typeset)
+[![Desktop](https://img.shields.io/badge/Desktop-Electron%20%7C%20TypeScript-3178c6.svg?logo=typescript&logoColor=white)](packages/tok-ui)
+[![License](https://img.shields.io/badge/License-TOK--NCCL%20v1.1-f59e0b.svg)](LICENSE.md)
 
 <p align="center">
-  <b>[ <a href="#-עברית">עברית</a> | <a href="#-english">English</a> ]</b>
+  <img src="assets/icons/globe.svg" width="16" height="16" alt="Languages" valign="middle" />
+  <b>[ <a href="#עברית">עברית</a> | <a href="#english">English</a> ]</b>
 </p>
 
 </div>
