@@ -111,36 +111,37 @@ export class ImportTemplateModal {
     dialog.appendChild(head);
 
     // Body: template grid
-    const body = el('div', 'tok-modal-body', { style: 'padding:20px 24px;display:flex;flex-direction:column;gap:10px;max-height:420px;overflow-y:auto;' });
+    const body = el('div', 'tok-modal-body', { style: 'padding:16px 22px;display:flex;flex-direction:column;gap:8px;max-height:56vh;overflow-y:auto;' });
 
     for (const opt of TEMPLATE_OPTIONS) {
       const card = el('button', 'tok-template-option-btn', {
         type: 'button',
-        style: 'display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 16px;border-radius:8px;border:1px solid var(--tok-border-strong);background:var(--tok-surface-elevated, #1E293B);color:var(--tok-text-primary);cursor:pointer;text-align:start;transition:all 0.15s ease;'
+        style: 'display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-radius:10px;border:1px solid var(--tok-border-strong);background:var(--tok-bg-surface-2, #1E293B);color:var(--tok-text-primary);cursor:pointer;text-align:start;transition:all 0.15s ease;flex-shrink:0;'
       });
 
-      const info = el('div', undefined, { style: 'display:flex;flex-direction:column;gap:3px;flex:1;' });
+      const info = el('div', undefined, { style: 'display:flex;flex-direction:column;gap:3px;flex:1;min-width:0;' });
       const optTitleRow = el('div', undefined, { style: 'display:flex;align-items:center;gap:8px;' });
-      optTitleRow.appendChild(el('strong', undefined, { style: 'font-size:14px;' }, t(opt.titleKey)));
+      optTitleRow.appendChild(el('strong', undefined, { style: 'font-size:14px;font-weight:700;' }, t(opt.titleKey)));
       if (opt.badge) {
         optTitleRow.appendChild(el('span', undefined, {
           style: `font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:${opt.badgeColor}22;color:${opt.badgeColor};`
         }, opt.badge));
       }
       info.appendChild(optTitleRow);
-      info.appendChild(el('span', undefined, { style: 'font-size:12px;color:var(--tok-text-muted);' }, t(opt.descKey)));
+      info.appendChild(el('span', undefined, { style: 'font-size:12px;color:var(--tok-text-secondary);line-height:1.4;' }, t(opt.descKey)));
       card.appendChild(info);
 
-      const arrow = el('span', undefined, { style: 'opacity:0.6;font-size:16px;' }, '←');
+      const arrow = el('span', 'tok-flip-rtl', { style: 'opacity:0.6;font-size:16px;flex:none;' });
+      arrow.appendChild(icon('arrowForward', 16));
       card.appendChild(arrow);
 
       card.addEventListener('mouseenter', () => {
-        card.style.borderColor = 'var(--tok-accent, #3B82F6)';
-        card.style.background = 'rgba(59, 130, 246, 0.1)';
+        card.style.borderColor = 'var(--tok-accent-primary, #3B82F6)';
+        card.style.background = 'var(--tok-accent-soft, rgba(59, 130, 246, 0.1))';
       });
       card.addEventListener('mouseleave', () => {
         card.style.borderColor = 'var(--tok-border-strong)';
-        card.style.background = 'var(--tok-surface-elevated, #1E293B)';
+        card.style.background = 'var(--tok-bg-surface-2, #1E293B)';
       });
 
       card.addEventListener('click', () => {

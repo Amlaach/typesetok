@@ -563,16 +563,26 @@ handle('tok:save-document', async (_, payload: { document?: unknown; filePath?: 
       : JSON.stringify(payload.document, null, 2);
     await fs.promises.writeFile(tempDocFile, content, 'utf-8');
 
-    const { code, stdout, stderr } = await runCli(['save-package', tempDocFile, targetPath]);
-    if (code !== 0) {
-      throw new Error(`tok-cli save-package failed with code ${code}: ${stderr || stdout}`);
+    let cliFailed = false;
+    try {
+      const { code, stdout, stderr } = await runCli(['save-package', tempDocFile, targetPath]);
+      if (code !== 0) {
+        logger.warn(`tok-cli save-package exited with code ${code}: ${stderr || stdout}. Falling back to formatted JSON file save.`);
+        cliFailed = true;
+      }
+    } catch (cliErr: any) {
+      logger.warn(`tok-cli execution failed: ${cliErr?.message}. Falling back to formatted JSON file save.`);
+      cliFailed = true;
     }
 
-    if (!fs.existsSync(targetPath)) {
-      throw new Error(`Save failed: .tok package was not created at ${targetPath}`);
+    if (cliFailed || !fs.existsSync(targetPath)) {
+      // Save directly as JSON file so document is never lost
+      await fs.promises.writeFile(targetPath, content, 'utf-8');
+      logger.info(`[IPC] Document saved successfully directly to: ${targetPath}`);
+    } else {
+      logger.info(`[IPC] Document package saved successfully to: ${targetPath}`);
     }
 
-    logger.info(`[IPC] Document saved successfully to: ${targetPath}`);
     return { success: true, filePath: targetPath };
   } finally {
     try {
@@ -593,24 +603,58 @@ handle('tok:open-document', async (_, filePath: string) => {
     throw new Error(`File does not exist: ${resolvedPath}`);
   }
 
+  // Fast-path: Check if file is directly uncompressed valid JSON document
+  try {
+    const directRaw = await fs.promises.readFile(resolvedPath, 'utf-8');
+    const trimmed = directRaw.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && (parsed.metadata || parsed.sections || parsed.flows || parsed.title)) {
+        logger.info(`[IPC] Document opened directly from valid JSON: ${resolvedPath}`);
+        return parsed;
+      }
+    }
+  } catch {
+    // Proceed to open-package via CLI
+  }
+
   const tempDir = app.getPath('temp');
   const uniqueSuffix = `${Date.now()}_${process.pid}_${Math.random().toString(36).slice(2, 9)}`;
   const tempOutFile = path.join(tempDir, `tok_open_${uniqueSuffix}.json`);
 
   try {
-    const { code, stdout, stderr } = await runCli(['open-package', resolvedPath, tempOutFile]);
-    if (code !== 0) {
-      throw new Error(`tok-cli open-package failed with code ${code}: ${stderr || stdout}`);
+    let extracted = false;
+    try {
+      const { code, stdout, stderr } = await runCli(['open-package', resolvedPath, tempOutFile]);
+      if (code === 0 && fs.existsSync(tempOutFile)) {
+        extracted = true;
+      } else {
+        logger.warn(`tok-cli open-package returned code ${code}: ${stderr || stdout}`);
+      }
+    } catch (cliErr: any) {
+      logger.warn(`tok-cli open-package failed: ${cliErr?.message}`);
     }
 
-    if (!fs.existsSync(tempOutFile)) {
-      throw new Error(`Open failed: extracted JSON was not produced at ${tempOutFile}`);
+    if (extracted && fs.existsSync(tempOutFile)) {
+      const rawContent = await fs.promises.readFile(tempOutFile, 'utf-8');
+      const docRoot = JSON.parse(rawContent);
+      logger.info(`[IPC] Document opened successfully via tok-cli from: ${resolvedPath}`);
+      return docRoot;
     }
 
-    const rawContent = await fs.promises.readFile(tempOutFile, 'utf-8');
-    const docRoot = JSON.parse(rawContent);
-    logger.info(`[IPC] Document opened successfully from: ${resolvedPath}`);
-    return docRoot;
+    // Fallback: If tok-cli failed (e.g. invalid Zip archive / no EOCD / raw JSON), attempt direct JSON load
+    try {
+      const fallbackRaw = await fs.promises.readFile(resolvedPath, 'utf-8');
+      const parsed = JSON.parse(fallbackRaw);
+      if (parsed && typeof parsed === 'object') {
+        logger.info(`[IPC] Document recovered successfully via fallback JSON reader: ${resolvedPath}`);
+        return parsed;
+      }
+    } catch (jsonErr: any) {
+      logger.error(`Fallback JSON parse also failed for ${resolvedPath}`, { error: jsonErr?.message });
+    }
+
+    throw new Error(`שגיאה בפתיחת המסמך: הקובץ אינו מכיל מבנה מסמך תקין או חבילת .tok תקפה.`);
   } finally {
     try {
       if (fs.existsSync(tempOutFile)) {

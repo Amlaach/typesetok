@@ -594,7 +594,27 @@ fn handle_save_package(input: &str, output: &str) -> Result<(), Box<dyn std::err
 
 fn handle_open_package(input: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("[TOK-CLI] Opening .tok package from: {}", input);
-    let (doc, _pkg) = TokPackage::open(input)?;
+    let maybe_open = TokPackage::open(input);
+    let root_json: serde_json::Value = match maybe_open {
+        Ok((doc, _pkg)) => serde_json::to_value(doc.root())?,
+        Err(err) => {
+            if let Ok(file_content) = fs::read_to_string(input) {
+                let trimmed = file_content.trim();
+                if trimmed.starts_with('{') {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                        println!("  [FALLBACK] Input is valid uncompressed JSON document.");
+                        val
+                    } else {
+                        return Err(err);
+                    }
+                } else {
+                    return Err(err);
+                }
+            } else {
+                return Err(err);
+            }
+        }
+    };
 
     if let Some(parent) = Path::new(output).parent() {
         if !parent.as_os_str().is_empty() {
@@ -602,7 +622,7 @@ fn handle_open_package(input: &str, output: &str) -> Result<(), Box<dyn std::err
         }
     }
 
-    let json_bytes = serde_json::to_vec_pretty(doc.root())?;
+    let json_bytes = serde_json::to_vec_pretty(&root_json)?;
     fs::write(output, json_bytes)?;
     println!("  [SUCCESS] Extracted document JSON to: {}", output);
     Ok(())

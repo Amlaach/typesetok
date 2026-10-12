@@ -21,6 +21,16 @@ export class ActionHud {
   private currentStyle = 'gemara';
   private currentFont = '';
 
+  // Drag state
+  private isDragging = false;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private initialLeft = 0;
+  private initialTop = 0;
+  private userHasMoved = false;
+  private customLeft: number | null = null;
+  private customTop: number | null = null;
+
   constructor(callbacks: ActionHudCallbacks) {
     this.callbacks = callbacks;
     this.element = document.createElement('div');
@@ -44,6 +54,11 @@ export class ActionHud {
         this.callbacks.onDismiss();
       }
     });
+
+    // Window drag event listeners
+    window.addEventListener('pointermove', (e) => this.onPointerMove(e));
+    window.addEventListener('pointerup', () => this.onPointerUp());
+    window.addEventListener('pointercancel', () => this.onPointerUp());
   }
 
   public showAt(x: number, y: number, initialValues?: {
@@ -64,18 +79,34 @@ export class ActionHud {
       this.isBold = initialValues.font_weight >= 700;
     }
     if (initialValues?.align) this.currentAlign = initialValues.align;
-
     if (initialValues?.style) this.currentStyle = initialValues.style;
     if (initialValues?.font) this.currentFont = initialValues.font;
 
     this.render();
 
-    // Position HUD centered above (x, y), kept fully inside the window
     this.element.style.display = 'flex';
-    const width = this.element.offsetWidth || 360;
-    const maxLeft = Math.max(10, window.innerWidth - width - 10);
-    this.element.style.left = `${Math.min(maxLeft, Math.max(10, x - width / 2))}px`;
-    this.element.style.top = `${Math.max(50, y - 48)}px`;
+    const width = this.element.offsetWidth || 380;
+    const height = this.element.offsetHeight || 42;
+
+    if (this.userHasMoved && this.customLeft !== null && this.customTop !== null) {
+      // Keep at the user's preferred location so it doesn't obstruct their view
+      const maxLeft = Math.max(10, window.innerWidth - width - 10);
+      const maxTop = Math.max(45, window.innerHeight - height - 10);
+      this.element.style.left = `${Math.min(maxLeft, Math.max(10, this.customLeft))}px`;
+      this.element.style.top = `${Math.min(maxTop, Math.max(45, this.customTop))}px`;
+    } else {
+      // Position smartly: if selection is high up, put HUD below it; otherwise put it well above with clearance
+      const maxLeft = Math.max(10, window.innerWidth - width - 10);
+      const targetLeft = Math.min(maxLeft, Math.max(10, x - width / 2));
+      let targetTop = y - 56;
+      if (targetTop < 50) {
+        // Place below the click so it never disappears off-screen or covers text
+        targetTop = y + 32;
+      }
+      this.element.style.left = `${targetLeft}px`;
+      this.element.style.top = `${targetTop}px`;
+    }
+
     this.isVisible = true;
   }
 
@@ -88,8 +119,54 @@ export class ActionHud {
     return this.isVisible;
   }
 
+  private onPointerDown(e: PointerEvent): void {
+    if (e.button !== 0) return;
+    this.isDragging = true;
+    this.dragStartX = e.clientX;
+    this.dragStartY = e.clientY;
+    this.initialLeft = this.element.offsetLeft;
+    this.initialTop = this.element.offsetTop;
+    this.element.style.cursor = 'grabbing';
+    e.preventDefault();
+  }
+
+  private onPointerMove(e: PointerEvent): void {
+    if (!this.isDragging) return;
+    const dx = e.clientX - this.dragStartX;
+    const dy = e.clientY - this.dragStartY;
+    const width = this.element.offsetWidth || 380;
+    const height = this.element.offsetHeight || 42;
+
+    const newLeft = Math.min(window.innerWidth - width - 5, Math.max(5, this.initialLeft + dx));
+    const newTop = Math.min(window.innerHeight - height - 5, Math.max(40, this.initialTop + dy));
+
+    this.element.style.left = `${newLeft}px`;
+    this.element.style.top = `${newTop}px`;
+    this.userHasMoved = true;
+    this.customLeft = newLeft;
+    this.customTop = newTop;
+  }
+
+  private onPointerUp(): void {
+    if (this.isDragging) {
+      this.isDragging = false;
+      this.element.style.cursor = 'default';
+    }
+  }
+
   private render(): void {
     this.element.innerHTML = '';
+
+    // 0. Draggable handle
+    const dragHandle = el('div', 'tok-hud-drag-handle', {
+      title: 'גרור להזזת הסרגל לכל מקום במסך',
+      style: 'cursor:grab;display:flex;align-items:center;justify-content:center;padding:0 4px;color:var(--tok-text-muted);user-select:none;height:100%;'
+    });
+    dragHandle.appendChild(icon('layers', 14));
+    dragHandle.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+    this.element.appendChild(dragHandle);
+
+    this.element.appendChild(this.createDivider());
 
     // 1. Font family
     const fontSelect = selectField(t('hudFont'), getAvailableFonts().map((f) => ({ value: f.family, label: f.label })), this.currentFont || DEFAULT_DOCUMENT_FONT, (value) => {
@@ -103,9 +180,9 @@ export class ActionHud {
     // 2. Font size stepper
     const sizeInput = el('input', 'tok-input tok-input-number', { type: 'text', 'aria-label': t('inspFontSize') });
     sizeInput.value = `${this.currentSize}pt`;
-    sizeInput.style.width = '52px';
+    sizeInput.style.width = '48px';
     sizeInput.style.textAlign = 'center';
-    sizeInput.style.padding = '0 4px';
+    sizeInput.style.padding = '0 2px';
     const step = (delta: number) => {
       this.currentSize = Math.max(6, Math.min(150, this.currentSize + delta));
       sizeInput.value = `${this.currentSize}pt`;
@@ -113,7 +190,6 @@ export class ActionHud {
     };
     sizeInput.addEventListener('change', () => {
       const parsed = parseInt(sizeInput.value, 10);
-      // Same 6–150pt range the −/+ steppers enforce.
       if (!isNaN(parsed) && parsed >= 6 && parsed <= 150) {
         this.currentSize = parsed;
         this.callbacks.onSizeChange(this.currentSize);
@@ -136,13 +212,15 @@ export class ActionHud {
     });
     this.element.appendChild(boldBtn);
 
-    // 4. Alignment (cycles right → justify → center)
+    // 4. Alignment button (Icon only - prevents text overflow!)
     const alignIcon = () => (this.currentAlign === 'justify' ? 'alignJustify' : this.currentAlign === 'center' ? 'alignCenter' : 'alignRight');
     const alignLabel = () => t(this.currentAlign === 'justify' ? 'hudAlignJustify' : this.currentAlign === 'center' ? 'hudAlignCenter' : 'hudAlignRight');
-    const alignBtn = el('button', 'tok-hud-btn', { type: 'button', title: t('hudAlignTitle') });
+    const alignBtn = el('button', 'tok-hud-btn', { type: 'button' });
     const paintAlign = () => {
-      alignBtn.replaceChildren(icon(alignIcon(), 15), el('span', undefined, undefined, alignLabel()));
-      alignBtn.setAttribute('aria-label', `${t('hudAlignTitle')}: ${alignLabel()}`);
+      alignBtn.replaceChildren(icon(alignIcon(), 15));
+      const lbl = alignLabel();
+      alignBtn.title = `${t('hudAlignTitle')}: ${lbl}`;
+      alignBtn.setAttribute('aria-label', `${t('hudAlignTitle')}: ${lbl}`);
     };
     paintAlign();
     alignBtn.addEventListener('click', () => {
@@ -165,6 +243,15 @@ export class ActionHud {
       this.currentStyle = value;
       this.callbacks.onStyleChange(value);
     }, { title: t('hudQuickStyle') }));
+
+    this.element.appendChild(this.createDivider());
+
+    // 6. Close button
+    const closeBtn = iconButton('close', 'סגירת סרגל צף (Esc)', () => {
+      this.hide();
+      this.callbacks.onDismiss();
+    }, { size: 14, className: 'tok-hud-btn', attrs: { style: 'color:var(--tok-text-muted);' } });
+    this.element.appendChild(closeBtn);
   }
 
   private createDivider(): HTMLElement {
