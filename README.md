@@ -146,16 +146,16 @@ npm start
 
 ---
 
-## 🇺🇸 English
+## <img src="assets/icons/globe.svg" width="22" height="22" alt="" valign="middle" /> English
 
-### 📖 What is TypesetOK?
+### <img src="assets/icons/book.svg" width="20" height="20" alt="" valign="middle" /> What is TypesetOK?
 **TypesetOK (TOK)** is a modern desktop publishing (DTP) application designed for typesetting Hebrew books, literature, and traditional sacred texts.
 
 Instead of relying on legacy monolithic software or overly complex design suites, TypesetOK offers a clean, visual, and approachable desktop workspace tailored specifically to the unique needs of Hebrew typography and book publishing.
 
 ---
 
-### ✨ Key Features
+### <img src="assets/icons/sparkle.svg" width="20" height="20" alt="" valign="middle" /> Key Features
 
 - **Hebrew Typography & Layout:** Natural right-to-left (RTL) text flow, balanced justification with traditional expanding letters (Ahalterm: א, ה, ל, ת, ר, ם), paragraph margins, and orphan control.
 - **Niqqud & Cantillation Support:** High-fidelity rendering of vocalized Hebrew text, automated Unicode ordering for letters and diacritics to avoid displacement, divine names protection, and Hebrew page numbering (gematria).
@@ -166,7 +166,7 @@ Instead of relying on legacy monolithic software or overly complex design suites
 
 ---
 
-### 💻 Getting Started (Windows)
+### <img src="assets/icons/download.svg" width="20" height="20" alt="" valign="middle" /> Getting Started (Windows)
 
 1. **Download:** Head to the [Releases page](https://github.com/TypesetOK/typesetok/releases) and grab either the standalone ZIP or the setup installer (`TypesetOK-Setup.exe`).
 2. **Launch:** Run `TypesetOK.exe` directly (no developer setup required).
@@ -174,7 +174,7 @@ Instead of relying on legacy monolithic software or overly complex design suites
 
 ---
 
-### 🛠️ Developer Quickstart
+### <img src="assets/icons/terminal.svg" width="20" height="20" alt="" valign="middle" /> Developer Quickstart
 
 ```bash
 # Clone repository
@@ -195,7 +195,7 @@ npm start
 
 ---
 
-### 📄 License
+### <img src="assets/icons/license.svg" width="20" height="20" alt="" valign="middle" /> License
 
 TypesetOK is licensed under the **[TOK-NCCL v1.1](LICENSE.md)** (Source-Available Non-Commercial Copyleft License):
 - **Free for Personal & Non-Commercial Use:** Personal study, community, and non-commercial publishing.
