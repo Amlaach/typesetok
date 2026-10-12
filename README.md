@@ -180,6 +180,29 @@ Instead of relying on legacy monolithic software or overly complex design suites
 
 ---
 
+### <img src="assets/icons/keyboard.svg" width="20" height="20" alt="" valign="middle" /> Keyboard Shortcuts
+
+| Action | Shortcut (English / Hebrew Layout) |
+| :--- | :--- |
+| **New Document** | `Ctrl + N` |
+| **Open Document** | `Ctrl + O` |
+| **Import Document (Text / Markdown)** | `Ctrl + I` |
+| **Save Document** | `Ctrl + S` / `Ctrl + ד` |
+| **Save As** | `Ctrl + Shift + S` |
+| **Export to Print PDF** | `Ctrl + E` / `Ctrl + ק` |
+| **Undo** | `Ctrl + Z` / `Ctrl + ז` |
+| **Redo** | `Ctrl + Y` |
+| **Pages View** | `Ctrl + 1` |
+| **Split View (Editor + Pages)** | `Ctrl + 2` |
+| **Text Editor View** | `Ctrl + 3` |
+| **Zoom In** | `Ctrl + +` / `Ctrl + =` |
+| **Zoom Out** | `Ctrl + -` |
+| **Fit Page to Window** | `Ctrl + 0` |
+| **Add New Page** | `Ctrl + Enter` |
+| **Typesetting Command Palette** | `Ctrl + K` |
+
+---
+
 ### <img src="assets/icons/terminal.svg" width="20" height="20" alt="" valign="middle" /> Developer Quickstart
 
 ```bash
