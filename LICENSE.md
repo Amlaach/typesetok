@@ -155,6 +155,8 @@ You agree to defend, indemnify, and hold harmless the Licensor, original authors
 2. **Effect of Termination:** Upon termination, you must immediately cease all access, execution, copying, modification, and distribution of the Software and permanently destroy all copies in your possession. Any continued use constitutes willful copyright infringement.
 3. **Injunctive Relief:** You acknowledge that unauthorized commercial use or violation of this License will cause irreparable harm to Licensor for which monetary damages alone would be inadequate. Accordingly, Licensor shall be entitled to seek immediate preliminary and permanent injunctive relief, specific performance, and statutory damages in any court of competent jurisdiction, without posting bond or proving actual financial damages.
 4. **Attorney's Fees:** In the event Licensor enforces this License against you in any legal proceeding and prevails, Licensor shall be entitled to recover from you all reasonable attorney's fees, expert costs, and expenses incurred in enforcement.
+5. **No Automatic Reinstatement:** A terminated license may be reinstated only by an express written notice signed by the Licensor. Re-downloading, re-cloning, re-installing, or otherwise re-obtaining the Software (including any later release, or a copy received from a third party) does not grant You a new license or reinstate a terminated one.
+6. **Survival:** Termination does not affect (a) the rights granted to the Licensor and to recipients under Section 6, which are irrevocable; (b) Sections 1, 3.5, 7, 8, 9, 10, 11, 12 and 13, which survive any termination or expiration of this License; or (c) Your liability for any breach occurring before termination.
 
 ---
 
