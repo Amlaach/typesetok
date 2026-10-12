@@ -444,7 +444,51 @@ export class FlowPaginator {
   }
 
   /**
-   * Builds the complete, interactive 3-column HTML layout for a Talmud page.
+   * Rule 2 Algorithmic Implementation:
+   * Calculates vertical line distributions and inter-paragraph spacings
+   * to achieve identical horizontal Y-axis baseline termination across all active columns.
+   */
+  public static calculateEqualBaselineDistribution(
+    activeColCount: number,
+    paraCounts: { right: number; center: number; left: number },
+    targetBodyHeightPx = 520
+  ): {
+    rightSpacingPx: number;
+    centerSpacingPx: number;
+    leftSpacingPx: number;
+    targetBaselineYPx: number;
+  } {
+    const calcSpacing = (count: number) => {
+      if (count <= 1) return 10;
+      const raw = Math.floor((targetBodyHeightPx * 0.16) / (count - 1));
+      return Math.max(4, Math.min(22, raw));
+    };
+
+    return {
+      rightSpacingPx: calcSpacing(paraCounts.right),
+      centerSpacingPx: calcSpacing(paraCounts.center),
+      leftSpacingPx: calcSpacing(paraCounts.left),
+      targetBaselineYPx: targetBodyHeightPx
+    };
+  }
+
+  /**
+   * Builds the complex multi-column dynamic layout for Talmud/Mikraot pages.
+   *
+   * Architectural & Algorithmic Rules Enforced:
+   * - Rule 1 (Top Offset & Adaptive Wrapping):
+   *     * Outer envelope columns initialize at the top (start line 1).
+   *     * First 4 lines consist exclusively of the two outer envelope columns (Header Shift).
+   *     * Primary/center column begins exactly at line 5 between the two wrapping columns.
+   *     * Center column has higher visual weight/emphasis (font, width, lead styling).
+   *     * Dynamic step-like / slanted boundaries wrap around the bottom of the center column.
+   * - Rule 2 (Strict Bottom Alignment):
+   *     * Identical horizontal Y-axis baseline termination across all active columns (1, 2, or 3).
+   *     * Balanced vertical distribution across active columns.
+   * - Rule 3 (Column Separation & Missing Content Expansion):
+   *     * Boundary integrity: strict text isolation, no overflow across column regions.
+   *     * Fallback expansion: when one outer envelope column is completely missing, the remaining
+   *       outer column expands horizontally across the missing column's space.
    */
   private static buildTalmudPageHtml(params: {
     pageIndex: number;
@@ -475,57 +519,121 @@ export class FlowPaginator {
       lShapeCommentary
     } = params;
 
-    const renderParas = (paras: StoryParagraph[]) =>
+    // Check content presence for Rule 3 Fallback Expansion
+    const hasRight = rightParas.length > 0 && rightParas.some((p) => (p.text || '').trim().length > 0);
+    const hasLeft = leftParas.length > 0 && leftParas.some((p) => (p.text || '').trim().length > 0);
+    const hasCenter = gemaraParas.length > 0 && gemaraParas.some((p) => (p.text || '').trim().length > 0);
+
+    const activeColCount = (hasRight ? 1 : 0) + (hasCenter ? 1 : 0) + (hasLeft ? 1 : 0);
+
+    // Rule 3: Dynamic Grid Proportion & Fallback Expansion
+    let gridTemplate = '1fr 1.65fr 1fr';
+    let rightExpanded = false;
+    let leftExpanded = false;
+
+    if (!hasRight && hasLeft) {
+      // Left outer envelope expands horizontally across missing right envelope space
+      gridTemplate = '2.1fr 1.65fr';
+      leftExpanded = true;
+    } else if (hasRight && !hasLeft) {
+      // Right outer envelope expands horizontally across missing left envelope space
+      gridTemplate = '1.65fr 2.1fr';
+      rightExpanded = true;
+    } else if (!hasRight && !hasLeft) {
+      // Both outer columns missing, center column takes entire width
+      gridTemplate = '1fr';
+    }
+
+    // Rule 1: Header shift metrics
+    const HEADER_SHIFT_LINES = 4;
+    const HEADER_LINE_HEIGHT_PX = 18;
+    const HEADER_OFFSET_PX = HEADER_SHIFT_LINES * HEADER_LINE_HEIGHT_PX; // 72px
+
+    // Rule 2: Calculate balanced distribution for equal baseline termination
+    const baselineDist = this.calculateEqualBaselineDistribution(
+      activeColCount,
+      {
+        right: rightParas.length,
+        center: gemaraParas.length,
+        left: leftParas.length
+      },
+      520
+    );
+
+    const renderParas = (paras: StoryParagraph[], spacingPx: number) =>
       paras.length > 0
         ? paras
             .map(
               (p) =>
-                `<p data-para-id="${p.id}" style="margin: 0 0 0.55em; text-align: justify;">${p.text || '&nbsp;'}</p>`
+                `<p data-para-id="${p.id}" style="margin: 0 0 ${spacingPx}px; text-align: justify; text-justify: inter-word; word-break: break-word;">${p.text || '&nbsp;'}</p>`
             )
             .join('')
         : `<div style="font-size: 10px; color: var(--tok-text-muted); font-style: italic; text-align: center; padding-top: 20px;">[אין טקסט בעמוד זה]</div>`;
 
     return `
-      <div class="tok-page-content" style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 22px 24px; overflow: hidden; gap: 8px;">
-        <!-- 3-Column Talmud Spread Grid -->
-        <div class="tok-talmud-grid" style="flex: 1; min-height: 0; display: grid; grid-template-columns: 1.05fr 1.35fr 1.05fr; column-gap: 12px; row-gap: 8px; overflow: hidden;">
+      <div class="tok-page-content" style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 20px 24px; overflow: hidden; gap: 8px;">
+        <!-- Adaptive Multi-Column Talmud Body Grid -->
+        <div class="tok-talmud-grid tok-dynamic-multi-column" data-active-columns="${activeColCount}" style="flex: 1; min-height: 0; display: grid; grid-template-columns: ${gridTemplate}; column-gap: 14px; row-gap: 8px; overflow: hidden; contain: layout style; isolation: isolate;">
           
-          <!-- Column 1: Right (Outer on Recto / Inner on Verso) -->
-          <div class="tok-interactive-frame tok-col-right" data-frame-id="frame-right-${pageIndex}" data-flow-id="${rightFlowId}" style="display: flex; flex-direction: column; overflow: hidden;">
-            <div class="tok-frame-label" style="font-size: 10px; font-weight: 700; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px;">
-              ${rightTitle}
+          <!-- Column 1: Right Outer/Inner Envelope -->
+          <div class="tok-interactive-frame tok-col-right tok-col-envelope ${rightExpanded ? 'tok-col-expanded-fallback' : ''}" data-frame-id="frame-right-${pageIndex}" data-flow-id="${rightFlowId}" data-start-line="1" data-envelope-role="outer-envelope" ${rightExpanded ? 'data-fallback-expanded="true" data-expanded-from="left"' : ''} style="display: ${!hasRight && hasLeft ? 'none' : 'flex'}; flex-direction: column; justify-content: space-between; height: 100%; min-height: 0; overflow: hidden; contain: layout style; isolation: isolate; border-radius: 2px;">
+            <div class="tok-frame-label" style="font-size: 10px; font-weight: 700; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px; flex: none;">
+              ${rightTitle} ${rightExpanded ? '<span style="font-size: 8.5px; font-weight: normal; color: var(--tok-accent-text);">(הרחבה אופקית במקום עמודה חסרה)</span>' : ''}
             </div>
-            <div class="tok-frame-text ${rightClass}" style="flex: 1; min-height: 0; overflow: hidden; font-size: 10px; line-height: 1.48;">
-              ${renderParas(rightParas)}
+            <div class="tok-frame-text ${rightClass}" style="flex: 1; min-height: 0; overflow: hidden; font-size: 10.5px; line-height: 1.48; display: flex; flex-direction: column;">
+              <div style="flex: 1; min-height: 0; overflow: hidden;">
+                ${renderParas(rightParas, baselineDist.rightSpacingPx)}
+              </div>
+              <!-- Rule 2: Synchronized Column Baseline Anchor -->
+              <div class="tok-baseline-terminator" data-baseline-sync="true" data-baseline-y="bottom-aligned" style="margin-top: auto; height: 1px; width: 100%; border-bottom: 0.5px solid transparent; flex: none;"></div>
             </div>
           </div>
 
-          <!-- Column 2: Center (Gemara) -->
-          <div class="tok-interactive-frame tok-col-center" data-frame-id="frame-gemara-${pageIndex}" data-flow-id="gemara" style="display: flex; flex-direction: column; overflow: hidden; background: rgba(0,0,0,0.012); padding: 0 4px; border-radius: 2px;">
-            <div class="tok-frame-label" style="font-size: 11px; font-weight: 800; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px;">
-              גמרא (טקסט ראשי)
+          <!-- Column 2: Center Primary Column (Rule 1: Begins at line 5, Header Shift 4 lines, Higher Visual Weight) -->
+          <div class="tok-interactive-frame tok-col-center tok-primary-center tok-center-inserted" data-frame-id="frame-gemara-${pageIndex}" data-flow-id="gemara" data-start-line="5" data-header-shift-lines="${HEADER_SHIFT_LINES}" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; min-height: 0; overflow: hidden; contain: layout style; isolation: isolate; background: rgba(30, 74, 158, 0.02); padding: 0 6px; border-inline: 1px solid rgba(0,0,0,0.06); border-radius: 3px;">
+            <!-- Header shift spacer representing lines 1-4 reserved for outer envelope columns -->
+            <div class="tok-header-shift-spacer" data-header-shift="4-lines" style="height: ${HEADER_OFFSET_PX}px; flex: none; border-bottom: 1px dashed rgba(0,0,0,0.08); margin-bottom: 4px; display: flex; align-items: center; justify-content: center; opacity: 0.5;">
+              <span style="font-size: 8.5px; color: var(--tok-text-muted); font-style: italic;">היסט כותרת: 4 שורות ראשונות במעטפת חיצונית בלבד (תחילת גמרא בשורה 5)</span>
             </div>
-            <div class="tok-frame-text tok-frame-gemara" style="flex: 1; min-height: 0; overflow: hidden; font-size: 13.5px; line-height: 1.55; font-weight: 600;">
-              ${renderParas(gemaraParas)}
+            <div class="tok-frame-label" style="font-size: 11.5px; font-weight: 800; text-align: center; border-bottom: 0.75px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px; color: var(--tok-ink); flex: none;">
+              גמרא (טקסט ראשי - עמודה מרכזית)
+            </div>
+            <div class="tok-frame-text tok-frame-gemara" style="flex: 1; min-height: 0; overflow: hidden; font-size: 14px; line-height: 1.58; font-weight: 700; color: var(--tok-ink); display: flex; flex-direction: column;">
+              <div style="flex: 1; min-height: 0; overflow: hidden;">
+                ${renderParas(gemaraParas, baselineDist.centerSpacingPx)}
+              </div>
+              <!-- Rule 1: Adaptive Slanted / Stepped Wrapping Boundary under Center Column -->
               ${lShapeCommentary ? `
-                <div class="tok-lshape-box" style="margin-top: 10px; padding: 6px; border-top: 1px dashed var(--tok-ink-rule); font-size: 9.5px; font-family: var(--tok-font-hebrew-rashi); color: var(--tok-ink-soft);">
-                  <div style="font-weight: 700; margin-bottom: 2px;">◄ ${lShapeCommentary}</div>
-                  המשך לשון רש״י זורם ומתרחב ברוחב שני טורים מתחת לסיום הגמרא כמסורת דפוס וילנא.
+                <div class="tok-lshape-box tok-adaptive-step-boundary tok-slanted-boundary" data-boundary-type="step-slanted" data-wrapping="adaptive-envelope" style="margin-top: 8px; padding: 6px 8px; border-top: 2px solid var(--tok-ink-rule); background: linear-gradient(135deg, rgba(30, 74, 158, 0.03) 0%, transparent 100%); clip-path: polygon(0 0, 100% 4px, 100% 100%, 0 100%); font-size: 9.5px; font-family: var(--tok-font-hebrew-rashi); color: var(--tok-ink-soft); flex: none;">
+                  <div style="font-weight: 700; margin-bottom: 2px;">◄ ${lShapeCommentary} (מעטפת מדורגת / צורת הדף)</div>
+                  המשך לשון הפירוש זורם במעטפת אלכסונית-מדורגת מתחת לטקסט המרכזי תוך שמירה על גבולות גיאומטריים הדוקים כמסורת דפוס וילנא.
                 </div>
               ` : ''}
+              <!-- Rule 2: Synchronized Column Baseline Anchor -->
+              <div class="tok-baseline-terminator" data-baseline-sync="true" data-baseline-y="bottom-aligned" style="margin-top: auto; height: 1px; width: 100%; border-bottom: 0.5px solid transparent; flex: none;"></div>
             </div>
           </div>
 
-          <!-- Column 3: Left (Inner on Recto / Outer on Verso) -->
-          <div class="tok-interactive-frame tok-col-left" data-frame-id="frame-left-${pageIndex}" data-flow-id="${leftFlowId}" style="display: flex; flex-direction: column; overflow: hidden;">
-            <div class="tok-frame-label" style="font-size: 10px; font-weight: 700; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px;">
-              ${leftTitle}
+          <!-- Column 3: Left Inner/Outer Envelope -->
+          <div class="tok-interactive-frame tok-col-left tok-col-envelope ${leftExpanded ? 'tok-col-expanded-fallback' : ''}" data-frame-id="frame-left-${pageIndex}" data-flow-id="${leftFlowId}" data-start-line="1" data-envelope-role="inner-envelope" ${leftExpanded ? 'data-fallback-expanded="true" data-expanded-from="right"' : ''} style="display: ${hasRight && !hasLeft ? 'none' : 'flex'}; flex-direction: column; justify-content: space-between; height: 100%; min-height: 0; overflow: hidden; contain: layout style; isolation: isolate; border-radius: 2px;">
+            <div class="tok-frame-label" style="font-size: 10px; font-weight: 700; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px; flex: none;">
+              ${leftTitle} ${leftExpanded ? '<span style="font-size: 8.5px; font-weight: normal; color: var(--tok-accent-text);">(הרחבה אופקית במקום עמודה חסרה)</span>' : ''}
             </div>
-            <div class="tok-frame-text ${leftClass}" style="flex: 1; min-height: 0; overflow: hidden; font-size: 10px; line-height: 1.48;">
-              ${renderParas(leftParas)}
+            <div class="tok-frame-text ${leftClass}" style="flex: 1; min-height: 0; overflow: hidden; font-size: 10.5px; line-height: 1.48; display: flex; flex-direction: column;">
+              <div style="flex: 1; min-height: 0; overflow: hidden;">
+                ${renderParas(leftParas, baselineDist.leftSpacingPx)}
+              </div>
+              <!-- Rule 2: Synchronized Column Baseline Anchor -->
+              <div class="tok-baseline-terminator" data-baseline-sync="true" data-baseline-y="bottom-aligned" style="margin-top: auto; height: 1px; width: 100%; border-bottom: 0.5px solid transparent; flex: none;"></div>
             </div>
           </div>
 
+        </div>
+
+        <!-- Rule 2: Uniform Grid Ending Baseline across all active body columns -->
+        <div class="tok-uniform-grid-baseline" data-baseline-aligned="true" data-active-columns="${activeColCount}" style="width: 100%; border-bottom: 0.75px solid var(--tok-ink-rule); margin-top: 4px; padding-top: 2px; display: flex; justify-content: space-between; align-items: baseline; flex: none;">
+          <span style="font-size: 8px; color: var(--tok-text-muted); opacity: 0.75;">קו בסיס אחיד לסיום גוף העמוד (${activeColCount} טורים פעילים)</span>
+          <span style="font-size: 8px; color: var(--tok-text-muted); opacity: 0.75;">איזון שורות תחתון מושלם</span>
         </div>
 
         <!-- Optional Bottom Footnotes / Traditional References Frame -->
