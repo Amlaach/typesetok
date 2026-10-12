@@ -218,20 +218,27 @@ Instead of relying on legacy monolithic software or overly complex design suites
 
 ### <img src="assets/icons/terminal.svg" width="20" height="20" alt="" valign="middle" /> Developer Quickstart
 
+For contributors, building from source, or setting up a local development environment:
+
+**Prerequisites:**
+- [Node.js 20+](https://nodejs.org) and `npm`
+- [Rust 1.85+](https://www.rust-lang.org) with Cargo
+
+**Build & Run Instructions:**
 ```bash
 # Clone repository
 git clone https://github.com/TypesetOK/typesetok.git
 cd typesetok
 
-# Install dependencies and build
+# Install dependencies and build TypeScript & UI bundle
 npm install
 npm run build
 
-# Run test suites
+# Run test suites (TypeScript & Rust)
 npm test
 cargo test --workspace
 
-# Launch desktop app
+# Launch desktop application
 npm start
 ```
 
