@@ -26,6 +26,7 @@ All Rights Reserved.
   6. Monetizing the Software or any Derivative Work through advertisements, sponsored content, user tracking, or data collection.
 * **"Contribution"** means any computer code, pull request, patch, bug fix, feature, script, schema, documentation, translation, graphic, idea, or enhancement submitted, conveyed, or committed by any person or entity to the Licensor, the Software repository, or the project’s communication channels.
 * **"Contributor"** means any individual, corporation, or entity that submits a Contribution.
+* **"You"** (or **"Your"**) means the individual or legal entity exercising any right under this License or accessing the Software, together with all of its Affiliates. **"Affiliate"** means any entity that directly or indirectly controls, is controlled by, or is under common control with You. Use of the Software by an individual in the course of, or in connection with, employment or engagement by any entity, or for the benefit of any entity, is deemed use by that entity. Routing any use of the Software, any Derivative Work, or any output through an Affiliate, non-profit vehicle, nominee, employee, contractor, or other intermediary in order to obtain a benefit that would constitute a Commercial Purpose if obtained directly is itself a Commercial Purpose.
 * **"Source Code"** means the preferred form of the work for making modifications to it, in full human-readable format with complete build and configuration scripts.
 
 ---
