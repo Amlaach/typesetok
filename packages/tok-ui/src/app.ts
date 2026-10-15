@@ -822,6 +822,10 @@ export class TypesetOkApp {
     return this.importTemplateModalInstance;
   }
 
+  public openTextCleanupWizard(): void {
+    // Will be fully wired in the subsequent integration commit
+  }
+
   private openTextStatsDialog(): void {
     const story = this.storyEditor ? this.storyEditor.getStory() : [];
     const fullText = story.map((s) => s.text).join('\n');
@@ -1102,6 +1106,12 @@ export class TypesetOkApp {
       this.toggleFindReplaceBar();
     }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
     bar.appendChild(findToggleBtn);
+
+    // Text cleanup & Dibur HaMatchil wizard button
+    const cleanupBtn = iconButton('sparkle', 'אשף ניקוי טקסט ודיבור המתחיל (Ctrl+Shift+C)', () => {
+      this.openTextCleanupWizard();
+    }, { size: 14, className: 'tok-btn tok-btn-ghost tok-btn-xs' });
+    bar.appendChild(cleanupBtn);
 
     bar.appendChild(el('span', 'tok-divider-v', { 'aria-hidden': 'true', style: 'height:18px' }));
 
@@ -1453,6 +1463,15 @@ export class TypesetOkApp {
         subtitle: t('cmdJustifySub'),
         shortcut: 'Ctrl+Alt+J',
         action: () => this.handleSystemAction('apply-justification')
+      },
+      {
+        id: 'cmd-text-cleanup',
+        icon: 'sparkle',
+        category: t('cmdCatTypography'),
+        title: t('cmdTextCleanupTitle'),
+        subtitle: t('cmdTextCleanupSub'),
+        shortcut: 'Ctrl+Shift+C',
+        action: () => this.openTextCleanupWizard()
       },
       {
         id: 'cmd-norm-niqqud',
@@ -2317,6 +2336,10 @@ export class TypesetOkApp {
       }
       case 'export-pdf':
         this.openExportDialog();
+        break;
+      case 'open-text-cleanup':
+      case 'text-cleanup':
+        this.openTextCleanupWizard();
         break;
       case 'normalize-hebrew': {
         const activeKey = this.activeFlowId || 'gemara';
