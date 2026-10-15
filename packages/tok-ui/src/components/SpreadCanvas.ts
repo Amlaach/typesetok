@@ -299,19 +299,69 @@ export class SpreadCanvas {
     this.zoomHud = el('div', 'tok-canvas-zoom-hud', {
       role: 'toolbar',
       'aria-label': 'בקרת תקריב וזום',
-      style: 'position:absolute;bottom:20px;inset-inline-end:24px;z-index:25;display:flex;align-items:center;gap:4px;padding:4px 6px;background:var(--tok-bg-surface-1);border:1px solid var(--tok-border-strong);border-radius:24px;box-shadow:0 4px 18px rgba(0,0,0,0.18);backdrop-filter:blur(8px);'
+      style: 'position:absolute;bottom:20px;inset-inline-end:24px;z-index:25;display:flex;align-items:center;gap:3px;padding:3px 6px;background:var(--tok-bg-surface-1);border:1px solid var(--tok-border-strong);border-radius:24px;box-shadow:0 4px 18px rgba(0,0,0,0.18);backdrop-filter:blur(8px);user-select:none;'
     });
+
+    // Drag handle for Zoom HUD
+    const zoomDrag = el('div', 'tok-zoom-drag-handle', {
+      title: 'גרור להזזת סרגל הזום',
+      style: 'cursor:grab;display:flex;align-items:center;justify-content:center;padding:0 3px;color:var(--tok-text-muted);'
+    });
+    zoomDrag.appendChild(icon('layers', 12));
+
+    let isZoomDragging = false;
+    let zStartX = 0;
+    let zStartY = 0;
+    let zInitLeft = 0;
+    let zInitTop = 0;
+
+    zoomDrag.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      isZoomDragging = true;
+      zStartX = e.clientX;
+      zStartY = e.clientY;
+      const rect = this.zoomHud.getBoundingClientRect();
+      const parentRect = this.element.getBoundingClientRect();
+      zInitLeft = rect.left - parentRect.left;
+      zInitTop = rect.top - parentRect.top;
+      this.zoomHud.style.insetInlineEnd = 'auto';
+      this.zoomHud.style.bottom = 'auto';
+      this.zoomHud.style.left = `${zInitLeft}px`;
+      this.zoomHud.style.top = `${zInitTop}px`;
+      zoomDrag.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!isZoomDragging) return;
+      const dx = e.clientX - zStartX;
+      const dy = e.clientY - zStartY;
+      const parentRect = this.element.getBoundingClientRect();
+      const newL = Math.max(10, Math.min(parentRect.width - 150, zInitLeft + dx));
+      const newT = Math.max(10, Math.min(parentRect.height - 45, zInitTop + dy));
+      this.zoomHud.style.left = `${newL}px`;
+      this.zoomHud.style.top = `${newT}px`;
+    });
+
+    window.addEventListener('pointerup', () => {
+      if (isZoomDragging) {
+        isZoomDragging = false;
+        zoomDrag.style.cursor = 'grab';
+      }
+    });
+
+    this.zoomHud.appendChild(zoomDrag);
 
     const zoomOut = iconButton('minus', 'הקטנת תצוגה (Ctrl+-)', () => this.applyUserZoom(this.zoomPercent - 10), {
       size: 13,
-      attrs: { style: 'width:26px;height:26px;border-radius:50%;' }
+      attrs: { style: 'width:24px;height:24px;border-radius:50%;' }
     });
     this.zoomHud.appendChild(zoomOut);
 
     this.zoomDisplayBtn = el('button', 'tok-btn tok-btn-ghost tok-btn-xs', {
       type: 'button',
       title: 'איפוס ל-100% (Ctrl+0)',
-      style: 'font-size:11px;font-weight:600;min-width:44px;padding:0 4px;height:26px;'
+      style: 'font-size:11px;font-weight:600;min-width:40px;padding:0 3px;height:24px;'
     }, `${this.zoomPercent}%`) as HTMLButtonElement;
     this.zoomDisplayBtn.addEventListener('click', () => {
       if (this.zoomPercent === 100) this.fitToWindow();
@@ -321,13 +371,13 @@ export class SpreadCanvas {
 
     const zoomIn = iconButton('plus', 'הגדלת תצוגה (Ctrl++)', () => this.applyUserZoom(this.zoomPercent + 10), {
       size: 13,
-      attrs: { style: 'width:26px;height:26px;border-radius:50%;' }
+      attrs: { style: 'width:24px;height:24px;border-radius:50%;' }
     });
     this.zoomHud.appendChild(zoomIn);
 
     const fitBtn = button('התאם', {
       className: 'tok-btn tok-btn-ghost tok-btn-xs',
-      attrs: { title: 'התאמה מלאה לחלון', style: 'font-size:11px;padding:0 6px;height:26px;' },
+      attrs: { title: 'התאמה מלאה לחלון', style: 'font-size:11px;padding:0 5px;height:24px;' },
       onClick: () => this.fitToWindow()
     });
     this.zoomHud.appendChild(fitBtn);
