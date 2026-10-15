@@ -18,6 +18,7 @@
 pub mod bidi;
 pub mod co_pagination;
 pub mod diagnostics;
+pub mod drop_cap;
 pub mod engine;
 pub mod fixtures;
 pub mod font;
@@ -49,6 +50,7 @@ pub use co_pagination::{
     TemplateConfig, TemplateKind,
 };
 pub use diagnostics::RecomputeReport;
+pub use drop_cap::{DropCapLayout, HebrewDropCapShaper};
 pub use engine::{TypesettingEngine, TypesettingEngineConfig};
 pub use font::{FontData, FontManager, FontMetrics};
 pub use footnote_paginator::{

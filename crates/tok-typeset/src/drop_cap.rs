@@ -1,0 +1,166 @@
+//! Hebrew Drop Cap and Opening Word Shaper ("חלון במילת פתיחה").
+//!
+//! Shapes large, bold opening words (including Niqqud and Ta'amim),
+//! calculates their exact visual bounding box, and synthesizes the
+//! rectangular/polygonal exclusion zone around them.
+
+use crate::font::{FontManager, DEFAULT_FAMILY};
+use crate::geometry::{GlyphBox, PhysicalRect};
+use crate::polygon::ExclusionZone;
+use tok_core::styles::{DropCapConfig, FONT_WEIGHT_BOLD};
+
+/// Layout and geometry result for an opening word / drop cap window.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropCapLayout {
+    /// Opening text extracted (e.g. "בְּרֵאשִׁית", "מֵאֵימָתַי").
+    pub text: String,
+    /// Remainder of the paragraph text following the opening word.
+    pub remaining_text: String,
+    /// Positioned glyphs of the drop cap word within the window.
+    pub glyphs: Vec<GlyphBox>,
+    /// Calculated font size in points used for the drop cap.
+    pub font_size_pt: f32,
+    /// Bounding rectangle of the window (in frame coordinates).
+    pub window_rect: PhysicalRect,
+    /// Geometric exclusion zone used to notch indented body lines.
+    pub exclusion: ExclusionZone,
+}
+
+pub struct HebrewDropCapShaper;
+
+impl HebrewDropCapShaper {
+    /// Splits paragraph text into the opening word/letters and the remaining body text.
+    pub fn split_opening_text(text: &str, config: &DropCapConfig) -> (String, String) {
+        let trimmed = text.trim_start();
+        if trimmed.is_empty() {
+            return (String::new(), String::new());
+        }
+
+        if config.whole_word {
+            // Find first whitespace separator
+            if let Some(pos) = trimmed.find(|c: char| c.is_whitespace()) {
+                let opening = trimmed[..pos].trim().to_string();
+                let remaining = trimmed[pos..].trim_start().to_string();
+                (opening, remaining)
+            } else {
+                (trimmed.to_string(), String::new())
+            }
+        } else {
+            // Take `characters_count` base letters along with any following combining marks (Niqqud/Ta'amim)
+            let mut count = 0;
+            let mut split_pos = trimmed.len();
+
+            let chars: Vec<(usize, char)> = trimmed.char_indices().collect();
+            for (idx, &(byte_offset, c)) in chars.iter().enumerate() {
+                // If it's a base Hebrew letter or alphanumeric
+                let is_combining = ('\u{0591}'..='\u{05BD}').contains(&c)
+                    || ('\u{05BF}'..='\u{05C7}').contains(&c);
+
+                if !is_combining && !c.is_whitespace() {
+                    count += 1;
+                    if count > config.characters_count {
+                        split_pos = byte_offset;
+                        break;
+                    }
+                }
+                // Also break on whitespace
+                if c.is_whitespace() && count > 0 {
+                    split_pos = byte_offset;
+                    break;
+                }
+                if idx == chars.len() - 1 {
+                    split_pos = trimmed.len();
+                }
+            }
+
+            let opening = trimmed[..split_pos].trim().to_string();
+            let remaining = trimmed[split_pos..].trim_start().to_string();
+            (opening, remaining)
+        }
+    }
+
+    /// Shapes the opening word and computes its exact window geometry and exclusion zone.
+    pub fn shape_drop_cap(
+        text: &str,
+        config: &DropCapConfig,
+        font_manager: &FontManager,
+        column_width_pt: f32,
+        line_height_pt: f32,
+        is_rtl: bool,
+    ) -> Option<DropCapLayout> {
+        if !config.enabled || text.trim().is_empty() || column_width_pt <= 0.0 {
+            return None;
+        }
+
+        let (opening_text, remaining_text) = Self::split_opening_text(text, config);
+        if opening_text.is_empty() {
+            return None;
+        }
+
+        let font_family = config
+            .font_family
+            .as_deref()
+            .unwrap_or(DEFAULT_FAMILY);
+
+        let lines_span = config.lines.max(1);
+        let window_height = (lines_span as f32) * line_height_pt;
+
+        let font_size = config
+            .font_size_pt
+            .unwrap_or_else(|| (line_height_pt * (lines_span as f32 - 0.15)).max(16.0));
+
+        // Use bold weight if specified
+        let font_face_name = font_manager.face_for(font_family, config.font_weight.max(FONT_WEIGHT_BOLD));
+        let session = font_manager.session(&font_face_name);
+
+        let (run, _choice) = session.shape(&opening_text, font_size, is_rtl);
+        let ink_width = run.total_width_pt;
+
+        let margin = config.margin_pt.max(0.0);
+        let window_width = ink_width + margin;
+
+        let (window_x, glyph_start_x) = if is_rtl {
+            let win_x = (column_width_pt - window_width).max(0.0);
+            let gl_x = win_x + margin; // margin is between window left edge and glyphs
+            (win_x, gl_x)
+        } else {
+            let win_x = 0.0;
+            let gl_x = 0.0; // in LTR, glyphs start at 0, margin on right
+            (win_x, gl_x)
+        };
+
+        let baseline_y = window_height - (line_height_pt * 0.22);
+
+        let mut curr_x = glyph_start_x;
+        let glyph_boxes: Vec<GlyphBox> = run
+            .glyphs
+            .into_iter()
+            .map(|g| {
+                let gb = GlyphBox {
+                    glyph_id: g.glyph_id,
+                    cluster: g.cluster,
+                    x: curr_x + g.x_offset,
+                    y: baseline_y + g.y_offset,
+                    width: g.x_advance,
+                    height: font_size,
+                    character: g.character,
+                    font_index: 0,
+                };
+                curr_x += g.x_advance;
+                gb
+            })
+            .collect();
+
+        let window_rect = PhysicalRect::new(window_x, 0.0, window_width, window_height);
+        let exclusion = ExclusionZone::new(window_rect, 0.0);
+
+        Some(DropCapLayout {
+            text: opening_text,
+            remaining_text,
+            glyphs: glyph_boxes,
+            font_size_pt: font_size,
+            window_rect,
+            exclusion,
+        })
+    }
+}
