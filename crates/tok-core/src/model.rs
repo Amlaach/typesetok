@@ -214,6 +214,8 @@ pub struct SectionNode {
     pub column_proportions: Option<Vec<f32>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expansion_flow_id: Option<FlowId>,
+    #[serde(default)]
+    pub anchors: crate::multi_flow_anchor::MultiFlowAnchorMap,
 }
 
 impl SectionNode {
@@ -227,7 +229,13 @@ impl SectionNode {
             layout_kind: None,
             column_proportions: None,
             expansion_flow_id: None,
+            anchors: crate::multi_flow_anchor::MultiFlowAnchorMap::default(),
         }
+    }
+
+    pub fn with_anchors(mut self, anchors: crate::multi_flow_anchor::MultiFlowAnchorMap) -> Self {
+        self.anchors = anchors;
+        self
     }
 
     pub fn with_layout_kind(mut self, kind: impl Into<String>) -> Self {
@@ -321,6 +329,8 @@ pub struct DocumentRoot {
     pub footnote_apparatus: Option<crate::header::FootnoteApparatusConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dependency_tracker: Option<crate::dependency::DocumentDependencyTracker>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub multi_flow_anchors: Option<crate::multi_flow_anchor::MultiFlowAnchorMap>,
 }
 
 impl DocumentRoot {
@@ -339,6 +349,7 @@ impl DocumentRoot {
             running_header: None,
             footnote_apparatus: None,
             dependency_tracker: None,
+            multi_flow_anchors: None,
         };
 
         // Add a default first section
