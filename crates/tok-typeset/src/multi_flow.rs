@@ -633,9 +633,13 @@ impl MultiFlowSolver {
                         let expansion_y = margin_y_pt + actual_term_h + gutter;
                         let expansion_h = non_negative(available_height - actual_term_h - gutter);
 
-                        // Find absorbing commentary
+                        // Find absorbing commentary (must be distinct from the terminating flow)
                         let absorbing_flow = if let Some(exp_id) = expansion_flow_id {
-                            column_flows.iter().find(|f| &f.flow_id == exp_id)
+                            if exp_id != term_id {
+                                column_flows.iter().find(|f| &f.flow_id == exp_id)
+                            } else {
+                                column_flows.iter().find(|f| &f.flow_id != term_id && f.role != FlowPlacementRole::Primary)
+                            }
                         } else {
                             column_flows.iter().find(|f| &f.flow_id != term_id && f.role != FlowPlacementRole::Primary)
                         };

@@ -1533,7 +1533,16 @@ impl TypesettingEngine {
                 None
             };
 
-            let expansion_id = template.expansion_flow_id.as_ref();
+            let expansion_id_derived = current_specs
+                .iter()
+                .filter(|s| s.role != FlowPlacementRole::Primary && s.role != FlowPlacementRole::BottomBand)
+                .max_by_key(|s| {
+                    let cur = flow_cursors.get(&s.flow_id.0).copied().unwrap_or(0);
+                    let total = flow_lines_map.get(&s.flow_id.0).map_or(0, |v| v.len());
+                    total.saturating_sub(cur)
+                })
+                .map(|s| &s.flow_id);
+            let expansion_id = template.expansion_flow_id.as_ref().or(expansion_id_derived);
             let dynamic_result = MultiFlowSolver::solve_dynamic_spread_with_commentary_absorption(
                 self.config.page_width_pt,
                 self.config.page_height_pt,
@@ -2465,6 +2474,71 @@ mod tests {
         assert!(flow_ids.contains(&"main"));
         assert!(flow_ids.contains(&"rashi"));
         assert!(flow_ids.contains(&"tosafot"));
+    }
+
+    #[test]
+    fn test_typeset_document_multi_flow_commentary_absorption() {
+        use tok_core::model::{Flow, FlowId, FlowType};
+
+        let mut doc = DocumentRoot::new("תלמוד עם מסגרת בליעה");
+        let sec = &mut doc.sections[0];
+
+        // 1. Rashi: short flow that finishes early on the page
+        let mut rashi_flow = Flow::new(FlowId::new("rashi"), FlowType::CommentA);
+        rashi_flow.add_paragraph(ParagraphNode::new(
+            FractionalIndex::new("r01"),
+            "rashi",
+            "רש\"י: קצר בלבד כאן ומסתיים מיד בתחילת העמוד.",
+        ));
+
+        // 2. Main text: substantial text filling the column
+        let main_flow = sec.main_flow_mut().unwrap();
+        for i in 0..45 {
+            main_flow.add_paragraph(ParagraphNode::new(
+                FractionalIndex::new(format!("m{:02}", i)),
+                "main",
+                "מאימתי קורין את שמע בערבין משעה שהכהנים נכנסין לאכול בתרומתן עד סוף האשמורה הראשונה דברי רבי אליעזר וחכמים אומרים עד חצות.",
+            ));
+        }
+
+        // 3. Tosafot: extensive text needing lots of space to absorb below Rashi
+        let mut tosafot_flow = Flow::new(FlowId::new("tosafot"), FlowType::CommentB);
+        for i in 0..20 {
+            tosafot_flow.add_paragraph(ParagraphNode::new(
+                FractionalIndex::new(format!("t{:02}", i)),
+                "tosafot",
+                "תוספות: פירש הקונטרס דאקרא קאי ותימה לר\"י דהא אמרינן לקמן מאימתי קורין את שמע בשחרית משיראה בין תכלת ללבן.",
+            ));
+        }
+
+        sec.flows.push(rashi_flow);
+        sec.flows.push(tosafot_flow);
+
+        let pages = engine().typeset_document(&doc);
+        assert!(!pages.is_empty());
+        let p0 = &pages[0];
+
+        let flow_ids: Vec<&str> = p0.frames.iter().map(|f| f.flow_id.as_str()).collect();
+        assert!(flow_ids.contains(&"main"), "Page must contain main flow");
+        assert!(flow_ids.contains(&"rashi"), "Page must contain rashi flow");
+        assert!(flow_ids.contains(&"tosafot"), "Page must contain tosafot flow");
+        assert!(
+            flow_ids.contains(&"tosafot_expansion"),
+            "Tosafot must expand into absorption frame beneath terminating Rashi"
+        );
+
+        let rashi_frame = p0.frames.iter().find(|f| f.flow_id == "rashi").unwrap();
+        let exp_frame = p0.frames.iter().find(|f| f.flow_id == "tosafot_expansion").unwrap();
+
+        // The expansion frame must be located below the terminating Rashi frame
+        assert!(
+            exp_frame.rect.y >= rashi_frame.rect.y + rashi_frame.rect.height,
+            "Expansion frame y ({}) must be below Rashi bottom ({})",
+            exp_frame.rect.y,
+            rashi_frame.rect.y + rashi_frame.rect.height
+        );
+        // The expansion frame must have placed lines
+        assert!(!exp_frame.lines.is_empty(), "Expansion frame must contain placed lines");
     }
 
     #[test]
