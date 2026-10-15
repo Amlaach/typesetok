@@ -45,11 +45,12 @@ pub mod template_synthesizer;
 
 pub use bidi::{BidiEngine, BidiRun};
 pub use co_pagination::{
-    calculate_typographic_split, ActiveSyncResult, ActiveSynchronizer, AnchorKey, AnchorPoint,
-    CancellationToken, CoPaginatedChunk, CoPaginatedCommentary, CoPaginatedPage,
-    CoPaginationDocument, CoPaginationEngine, CoPaginationResult, ColumnAllocation,
-    NonBlockingPaginator, PaginationEvent, SpreadMathematics, SyncRemedy, SynchronizerConfig,
-    TemplateConfig, TemplateKind,
+    calculate_typographic_split, ActiveSyncResult, ActiveSynchronizer, AnchorCascadeEngine,
+    AnchorKey, AnchorPoint, CancellationToken, CascadeLayoutResult, CascadeNodeInput,
+    CascadeReason, CascadeViolation, CascadedNodeEvent, CoPaginatedChunk, CoPaginatedCommentary,
+    CoPaginatedPage, CoPaginationDocument, CoPaginationEngine, CoPaginationResult,
+    ColumnAllocation, NonBlockingPaginator, PaginationEvent, SpreadMathematics, SyncRemedy,
+    SynchronizerConfig, TemplateConfig, TemplateKind,
 };
 pub use diagnostics::RecomputeReport;
 pub use drop_cap::{DropCapLayout, HebrewDropCapShaper};
