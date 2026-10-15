@@ -12,6 +12,8 @@ import { AboutModal } from './components/AboutModal';
 import { UserGuideModal } from './components/UserGuideModal';
 import { TextStatsModal } from './components/TextStatsModal';
 import { ImportTemplateModal } from './components/ImportTemplateModal';
+import { TextCleanupModal } from './components/TextCleanupModal';
+import { CleanupOptions, cleanupParagraphs } from './engine/textCleanup';
 import { PluginEngine } from './plugins/PluginEngine';
 import { StoryEditor, StoryParagraph } from 'tok-story-editor';
 import { PageDescriptor } from 'tok-viewer';
@@ -105,6 +107,7 @@ export class TypesetOkApp {
   private userGuideModalInstance?: UserGuideModal;
   private textStatsModalInstance?: TextStatsModal;
   private importTemplateModalInstance?: ImportTemplateModal;
+  private textCleanupModalInstance?: TextCleanupModal;
   private pendingImportResult: { result: ImportResult; filePath?: string } | null = null;
   private pluginEngine!: PluginEngine;
 
@@ -386,6 +389,9 @@ export class TypesetOkApp {
       onNormalizeNiqqud: () => {
         this.handleSystemAction('normalize-hebrew');
       },
+      onOpenTextCleanup: () => {
+        this.openTextCleanupWizard();
+      },
       onAlignFrames: (alignType) => {
         this.showToast(tf('toastAlignApplied', { type: alignType }));
       }
@@ -546,6 +552,13 @@ export class TypesetOkApp {
       if (!e.shiftKey && (code === 'KeyS' || key === 's' || key === 'ד')) {
         e.preventDefault();
         this.handleSystemAction('save-document');
+        return;
+      }
+
+      // Ctrl+Shift+C: Text Cleanup Wizard
+      if (e.shiftKey && (code === 'KeyC' || key === 'c' || key === 'ב')) {
+        e.preventDefault();
+        this.openTextCleanupWizard();
         return;
       }
 
@@ -822,8 +835,76 @@ export class TypesetOkApp {
     return this.importTemplateModalInstance;
   }
 
+  private get textCleanupModal(): TextCleanupModal {
+    if (!this.textCleanupModalInstance) {
+      this.textCleanupModalInstance = new TextCleanupModal({
+        onApply: (options) => this.applyTextCleanup(options)
+      });
+      this.root.appendChild(this.textCleanupModalInstance.element);
+    }
+    return this.textCleanupModalInstance;
+  }
+
   public openTextCleanupWizard(): void {
-    // Will be fully wired in the subsequent integration commit
+    const activeKey = this.activeFlowId || 'gemara';
+    this.textCleanupModal.show({
+      activeFlowId: activeKey,
+      activeFlowDisplayName: this.flowDisplayName(activeKey),
+      getParagraphs: (scope) => {
+        if (scope === 'activeFlow') {
+          return this.storyEditor ? this.storyEditor.getStory() : (this.documentState.flows[activeKey] || []);
+        } else {
+          const all: StoryParagraph[] = [];
+          for (const [k, paras] of Object.entries(this.documentState.flows)) {
+            if (k === this.activeFlowId && this.storyEditor) {
+              all.push(...this.storyEditor.getStory());
+            } else {
+              all.push(...paras);
+            }
+          }
+          return all;
+        }
+      }
+    });
+  }
+
+  private applyTextCleanup(options: CleanupOptions): void {
+    const activeKey = this.activeFlowId || 'gemara';
+    let totalChanges = 0;
+
+    if (options.scope === 'activeFlow') {
+      const curParas = this.storyEditor ? this.storyEditor.getStory() : (this.documentState.flows[activeKey] || []);
+      const { paragraphs: cleaned, stats } = cleanupParagraphs(curParas, options);
+      totalChanges = stats.totalModifications;
+
+      if (this.storyEditor) {
+        this.storyEditor.executeTransaction(t('textCleanupTitle'), () => {
+          this.storyEditor.loadStory(cleaned, false);
+        });
+      } else {
+        this.documentState.flows[activeKey] = cleaned;
+      }
+    } else {
+      // All flows
+      for (const [flowId, paras] of Object.entries(this.documentState.flows)) {
+        const cur = (flowId === this.activeFlowId && this.storyEditor) ? this.storyEditor.getStory() : paras;
+        const { paragraphs: cleaned, stats } = cleanupParagraphs(cur, options);
+        totalChanges += stats.totalModifications;
+
+        if (flowId === this.activeFlowId && this.storyEditor) {
+          this.storyEditor.executeTransaction(t('textCleanupTitle'), () => {
+            this.storyEditor.loadStory(cleaned, false);
+          });
+        } else {
+          this.documentState.flows[flowId] = cleaned;
+        }
+      }
+    }
+
+    this.setDirty(true);
+    this.scheduleWordCountUpdate();
+    this.scheduleRepaginate();
+    this.showToast(tf('textCleanupToastSuccess', { count: totalChanges }));
   }
 
   private openTextStatsDialog(): void {
