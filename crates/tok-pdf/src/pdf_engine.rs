@@ -880,6 +880,8 @@ mod tests {
             baseline_y: 20.0,
             height: 14.5,
             width: 300.0,
+            x_offset: 0.0,
+            is_drop_cap: false,
             glyphs: Vec::new(),
             text: "שלום עולם".to_string(),
             is_rtl: true,
@@ -1019,6 +1021,8 @@ mod tests {
             baseline_y: 20.0,
             height: 14.5,
             width: 10.0,
+            x_offset: 0.0,
+            is_drop_cap: false,
             glyphs: vec![
                 glyph(70_000, 0, 'x'),
                 glyph(0x05D0, tok_typeset::geometry::UNKNOWN_FONT, 'א'),

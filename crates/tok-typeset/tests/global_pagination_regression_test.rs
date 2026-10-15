@@ -272,6 +272,7 @@ fn test_regression_talmud_multi_flow_co_pagination_recto_verso_spine_alternation
         main_chunks,
         rashi_items,
         tosafot_items,
+        additional_streams: std::collections::HashMap::new(),
     };
 
     let result = engine.typeset_co_paginated_document(&template, &sync_config, &doc);

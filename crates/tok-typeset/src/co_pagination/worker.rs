@@ -141,6 +141,7 @@ mod tests {
                 text: "מאימתי קורין וכו' - פירוש קצר בראש העמוד".to_string(),
             }],
             tosafot_items: Vec::new(),
+            additional_streams: std::collections::HashMap::new(),
         };
 
         let (rx, _token) = NonBlockingPaginator::paginate_async(config, sync_config, doc, engine);
@@ -184,6 +185,7 @@ mod tests {
             }],
             rashi_items: Vec::new(),
             tosafot_items: Vec::new(),
+            additional_streams: std::collections::HashMap::new(),
         };
 
         let (rx, token) = NonBlockingPaginator::paginate_async(config, sync_config, doc, engine);

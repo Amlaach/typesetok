@@ -200,6 +200,7 @@ pub fn create_realistic_talmud_co_pagination_doc() -> CoPaginationDocument {
         main_chunks,
         rashi_items,
         tosafot_items,
+        additional_streams: std::collections::HashMap::new(),
     }
 }
 

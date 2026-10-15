@@ -31,6 +31,10 @@ pub enum TemplateKind {
         inner_commentary_ratio: f32,
         outer_commentary_ratio: f32,
     },
+    /// Multi-stream layout with arbitrary named flows and column proportions.
+    MultiFlow {
+        streams: Vec<(FlowId, f32)>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -142,6 +146,7 @@ impl SpreadMathematics {
                 *inner_commentary_ratio,
                 *outer_commentary_ratio,
             ),
+            TemplateKind::MultiFlow { .. } => (0.40, 0.30, 0.30),
         };
 
         let mut solver = GeometricConstraintSolver::new();
@@ -164,29 +169,63 @@ impl SpreadMathematics {
         let solver_result = (|| -> Result<(), crate::solver::SolverError> {
             page_model.apply(&mut solver, &page_geom)?;
 
-            let (flow_ids, col_specs, proportions) = if outer_ratio > 0.0 {
-                let (col1, col3) = match side {
-                    SpreadSide::Recto => ("rashi", "tosafot"),
-                    SpreadSide::Verso => ("tosafot", "rashi"),
-                };
-                let props = match side {
-                    SpreadSide::Recto => vec![inner_ratio, main_ratio, outer_ratio],
-                    SpreadSide::Verso => vec![outer_ratio, main_ratio, inner_ratio],
-                };
-                let ids = vec![FlowId::new(col1), FlowId::new("main"), FlowId::new(col3)];
-                let specs = vec![
-                    ColumnSpec::new(FlowId::new(col1)),
-                    ColumnSpec::new(FlowId::new("main")),
-                    ColumnSpec::new(FlowId::new(col3)),
-                ];
-                (ids, specs, props)
-            } else {
-                let ids = vec![FlowId::new("main"), FlowId::new("rashi")];
-                let specs = vec![
-                    ColumnSpec::new(FlowId::new("main")),
-                    ColumnSpec::new(FlowId::new("rashi")),
-                ];
-                (ids, specs, vec![main_ratio, inner_ratio])
+            let (flow_ids, col_specs, proportions) = match &config.kind {
+                TemplateKind::MikraotGedolot => {
+                    let streams = match side {
+                        SpreadSide::Recto => vec![
+                            (FlowId::new("rashi"), 0.24),
+                            (FlowId::new("main"), 0.38),
+                            (FlowId::new("targum"), 0.18),
+                            (FlowId::new("ramban"), 0.20),
+                        ],
+                        SpreadSide::Verso => vec![
+                            (FlowId::new("ramban"), 0.20),
+                            (FlowId::new("targum"), 0.18),
+                            (FlowId::new("main"), 0.38),
+                            (FlowId::new("rashi"), 0.24),
+                        ],
+                    };
+                    let ids: Vec<FlowId> = streams.iter().map(|(id, _)| id.clone()).collect();
+                    let specs: Vec<ColumnSpec> = ids.iter().map(|id| ColumnSpec::new(id.clone())).collect();
+                    let props: Vec<f32> = streams.iter().map(|(_, p)| *p).collect();
+                    (ids, specs, props)
+                }
+                TemplateKind::MultiFlow { streams } => {
+                    let mut s = streams.clone();
+                    if side == SpreadSide::Verso {
+                        s.reverse();
+                    }
+                    let ids: Vec<FlowId> = s.iter().map(|(id, _)| id.clone()).collect();
+                    let specs: Vec<ColumnSpec> = ids.iter().map(|id| ColumnSpec::new(id.clone())).collect();
+                    let props: Vec<f32> = s.iter().map(|(_, p)| *p).collect();
+                    (ids, specs, props)
+                }
+                _ => {
+                    if outer_ratio > 0.0 {
+                        let (col1, col3) = match side {
+                            SpreadSide::Recto => ("rashi", "tosafot"),
+                            SpreadSide::Verso => ("tosafot", "rashi"),
+                        };
+                        let props = match side {
+                            SpreadSide::Recto => vec![inner_ratio, main_ratio, outer_ratio],
+                            SpreadSide::Verso => vec![outer_ratio, main_ratio, inner_ratio],
+                        };
+                        let ids = vec![FlowId::new(col1), FlowId::new("main"), FlowId::new(col3)];
+                        let specs = vec![
+                            ColumnSpec::new(FlowId::new(col1)),
+                            ColumnSpec::new(FlowId::new("main")),
+                            ColumnSpec::new(FlowId::new(col3)),
+                        ];
+                        (ids, specs, props)
+                    } else {
+                        let ids = vec![FlowId::new("main"), FlowId::new("rashi")];
+                        let specs = vec![
+                            ColumnSpec::new(FlowId::new("main")),
+                            ColumnSpec::new(FlowId::new("rashi")),
+                        ];
+                        (ids, specs, vec![main_ratio, inner_ratio])
+                    }
+                }
             };
 
             let multi_model = MultiColumnConstraintModel::new(&flow_ids);
@@ -306,6 +345,9 @@ impl SpreadMathematics {
         }
 
         if !is_rashi {
+            if let Some(col) = self.columns.iter().find(|c| c.stream_id == stream_id) {
+                return MeasureProfile::uniform(col.width_pt);
+            }
             // Tosafot or other outer commentary uses regular uniform width
             return MeasureProfile::uniform(self.outer_column_width_pt);
         }

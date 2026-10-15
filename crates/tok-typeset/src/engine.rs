@@ -2572,6 +2572,7 @@ mod tests {
                 text: "קורין את שמע: פירש רש\"י".to_string(),
             }],
             tosafot_items: vec![],
+            additional_streams: std::collections::HashMap::new(),
         };
 
         let result = eng.typeset_co_paginated_document(&tmpl, &sync_cfg, &doc);
@@ -2602,6 +2603,7 @@ mod tests {
                 text: "מסובין: בהסבה של מצוה".to_string(),
             }],
             tosafot_items: vec![],
+            additional_streams: std::collections::HashMap::new(),
         };
 
         let (rx, _token) = eng.paginate_co_paginated_document_async(tmpl, sync_cfg, doc);

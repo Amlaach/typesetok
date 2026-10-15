@@ -57,6 +57,7 @@ fn test_multi_page_talmud_spread_facing_pages_alternation() {
         main_chunks,
         rashi_items,
         tosafot_items,
+        additional_streams: std::collections::HashMap::new(),
     };
 
     let result = engine.typeset_co_paginated_document(&template, &sync_config, &doc);
@@ -146,6 +147,7 @@ fn test_active_synchronization_spring_remedy() {
             text: "עוגן: פירוש רש\"י המתחיל מוקדם".to_string(),
         }],
         tosafot_items: vec![],
+        additional_streams: std::collections::HashMap::new(),
     };
 
     let result = engine.typeset_co_paginated_document(&template, &sync_config, &doc);
@@ -215,6 +217,7 @@ fn test_commentary_overflow_splits_gemara_and_carries_over() {
             },
         ],
         tosafot_items: vec![],
+        additional_streams: std::collections::HashMap::new(),
     };
 
     let result = engine.typeset_co_paginated_document(&template, &sync_config, &doc);
@@ -245,6 +248,7 @@ fn test_async_paginator_incremental_streaming_and_cancellation() {
             text: "רש\"י על המשנה".to_string(),
         }],
         tosafot_items: vec![],
+        additional_streams: std::collections::HashMap::new(),
     };
 
     let (rx, _token) = NonBlockingPaginator::paginate_async(
@@ -333,6 +337,7 @@ fn test_multi_stream_co_pagination_defect_prevention_no_orphans_or_widows() {
         main_chunks,
         rashi_items,
         tosafot_items: Vec::new(),
+        additional_streams: std::collections::HashMap::new(),
     };
 
     let result = engine.typeset_co_paginated_document(&template, &sync_config, &doc);
@@ -419,6 +424,7 @@ fn test_multi_stream_co_pagination_anchor_continuity_and_flow_conservation() {
         main_chunks,
         rashi_items,
         tosafot_items,
+        additional_streams: std::collections::HashMap::new(),
     };
 
     let result = engine.typeset_co_paginated_document(&template, &sync_config, &doc);
