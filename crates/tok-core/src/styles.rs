@@ -379,4 +379,45 @@ mod tests {
         assert_eq!(back, fmt);
         assert!(CharacterFormat::default().is_empty());
     }
+
+    #[test]
+    fn test_drop_cap_serialization_defaults() {
+        let dc = DropCapConfig::default();
+        assert!(dc.enabled);
+        assert_eq!(dc.lines, 3);
+        assert_eq!(dc.characters_count, 1);
+        assert!(dc.whole_word);
+        assert_eq!(dc.font_weight, FONT_WEIGHT_BOLD);
+        assert_eq!(dc.margin_pt, 6.0);
+        assert_eq!(dc.font_size_pt, None);
+
+        let json = serde_json::to_string(&dc).unwrap();
+        let deserialized: DropCapConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(dc, deserialized);
+    }
+
+    #[test]
+    fn test_drop_cap_apply_patch_overrides() {
+        let mut style = ParagraphStyle::default();
+        assert_eq!(style.drop_cap, None);
+
+        let dc = DropCapConfig {
+            enabled: true,
+            lines: 2,
+            characters_count: 1,
+            whole_word: false,
+            font_family: Some("Frank Ruhl Libre".to_string()),
+            font_weight: 800,
+            margin_pt: 8.5,
+            font_size_pt: Some(36.0),
+        };
+
+        let patch = StylePatch {
+            drop_cap: Some(dc.clone()),
+            ..Default::default()
+        };
+
+        style.apply_patch(&patch);
+        assert_eq!(style.drop_cap, Some(dc));
+    }
 }
