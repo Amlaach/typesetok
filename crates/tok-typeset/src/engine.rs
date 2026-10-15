@@ -217,6 +217,83 @@ impl TypesettingEngine {
         font_size_pt: f32,
         line_height_pt: f32,
     ) -> Vec<LineBox> {
+        let dc_opt = paragraph
+            .style_patches
+            .iter()
+            .filter_map(|p| p.drop_cap.as_ref())
+            .last()
+            .cloned();
+
+        let line_height = if line_height_pt.is_finite() && line_height_pt > 0.0 {
+            line_height_pt
+        } else {
+            (if font_size_pt.is_finite() && font_size_pt > 0.0 {
+                font_size_pt
+            } else {
+                DEFAULT_FONT_SIZE_PT
+            }) * 1.3
+        };
+
+        let bidi = BidiInfo::new(&paragraph.text, None);
+        let is_rtl = bidi.paragraphs.first().is_some_and(|p| p.level.is_rtl());
+
+        if let Some(ref dc) = dc_opt {
+            if dc.enabled {
+                let col_w = profile.width_for_line(0);
+                if let Some(drop_layout) = crate::drop_cap::HebrewDropCapShaper::shape_drop_cap(
+                    &paragraph.text,
+                    dc,
+                    &self.font_manager,
+                    col_w,
+                    line_height,
+                    is_rtl,
+                ) {
+                    let notched_profile =
+                        profile.with_drop_cap_exclusion(line_height, &drop_layout.exclusion, is_rtl);
+                    let mut rem_node = paragraph.clone();
+                    rem_node.text = drop_layout.remaining_text;
+                    rem_node.style_patches.retain(|p| p.drop_cap.is_none());
+
+                    let session = self.font_manager.session(font_family);
+                    let body_lines = Self::typeset_with_session_shaped(
+                        &session,
+                        &rem_node,
+                        &notched_profile,
+                        font_size_pt,
+                        line_height_pt,
+                    );
+
+                    let drop_cap_face = self.font_manager.face_for(
+                        dc.font_family.as_deref().unwrap_or(font_family),
+                        dc.font_weight.max(tok_core::styles::FONT_WEIGHT_BOLD),
+                    );
+
+                    let mut all_lines = Vec::with_capacity(body_lines.len() + 1);
+                    all_lines.push(LineBox {
+                        line_index: 0,
+                        paragraph_id: Some(paragraph.id),
+                        baseline_y: drop_layout.window_rect.height - (line_height * 0.22),
+                        height: drop_layout.window_rect.height,
+                        width: drop_layout.window_rect.width,
+                        glyphs: drop_layout.glyphs,
+                        text: drop_layout.text,
+                        is_rtl,
+                        fonts: vec![drop_cap_face],
+                        is_drop_cap: true,
+                        x_offset: drop_layout.window_rect.x,
+                    });
+
+                    for (i, mut bl) in body_lines.into_iter().enumerate() {
+                        bl.line_index = i + 1;
+                        bl.paragraph_id = Some(paragraph.id);
+                        all_lines.push(bl);
+                    }
+
+                    return all_lines;
+                }
+            }
+        }
+
         let session = self.font_manager.session(font_family);
         Self::typeset_with_session_shaped(
             &session,
@@ -416,8 +493,8 @@ impl TypesettingEngine {
                 HebrewJustifier::justify_line(line_glyphs, target_w, font_size, is_last);
 
             let line_width: f32 = justified.glyphs.iter().map(|g| g.x_advance).sum();
-            // RTL lines start at the right edge of the assigned line measure.
-            let mut current_x = if is_rtl { target_w - line_width } else { 0.0 };
+            // RTL lines start at the right edge of the assigned line measure, plus span.x_offset.
+            let mut current_x = span.x_offset + if is_rtl { target_w - line_width } else { 0.0 };
             let glyph_boxes: Vec<GlyphBox> = justified
                 .glyphs
                 .into_iter()
@@ -448,6 +525,8 @@ impl TypesettingEngine {
                 text: line_text,
                 is_rtl,
                 fonts: fonts.clone(),
+                is_drop_cap: false,
+                x_offset: span.x_offset,
             });
         }
 

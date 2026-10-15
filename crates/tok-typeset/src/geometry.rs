@@ -78,6 +78,12 @@ pub struct LineBox {
     /// Empty for lines produced without font information.
     #[serde(default)]
     pub fonts: Vec<String>,
+    /// Whether this line represents an opening word / drop cap window.
+    #[serde(default)]
+    pub is_drop_cap: bool,
+    /// Horizontal offset of this line relative to the text frame (in pt).
+    #[serde(default)]
+    pub x_offset: f32,
 }
 
 impl LineBox {
