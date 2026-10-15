@@ -1510,8 +1510,31 @@ impl TypesettingEngine {
                 None
             };
 
+            let comm_termination = if primary_target_h.is_none() {
+                current_specs
+                    .iter()
+                    .filter(|s| s.role != FlowPlacementRole::Primary && s.role != FlowPlacementRole::BottomBand)
+                    .find_map(|s| {
+                        let cur = flow_cursors.get(&s.flow_id.0).copied().unwrap_or(0);
+                        if let Some(lines) = flow_lines_map.get(&s.flow_id.0) {
+                            let rem_lines = &lines[cur..];
+                            let rem_h: f32 = rem_lines.iter().map(|l| l.height).sum();
+                            let max_h = self.config.page_height_pt - 2.0 * self.config.margin_top_pt;
+                            if rem_h > 0.0 && rem_h < max_h - MultiFlowSolver::L_SHAPE_MIN_GAP_PT {
+                                Some((s.flow_id.clone(), rem_h))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+            } else {
+                None
+            };
+
             let expansion_id = template.expansion_flow_id.as_ref();
-            let dynamic_result = MultiFlowSolver::solve_dynamic_spread_with_footnotes(
+            let dynamic_result = MultiFlowSolver::solve_dynamic_spread_with_commentary_absorption(
                 self.config.page_width_pt,
                 self.config.page_height_pt,
                 self.config.margin_inner_pt,
@@ -1522,6 +1545,7 @@ impl TypesettingEngine {
                 primary_target_h,
                 footnote_target,
                 expansion_id,
+                comm_termination,
             );
 
             let mut page_frames = Vec::new();

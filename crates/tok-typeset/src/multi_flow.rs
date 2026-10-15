@@ -467,6 +467,37 @@ impl MultiFlowSolver {
         footnote_target_height_pt: Option<f32>,
         expansion_flow_id: Option<&FlowId>,
     ) -> DynamicTalmudPageResult {
+        Self::solve_dynamic_spread_with_commentary_absorption(
+            page_width_pt,
+            page_height_pt,
+            margin_inner_pt,
+            margin_outer_pt,
+            margin_y_pt,
+            flows,
+            side,
+            primary_target_height_pt,
+            footnote_target_height_pt,
+            expansion_flow_id,
+            None,
+        )
+    }
+
+    /// Solves dynamic layout with L-shaped commentary expansion below early-terminating primary
+    /// or commentary streams, and bottom-anchored floating footnotes.
+    #[allow(clippy::too_many_arguments)]
+    pub fn solve_dynamic_spread_with_commentary_absorption(
+        page_width_pt: f32,
+        page_height_pt: f32,
+        margin_inner_pt: f32,
+        margin_outer_pt: f32,
+        margin_y_pt: f32,
+        flows: &[FlowGeometrySpec],
+        side: SpreadSide,
+        primary_target_height_pt: Option<f32>,
+        footnote_target_height_pt: Option<f32>,
+        expansion_flow_id: Option<&FlowId>,
+        commentary_termination: Option<(FlowId, f32)>,
+    ) -> DynamicTalmudPageResult {
         let (margin_left, margin_right) = Self::margins(margin_inner_pt, margin_outer_pt, side);
 
         let content_width = non_negative(page_width_pt - margin_left - margin_right);
@@ -590,6 +621,40 @@ impl MultiFlowSolver {
             }
             None => available_height,
         };
+
+        // 4. Dynamic commentary absorption if a commentary finishes early and primary does not expand
+        if !has_l_shape {
+            if let Some((ref term_id, term_h)) = commentary_termination {
+                let actual_term_h = non_negative(term_h).min(available_height);
+                if actual_term_h < available_height - Self::L_SHAPE_MIN_GAP_PT {
+                    if let Some(term_alloc) = allocations.iter_mut().find(|a| &a.flow_id == term_id) {
+                        term_alloc.allocated_height_pt = actual_term_h;
+                        let (tx, tw) = (term_alloc.allocated_x_pt, term_alloc.allocated_width_pt);
+                        let expansion_y = margin_y_pt + actual_term_h + gutter;
+                        let expansion_h = non_negative(available_height - actual_term_h - gutter);
+
+                        // Find absorbing commentary
+                        let absorbing_flow = if let Some(exp_id) = expansion_flow_id {
+                            column_flows.iter().find(|f| &f.flow_id == exp_id)
+                        } else {
+                            column_flows.iter().find(|f| &f.flow_id != term_id && f.role != FlowPlacementRole::Primary)
+                        };
+
+                        if let Some(absorb_spec) = absorbing_flow {
+                            let exp_id = FlowId::new(format!("{}_expansion", absorb_spec.flow_id.0));
+                            allocations.push(SolvedFlowAllocation {
+                                flow_id: exp_id,
+                                allocated_x_pt: tx,
+                                allocated_y_pt: expansion_y,
+                                allocated_width_pt: tw,
+                                allocated_height_pt: expansion_h,
+                            });
+                            has_l_shape = true;
+                        }
+                    }
+                }
+            }
+        }
 
         DynamicTalmudPageResult {
             allocations,
