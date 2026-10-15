@@ -311,3 +311,130 @@ export function analyzeParagraphs(paragraphs: StoryParagraph[], options: Cleanup
 
   return stats;
 }
+
+
+/**
+ * Cleans a list of paragraphs according to the specified cleanup options.
+ * Modifies text, recalculates spans, and automatically bolds Dibur HaMatchil.
+ */
+export function cleanupParagraphs(
+  paragraphs: StoryParagraph[],
+  options: CleanupOptions
+): { paragraphs: StoryParagraph[]; stats: CleanupStats } {
+  const stats: CleanupStats = {
+    doubleSpacesFixed: 0,
+    spacesBeforePunctFixed: 0,
+    spacesAfterPunctFixed: 0,
+    quotesConverted: 0,
+    gereshConverted: 0,
+    emptyParagraphsRemoved: 0,
+    diburHaMatchilBolded: 0,
+    totalModifications: 0
+  };
+
+  const result: StoryParagraph[] = [];
+  let prevEmpty = false;
+
+  for (const original of paragraphs) {
+    const rawText = original.text || '';
+    const isBlank = rawText.trim().length === 0;
+
+    if (isBlank) {
+      if (options.collapseEmptyParagraphs && prevEmpty) {
+        stats.emptyParagraphsRemoved++;
+        continue;
+      }
+      prevEmpty = true;
+      result.push({
+        id: original.id,
+        styleId: original.styleId,
+        text: '',
+        spans: [],
+        patch: original.patch ? { ...original.patch } : undefined
+      });
+      continue;
+    }
+    prevEmpty = false;
+
+    let curText = rawText;
+    let curSpans = original.spans ? original.spans.map((s) => ({ ...s, format: { ...s.format } })) : [];
+
+    // 1. Clean double spaces
+    if (options.cleanDoubleSpaces) {
+      const r = applyReplacementWithSpans(curText, /[ \t]{2,}/g, () => ' ', curSpans);
+      curText = r.newText;
+      curSpans = r.newSpans;
+      stats.doubleSpacesFixed += r.count;
+    }
+
+    // 2. Clean spaces before punctuation
+    if (options.cleanSpacesBeforePunct) {
+      const r = applyReplacementWithSpans(curText, /[ \t]+([,.:;!?׃])/g, (_m, p1) => p1, curSpans);
+      curText = r.newText;
+      curSpans = r.newSpans;
+      stats.spacesBeforePunctFixed += r.count;
+    }
+
+    // 3. Ensure space after punctuation when directly touching Hebrew letters
+    if (options.ensureSpaceAfterPunct) {
+      const r1 = applyReplacementWithSpans(curText, /([,.;!?׃])([\u0590-\u05FF])/g, (_m, p1, p2) => `${p1} ${p2}`, curSpans);
+      curText = r1.newText;
+      curSpans = r1.newSpans;
+      stats.spacesAfterPunctFixed += r1.count;
+
+      const r2 = applyReplacementWithSpans(curText, /([:])([\u0590-\u05FF]{2,})/g, (_m, p1, p2) => `${p1} ${p2}`, curSpans);
+      curText = r2.newText;
+      curSpans = r2.newSpans;
+      stats.spacesAfterPunctFixed += r2.count;
+    }
+
+    // 4. Normalize quotes to Hebrew Gershayim (״) and Geresh (׳)
+    if (options.normalizeQuotesAndGeresh) {
+      // Double quote between Hebrew characters -> Gershayim U+05F4
+      const rq = applyReplacementWithSpans(curText, /([\u0590-\u05FF])"([\u0590-\u05FF])/g, (_m, p1, p2) => `${p1}״${p2}`, curSpans);
+      curText = rq.newText;
+      curSpans = rq.newSpans;
+      stats.quotesConverted += rq.count;
+
+      // Single quote at end of Hebrew word/abbreviation -> Geresh U+05F3
+      const rg = applyReplacementWithSpans(
+        curText,
+        /([\u0590-\u05FF])'(?=\s|[,.:;!?׃\-]|$|[^\u0590-\u05FF])/g,
+        (_m, p1) => `${p1}׳`,
+        curSpans
+      );
+      curText = rg.newText;
+      curSpans = rg.newSpans;
+      stats.gereshConverted += rg.count;
+    }
+
+    // 5. Automatic Dibur HaMatchil run-in bold styling
+    if (options.boldDiburHaMatchil) {
+      const delimIdx = findDiburDelimiter(curText, options.diburDelimiter);
+      if (delimIdx > 0) {
+        const boldEnd = delimIdx + 1; // Include delimiter in bold formatting
+        curSpans = formatRangeInSpans(curSpans, 0, boldEnd, { fontWeight: 700 }, curText.length);
+        stats.diburHaMatchilBolded++;
+      }
+    }
+
+    result.push({
+      id: original.id,
+      styleId: original.styleId,
+      text: curText,
+      spans: curSpans.length > 0 ? curSpans : undefined,
+      patch: original.patch ? { ...original.patch } : undefined
+    });
+  }
+
+  stats.totalModifications =
+    stats.doubleSpacesFixed +
+    stats.spacesBeforePunctFixed +
+    stats.spacesAfterPunctFixed +
+    stats.quotesConverted +
+    stats.gereshConverted +
+    stats.emptyParagraphsRemoved +
+    stats.diburHaMatchilBolded;
+
+  return { paragraphs: result, stats };
+}
