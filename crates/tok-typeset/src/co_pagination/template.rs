@@ -32,9 +32,7 @@ pub enum TemplateKind {
         outer_commentary_ratio: f32,
     },
     /// Multi-stream layout with arbitrary named flows and column proportions.
-    MultiFlow {
-        streams: Vec<(FlowId, f32)>,
-    },
+    MultiFlow { streams: Vec<(FlowId, f32)> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -186,7 +184,8 @@ impl SpreadMathematics {
                         ],
                     };
                     let ids: Vec<FlowId> = streams.iter().map(|(id, _)| id.clone()).collect();
-                    let specs: Vec<ColumnSpec> = ids.iter().map(|id| ColumnSpec::new(id.clone())).collect();
+                    let specs: Vec<ColumnSpec> =
+                        ids.iter().map(|id| ColumnSpec::new(id.clone())).collect();
                     let props: Vec<f32> = streams.iter().map(|(_, p)| *p).collect();
                     (ids, specs, props)
                 }
@@ -196,7 +195,8 @@ impl SpreadMathematics {
                         s.reverse();
                     }
                     let ids: Vec<FlowId> = s.iter().map(|(id, _)| id.clone()).collect();
-                    let specs: Vec<ColumnSpec> = ids.iter().map(|id| ColumnSpec::new(id.clone())).collect();
+                    let specs: Vec<ColumnSpec> =
+                        ids.iter().map(|id| ColumnSpec::new(id.clone())).collect();
                     let props: Vec<f32> = s.iter().map(|(_, p)| *p).collect();
                     (ids, specs, props)
                 }

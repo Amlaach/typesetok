@@ -328,13 +328,14 @@ mod tests {
         let ex = ExclusionZone::new(PhysicalRect::new(320.0, 0.0, 80.0, 45.0), 5.0);
 
         // Line 1: y = 0 to 15 (intersecting drop cap exclusion)
-        let line1_spans = poly.scanline_spans_with_exclusions(0.0, 15.0, &[ex.clone()]);
+        let line1_spans = poly.scanline_spans_with_exclusions(0.0, 15.0, std::slice::from_ref(&ex));
         assert_eq!(line1_spans.len(), 1);
         // Available width should be 320 - 5.0 = 315.0
         assert!((line1_spans[0].width - 315.0).abs() < 1e-2);
 
         // Line 4: y = 60 to 75 (below drop cap window + margin)
-        let line4_spans = poly.scanline_spans_with_exclusions(60.0, 15.0, &[ex]);
+        let line4_spans =
+            poly.scanline_spans_with_exclusions(60.0, 15.0, std::slice::from_ref(&ex));
         assert_eq!(line4_spans.len(), 1);
         assert!((line4_spans[0].width - 400.0).abs() < 1e-2);
     }

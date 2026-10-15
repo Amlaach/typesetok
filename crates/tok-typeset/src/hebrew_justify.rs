@@ -213,9 +213,11 @@ impl HebrewJustifier {
         is_last_line_of_para: bool,
         is_rtl: bool,
     ) -> VariableLineLayout {
-        let justified = Self::justify_line(glyphs, target_width_pt, font_size_pt, is_last_line_of_para);
+        let justified =
+            Self::justify_line(glyphs, target_width_pt, font_size_pt, is_last_line_of_para);
         let total_width: f32 = justified.glyphs.iter().map(|g| g.x_advance).sum();
-        let start_x = Self::calculate_line_start_x(total_width, target_width_pt, x_offset_pt, is_rtl);
+        let start_x =
+            Self::calculate_line_start_x(total_width, target_width_pt, x_offset_pt, is_rtl);
         VariableLineLayout {
             justified,
             total_width,
@@ -398,26 +400,14 @@ mod tests {
         let run2 = TextShaper::shape_fallback(line2_text, 11.0, true);
 
         // Line 1: narrow upper column (x_offset = 200.0, width = 100.0)
-        let l1 = HebrewJustifier::justify_line_with_offset(
-            run1.glyphs,
-            100.0,
-            200.0,
-            11.0,
-            false,
-            true,
-        );
+        let l1 =
+            HebrewJustifier::justify_line_with_offset(run1.glyphs, 100.0, 200.0, 11.0, false, true);
         assert!((l1.total_width - 100.0).abs() < 0.5);
         assert!((l1.start_x - 200.0).abs() < 0.5);
 
         // Line 2: wide expanded lower absorption band (x_offset = 0.0, width = 300.0)
-        let l2 = HebrewJustifier::justify_line_with_offset(
-            run2.glyphs,
-            300.0,
-            0.0,
-            11.0,
-            false,
-            true,
-        );
+        let l2 =
+            HebrewJustifier::justify_line_with_offset(run2.glyphs, 300.0, 0.0, 11.0, false, true);
         assert!((l2.total_width - 300.0).abs() < 0.5);
         assert!((l2.start_x - 0.0).abs() < 0.5);
     }

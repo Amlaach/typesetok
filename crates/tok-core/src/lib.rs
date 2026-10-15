@@ -26,9 +26,7 @@ pub use model::{
     DocumentMetadata, DocumentModel, DocumentRoot, Flow, FlowId, FlowType, ParagraphNode,
     SectionNode,
 };
-pub use multi_flow_anchor::{
-    AnchorDefinition, AnchorId, CommentaryLink, MultiFlowAnchorMap,
-};
+pub use multi_flow_anchor::{AnchorDefinition, AnchorId, CommentaryLink, MultiFlowAnchorMap};
 pub use normalizer::{HebrewMarkCategory, HebrewNormalizer};
 pub use numbering::{GematriaPunctuation, NumberingFormatter, NumberingScheme, NumberingScope};
 pub use outline::{DocumentHierarchyNode, DocumentOutline, HierarchyLevel};

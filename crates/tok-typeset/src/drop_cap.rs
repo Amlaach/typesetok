@@ -97,10 +97,7 @@ impl HebrewDropCapShaper {
             return None;
         }
 
-        let font_family = config
-            .font_family
-            .as_deref()
-            .unwrap_or(DEFAULT_FAMILY);
+        let font_family = config.font_family.as_deref().unwrap_or(DEFAULT_FAMILY);
 
         let lines_span = config.lines.max(1);
         let window_height = (lines_span as f32) * line_height_pt;
@@ -110,7 +107,8 @@ impl HebrewDropCapShaper {
             .unwrap_or_else(|| (line_height_pt * (lines_span as f32 - 0.15)).max(16.0));
 
         // Use bold weight if specified
-        let font_face_name = font_manager.face_for(font_family, config.font_weight.max(FONT_WEIGHT_BOLD));
+        let font_face_name =
+            font_manager.face_for(font_family, config.font_weight.max(FONT_WEIGHT_BOLD));
         let session = font_manager.session(&font_face_name);
 
         let (run, _choice) = session.shape(&opening_text, font_size, is_rtl);
@@ -176,10 +174,8 @@ mod tests {
             ..Default::default()
         };
 
-        let (first, rem) = HebrewDropCapShaper::split_opening_text(
-            "בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם",
-            &config,
-        );
+        let (first, rem) =
+            HebrewDropCapShaper::split_opening_text("בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם", &config);
         assert_eq!(first, "בְּרֵאשִׁ֖ית");
         assert_eq!(rem, "בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם");
     }
@@ -193,10 +189,7 @@ mod tests {
         };
 
         // First 2 base letters: מ and א, keeping their vowels/dagesh attached
-        let (first, rem) = HebrewDropCapShaper::split_opening_text(
-            "מֵאֵימָתַי קוֹרִין אֶת שְׁמַע",
-            &config,
-        );
+        let (first, rem) = HebrewDropCapShaper::split_opening_text("מֵאֵימָתַי קוֹרִין אֶת שְׁמַע", &config);
         assert_eq!(first, "מֵאֵ");
         assert_eq!(rem, "ימָתַי קוֹרִין אֶת שְׁמַע");
     }
@@ -244,15 +237,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = HebrewDropCapShaper::shape_drop_cap(
-            "בְּרֵאשִׁית",
-            &config,
-            &fm,
-            300.0,
-            15.0,
-            true,
-        );
+        let result = HebrewDropCapShaper::shape_drop_cap("בְּרֵאשִׁית", &config, &fm, 300.0, 15.0, true);
         assert!(result.is_none());
     }
 }
-

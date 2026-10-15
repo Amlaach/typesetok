@@ -72,21 +72,25 @@ impl CoPaginationDocument {
         match name.as_str() {
             "rashi" => self.rashi_items.extend(items),
             "tosafot" => self.tosafot_items.extend(items),
-            _ => self.additional_streams.entry(FlowId::new(&name)).or_default().extend(items),
+            _ => self
+                .additional_streams
+                .entry(FlowId::new(&name))
+                .or_default()
+                .extend(items),
         }
         self
     }
 
-    pub fn add_commentary(
-        &mut self,
-        flow_id: impl Into<String>,
-        item: CoPaginatedCommentary,
-    ) {
+    pub fn add_commentary(&mut self, flow_id: impl Into<String>, item: CoPaginatedCommentary) {
         let name = flow_id.into();
         match name.as_str() {
             "rashi" => self.rashi_items.push(item),
             "tosafot" => self.tosafot_items.push(item),
-            _ => self.additional_streams.entry(FlowId::new(&name)).or_default().push(item),
+            _ => self
+                .additional_streams
+                .entry(FlowId::new(&name))
+                .or_default()
+                .push(item),
         }
     }
 }
@@ -171,11 +175,11 @@ impl CoPaginationEngine {
             doc.rashi_items.iter().cloned().collect();
         let mut remaining_tosafot: VecDeque<CoPaginatedCommentary> =
             doc.tosafot_items.iter().cloned().collect();
-        let mut remaining_additional: HashMap<FlowId, VecDeque<CoPaginatedCommentary>> =
-            doc.additional_streams
-                .iter()
-                .map(|(k, v)| (k.clone(), v.iter().cloned().collect()))
-                .collect();
+        let mut remaining_additional: HashMap<FlowId, VecDeque<CoPaginatedCommentary>> = doc
+            .additional_streams
+            .iter()
+            .map(|(k, v)| (k.clone(), v.iter().cloned().collect()))
+            .collect();
 
         let mut pages = Vec::new();
         let mut total_gemara_lines = 0;
@@ -618,7 +622,10 @@ impl CoPaginationEngine {
                     let natural_y = start_line as f32 * config.commentary_line_height;
 
                     let p_node = ParagraphNode::new(
-                        FractionalIndex::new(format!("{}_{}_{}", col.stream_id, page_number, p_idx)),
+                        FractionalIndex::new(format!(
+                            "{}_{}_{}",
+                            col.stream_id, page_number, p_idx
+                        )),
                         &col.stream_id,
                         &item.text,
                     );
@@ -631,7 +638,8 @@ impl CoPaginationEngine {
                     );
 
                     if stream_line_counter + p_lines.len() > max_commentary_lines {
-                        let available_lines = max_commentary_lines.saturating_sub(stream_line_counter);
+                        let available_lines =
+                            max_commentary_lines.saturating_sub(stream_line_counter);
                         if let Some(take) =
                             calculate_typographic_split(p_lines.len(), available_lines, 2, 2)
                         {
@@ -731,9 +739,12 @@ impl CoPaginationEngine {
                 page_stream_lines.insert(fid.clone(), lines.len());
                 *total_stream_lines.entry(fid.clone()).or_insert(0) += lines.len();
             }
-            *total_stream_lines.entry(FlowId::new("main")).or_insert(0) += tentative_gemara_lines.len();
+            *total_stream_lines.entry(FlowId::new("main")).or_insert(0) +=
+                tentative_gemara_lines.len();
             *total_stream_lines.entry(FlowId::new("rashi")).or_insert(0) += page_rashi_lines.len();
-            *total_stream_lines.entry(FlowId::new("tosafot")).or_insert(0) += page_tosafot_lines.len();
+            *total_stream_lines
+                .entry(FlowId::new("tosafot"))
+                .or_insert(0) += page_tosafot_lines.len();
 
             pages.push(CoPaginatedPage {
                 page_number,
@@ -1011,7 +1022,8 @@ mod tests {
             "rashi",
             CoPaginatedCommentary {
                 target_anchor: AnchorKey::new("mg_1"),
-                text: "בראשית - אמר רבי יצחק לא היה צריך להתחיל את התורה אלא מהחודש הזה לכם".to_string(),
+                text: "בראשית - אמר רבי יצחק לא היה צריך להתחיל את התורה אלא מהחודש הזה לכם"
+                    .to_string(),
             },
         );
         doc.add_commentary(
@@ -1048,28 +1060,57 @@ mod tests {
             "ramban",
             CoPaginatedCommentary {
                 target_anchor: AnchorKey::new("mg_2"),
-                text: "והארץ היתה תהו - החומר הראשון קראו תהו, והצורה שנתלבשה בו קראה בהו".to_string(),
+                text: "והארץ היתה תהו - החומר הראשון קראו תהו, והצורה שנתלבשה בו קראה בהו"
+                    .to_string(),
             },
         );
 
         let result = CoPaginationEngine::co_paginate(&config, &sync_config, &doc, &engine);
 
-        assert!(result.total_pages >= 1, "Expected at least 1 page generated");
+        assert!(
+            result.total_pages >= 1,
+            "Expected at least 1 page generated"
+        );
         assert!(result.total_gemara_lines > 0, "Torah lines missing");
         assert!(result.total_rashi_lines > 0, "Rashi lines missing");
 
         // Verify Targum and Ramban stream lines recorded
-        let total_targum = result.total_stream_lines.get(&FlowId::new("targum")).copied().unwrap_or(0);
-        let total_ramban = result.total_stream_lines.get(&FlowId::new("ramban")).copied().unwrap_or(0);
-        assert!(total_targum > 0, "Targum lines should be greater than 0, got {}", total_targum);
-        assert!(total_ramban > 0, "Ramban lines should be greater than 0, got {}", total_ramban);
+        let total_targum = result
+            .total_stream_lines
+            .get(&FlowId::new("targum"))
+            .copied()
+            .unwrap_or(0);
+        let total_ramban = result
+            .total_stream_lines
+            .get(&FlowId::new("ramban"))
+            .copied()
+            .unwrap_or(0);
+        assert!(
+            total_targum > 0,
+            "Targum lines should be greater than 0, got {}",
+            total_targum
+        );
+        assert!(
+            total_ramban > 0,
+            "Ramban lines should be greater than 0, got {}",
+            total_ramban
+        );
 
         let page1 = &result.pages[0];
         assert_eq!(page1.page_number, 1);
         // Mikraot Gedolot template on page 1 (Recto) produces 4 column frames: rashi, main, targum, ramban
-        assert_eq!(page1.page_layout.frames.len(), 4, "Expected 4 frames on Mikraot Gedolot page");
+        assert_eq!(
+            page1.page_layout.frames.len(),
+            4,
+            "Expected 4 frames on Mikraot Gedolot page"
+        );
 
-        let flow_ids: Vec<&str> = page1.page_layout.frames.iter().map(|f| f.flow_id.as_str()).collect();
+        let flow_ids: Vec<&str> = page1
+            .page_layout
+            .frames
+            .iter()
+            .map(|f| f.flow_id.as_str())
+            .collect();
         assert!(flow_ids.contains(&"rashi"));
         assert!(flow_ids.contains(&"main"));
         assert!(flow_ids.contains(&"targum"));

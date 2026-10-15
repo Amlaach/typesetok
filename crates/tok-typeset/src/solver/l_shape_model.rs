@@ -219,18 +219,35 @@ impl CommentaryAbsorptionVariables {
             AbsorptionKind::CombinedAdjacent | AbsorptionKind::FullWidth => {
                 // Unites both columns continuously
                 let (left_x, right_x) = if terminating_is_left {
-                    (terminating_col.rect.x.to_expr(), absorbing_col.rect.right_expr())
+                    (
+                        terminating_col.rect.x.to_expr(),
+                        absorbing_col.rect.right_expr(),
+                    )
                 } else {
-                    (absorbing_col.rect.x.to_expr(), terminating_col.rect.right_expr())
+                    (
+                        absorbing_col.rect.x.to_expr(),
+                        terminating_col.rect.right_expr(),
+                    )
                 };
                 solver.add_eq(self.rect.x.to_expr(), left_x, ConstraintStrength::Required)?;
-                solver.add_eq(self.rect.right_expr(), right_x, ConstraintStrength::Required)?;
+                solver.add_eq(
+                    self.rect.right_expr(),
+                    right_x,
+                    ConstraintStrength::Required,
+                )?;
             }
         }
 
         // 3. Vertical position: starts below terminating column + gutter
-        let top_target = terminating_col.rect.bottom_expr().plus(&self.gutter.to_expr());
-        solver.add_eq(self.rect.y.to_expr(), top_target, ConstraintStrength::Required)?;
+        let top_target = terminating_col
+            .rect
+            .bottom_expr()
+            .plus(&self.gutter.to_expr());
+        solver.add_eq(
+            self.rect.y.to_expr(),
+            top_target,
+            ConstraintStrength::Required,
+        )?;
 
         // 4. Vertical extent: reaches bottom limit
         solver.add_eq(
@@ -270,12 +287,27 @@ impl CommentaryAbsorptionVariables {
         )?;
 
         // Full width bounds
-        solver.add_eq(self.rect.x.to_expr(), left_bound_expr, ConstraintStrength::Required)?;
-        solver.add_eq(self.rect.right_expr(), right_bound_expr, ConstraintStrength::Required)?;
+        solver.add_eq(
+            self.rect.x.to_expr(),
+            left_bound_expr,
+            ConstraintStrength::Required,
+        )?;
+        solver.add_eq(
+            self.rect.right_expr(),
+            right_bound_expr,
+            ConstraintStrength::Required,
+        )?;
 
         // Vertical position: below terminating column + gutter
-        let top_target = terminating_col.rect.bottom_expr().plus(&self.gutter.to_expr());
-        solver.add_eq(self.rect.y.to_expr(), top_target, ConstraintStrength::Required)?;
+        let top_target = terminating_col
+            .rect
+            .bottom_expr()
+            .plus(&self.gutter.to_expr());
+        solver.add_eq(
+            self.rect.y.to_expr(),
+            top_target,
+            ConstraintStrength::Required,
+        )?;
 
         // Vertical bottom
         solver.add_eq(
@@ -309,12 +341,7 @@ impl CommentaryAbsorptionVariables {
             absorbing_col_rect.width,
             upper_h,
         );
-        let lower_rect = PhysicalRect::new(
-            absorbed.x,
-            absorbed.y,
-            absorbed.width,
-            absorbed.height,
-        );
+        let lower_rect = PhysicalRect::new(absorbed.x, absorbed.y, absorbed.width, absorbed.height);
         PolygonFrame {
             bands: vec![upper_rect, lower_rect],
             polygon: None,
@@ -457,28 +484,65 @@ mod tests {
         let mut solver = GeometricConstraintSolver::new();
         let page_model = PageConstraintModel::new();
         // Page 500 x 800, margins 50 -> content 400 x 700 (x: 50 to 450, y: 50 to 750)
-        let config = PageGeometryConfig::new(500.0, 800.0, 50.0, 50.0, 50.0, 50.0, SpreadSide::Recto);
+        let config =
+            PageGeometryConfig::new(500.0, 800.0, 50.0, 50.0, 50.0, 50.0, SpreadSide::Recto);
         page_model.apply(&mut solver, &config).unwrap();
 
-        let flows = vec![
-            FlowId::new("rashi"),
-            FlowId::new("tosafot"),
-        ];
+        let flows = vec![FlowId::new("rashi"), FlowId::new("tosafot")];
         let col_model = MultiColumnConstraintModel::new(&flows);
         let gutter = 10.0;
 
         // Column 0 (rashi) starts at page content left
-        solver.add_eq(col_model.columns[0].rect.x.to_expr(), page_model.content_rect.x.to_expr(), ConstraintStrength::Required).unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.x.to_expr(),
+                page_model.content_rect.x.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
         // Column 1 (tosafot) right matches page content right
-        solver.add_eq(col_model.columns[1].rect.right_expr(), page_model.content_rect.right_expr(), ConstraintStrength::Required).unwrap();
+        solver
+            .add_eq(
+                col_model.columns[1].rect.right_expr(),
+                page_model.content_rect.right_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
         // Top alignment
-        solver.add_eq(col_model.columns[0].rect.y.to_expr(), page_model.content_rect.y.to_expr(), ConstraintStrength::Required).unwrap();
-        solver.add_eq(col_model.columns[1].rect.y.to_expr(), page_model.content_rect.y.to_expr(), ConstraintStrength::Required).unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.y.to_expr(),
+                page_model.content_rect.y.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        solver
+            .add_eq(
+                col_model.columns[1].rect.y.to_expr(),
+                page_model.content_rect.y.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
         // Inter-column gutter
-        let col1_x = col_model.columns[0].rect.right_expr().plus(&LinearExpression::constant(gutter as f64));
-        solver.add_eq(col_model.columns[1].rect.x.to_expr(), col1_x, ConstraintStrength::Required).unwrap();
+        let col1_x = col_model.columns[0]
+            .rect
+            .right_expr()
+            .plus(&LinearExpression::constant(gutter as f64));
+        solver
+            .add_eq(
+                col_model.columns[1].rect.x.to_expr(),
+                col1_x,
+                ConstraintStrength::Required,
+            )
+            .unwrap();
         // Equal column widths: (400 - 10) / 2 = 195
-        solver.add_eq(col_model.columns[0].rect.width.to_expr(), col_model.columns[1].rect.width.to_expr(), ConstraintStrength::Required).unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.width.to_expr(),
+                col_model.columns[1].rect.width.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
 
         // Rashi terminates at 200 pt height (from 50 to 250)
         let absorption_vars = CommentaryAbsorptionVariables::new(FlowId::new("tosafot"));
@@ -490,14 +554,16 @@ mod tests {
             AbsorptionKind::CombinedAdjacent,
         );
 
-        absorption_vars.apply_adjacent(
-            &mut solver,
-            &col_model.columns[0],
-            &col_model.columns[1],
-            true, // rashi is on left
-            page_model.content_rect.bottom_expr(),
-            &absorb_config,
-        ).unwrap();
+        absorption_vars
+            .apply_adjacent(
+                &mut solver,
+                &col_model.columns[0],
+                &col_model.columns[1],
+                true, // rashi is on left
+                page_model.content_rect.bottom_expr(),
+                &absorb_config,
+            )
+            .unwrap();
 
         let rashi_rect = solver.get_rect(col_model.columns[0].rect);
         let tosafot_rect = solver.get_rect(col_model.columns[1].rect);
@@ -532,20 +598,60 @@ mod tests {
     fn test_commentary_absorption_column_extension() {
         let mut solver = GeometricConstraintSolver::new();
         let page_model = PageConstraintModel::new();
-        let config = PageGeometryConfig::new(500.0, 800.0, 50.0, 50.0, 50.0, 50.0, SpreadSide::Recto);
+        let config =
+            PageGeometryConfig::new(500.0, 800.0, 50.0, 50.0, 50.0, 50.0, SpreadSide::Recto);
         page_model.apply(&mut solver, &config).unwrap();
 
         let flows = vec![FlowId::new("rashi"), FlowId::new("tosafot")];
         let col_model = MultiColumnConstraintModel::new(&flows);
         let gutter = 10.0;
 
-        solver.add_eq(col_model.columns[0].rect.x.to_expr(), page_model.content_rect.x.to_expr(), ConstraintStrength::Required).unwrap();
-        solver.add_eq(col_model.columns[1].rect.right_expr(), page_model.content_rect.right_expr(), ConstraintStrength::Required).unwrap();
-        solver.add_eq(col_model.columns[0].rect.y.to_expr(), page_model.content_rect.y.to_expr(), ConstraintStrength::Required).unwrap();
-        solver.add_eq(col_model.columns[1].rect.y.to_expr(), page_model.content_rect.y.to_expr(), ConstraintStrength::Required).unwrap();
-        let col1_x = col_model.columns[0].rect.right_expr().plus(&LinearExpression::constant(gutter as f64));
-        solver.add_eq(col_model.columns[1].rect.x.to_expr(), col1_x, ConstraintStrength::Required).unwrap();
-        solver.add_eq(col_model.columns[0].rect.width.to_expr(), col_model.columns[1].rect.width.to_expr(), ConstraintStrength::Required).unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.x.to_expr(),
+                page_model.content_rect.x.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        solver
+            .add_eq(
+                col_model.columns[1].rect.right_expr(),
+                page_model.content_rect.right_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.y.to_expr(),
+                page_model.content_rect.y.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        solver
+            .add_eq(
+                col_model.columns[1].rect.y.to_expr(),
+                page_model.content_rect.y.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        let col1_x = col_model.columns[0]
+            .rect
+            .right_expr()
+            .plus(&LinearExpression::constant(gutter as f64));
+        solver
+            .add_eq(
+                col_model.columns[1].rect.x.to_expr(),
+                col1_x,
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.width.to_expr(),
+                col_model.columns[1].rect.width.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
 
         let absorption_vars = CommentaryAbsorptionVariables::new(FlowId::new("tosafot"));
         let absorb_config = CommentaryAbsorptionConfig::new(
@@ -556,14 +662,16 @@ mod tests {
             AbsorptionKind::ColumnExtension,
         );
 
-        absorption_vars.apply_adjacent(
-            &mut solver,
-            &col_model.columns[0],
-            &col_model.columns[1],
-            true,
-            page_model.content_rect.bottom_expr(),
-            &absorb_config,
-        ).unwrap();
+        absorption_vars
+            .apply_adjacent(
+                &mut solver,
+                &col_model.columns[0],
+                &col_model.columns[1],
+                true,
+                page_model.content_rect.bottom_expr(),
+                &absorb_config,
+            )
+            .unwrap();
 
         let rashi_rect = solver.get_rect(col_model.columns[0].rect);
         let absorbed_rect = absorption_vars.get_rect(&solver);
@@ -579,15 +687,34 @@ mod tests {
     fn test_commentary_absorption_full_width() {
         let mut solver = GeometricConstraintSolver::new();
         let page_model = PageConstraintModel::new();
-        let config = PageGeometryConfig::new(600.0, 900.0, 50.0, 50.0, 50.0, 50.0, SpreadSide::Recto);
+        let config =
+            PageGeometryConfig::new(600.0, 900.0, 50.0, 50.0, 50.0, 50.0, SpreadSide::Recto);
         page_model.apply(&mut solver, &config).unwrap();
 
         let flows = vec![FlowId::new("primary")];
         let col_model = MultiColumnConstraintModel::new(&flows);
 
-        solver.add_eq(col_model.columns[0].rect.x.to_expr(), page_model.content_rect.x.to_expr(), ConstraintStrength::Required).unwrap();
-        solver.add_eq(col_model.columns[0].rect.y.to_expr(), page_model.content_rect.y.to_expr(), ConstraintStrength::Required).unwrap();
-        solver.add_eq(col_model.columns[0].rect.width.to_expr(), LinearExpression::constant(200.0), ConstraintStrength::Required).unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.x.to_expr(),
+                page_model.content_rect.x.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.y.to_expr(),
+                page_model.content_rect.y.to_expr(),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
+        solver
+            .add_eq(
+                col_model.columns[0].rect.width.to_expr(),
+                LinearExpression::constant(200.0),
+                ConstraintStrength::Required,
+            )
+            .unwrap();
 
         let absorption_vars = CommentaryAbsorptionVariables::new(FlowId::new("commentary"));
         let absorb_config = CommentaryAbsorptionConfig::new(
@@ -598,14 +725,16 @@ mod tests {
             AbsorptionKind::FullWidth,
         );
 
-        absorption_vars.apply_full_width(
-            &mut solver,
-            &col_model.columns[0],
-            page_model.content_rect.x.to_expr(),
-            page_model.content_rect.right_expr(),
-            page_model.content_rect.bottom_expr(),
-            &absorb_config,
-        ).unwrap();
+        absorption_vars
+            .apply_full_width(
+                &mut solver,
+                &col_model.columns[0],
+                page_model.content_rect.x.to_expr(),
+                page_model.content_rect.right_expr(),
+                page_model.content_rect.bottom_expr(),
+                &absorb_config,
+            )
+            .unwrap();
 
         let primary_rect = solver.get_rect(col_model.columns[0].rect);
         let absorbed_rect = absorption_vars.get_rect(&solver);

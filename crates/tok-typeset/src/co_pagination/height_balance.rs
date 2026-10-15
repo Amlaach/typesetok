@@ -82,12 +82,10 @@ impl SharedColumnHeightBalancer {
 
         // 2. Determine target bottom baseline Y_target
         let target_y = match config.target_mode {
-            BalanceTargetMode::TallestColumn => {
-                column_bottoms
-                    .iter()
-                    .map(|(_, y)| *y)
-                    .fold(0.0_f32, |acc, y| acc.max(y))
-            }
+            BalanceTargetMode::TallestColumn => column_bottoms
+                .iter()
+                .map(|(_, y)| *y)
+                .fold(0.0_f32, |acc, y| acc.max(y)),
             BalanceTargetMode::FixedPageBottom(y) => y,
             BalanceTargetMode::AverageHeight => {
                 let sum: f32 = column_bottoms.iter().map(|(_, y)| *y).sum();
@@ -122,7 +120,8 @@ impl SharedColumnHeightBalancer {
             let mut total_weight = 0.0;
 
             for i in 0..(num_lines - 1) {
-                let is_para_boundary = frame.lines[i].paragraph_id != frame.lines[i + 1].paragraph_id;
+                let is_para_boundary =
+                    frame.lines[i].paragraph_id != frame.lines[i + 1].paragraph_id;
                 let weight = if is_para_boundary {
                     // Paragraph boundaries absorb more vertical spring
                     config.max_paragraph_expansion_pt.max(1.0)
@@ -158,7 +157,11 @@ impl SharedColumnHeightBalancer {
                 frame.lines[i + 1].baseline_y += accumulated_spring;
             }
 
-            let new_bottom_y = frame.lines.last().map(|l| l.baseline_y).unwrap_or(orig_bottom_y);
+            let new_bottom_y = frame
+                .lines
+                .last()
+                .map(|l| l.baseline_y)
+                .unwrap_or(orig_bottom_y);
 
             reports.push(ColumnBalanceReport {
                 flow_id: frame.flow_id.clone(),
@@ -180,7 +183,9 @@ mod tests {
     use tok_core::id::NodeId;
 
     fn deterministic_node_id(idx: usize) -> NodeId {
-        let chars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'];
+        let chars = [
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
+        ];
         let c1 = chars[(idx / 16) % 16];
         let c2 = chars[idx % 16];
         NodeId::from_string(&format!("01ARZ3NDEKTSV4RRFFQ69G5F{}{}", c1, c2))
@@ -220,13 +225,16 @@ mod tests {
     #[test]
     fn test_talmud_spread_shared_column_height_balancing() {
         // Gemara has 10 lines ending at 500.0 pt (tallest column)
-        let gemara_specs: Vec<(usize, f32)> = (0..10).map(|i| (0, 50.0 + i as f32 * 50.0)).collect();
+        let gemara_specs: Vec<(usize, f32)> =
+            (0..10).map(|i| (0, 50.0 + i as f32 * 50.0)).collect();
 
         // Rashi has 8 lines ending at 480.0 pt (20 pt deficit)
-        let rashi_specs: Vec<(usize, f32)> = (0..8).map(|i| (i / 4, 60.0 + i as f32 * 60.0)).collect();
+        let rashi_specs: Vec<(usize, f32)> =
+            (0..8).map(|i| (i / 4, 60.0 + i as f32 * 60.0)).collect();
 
         // Tosafot has 7 lines ending at 485.0 pt (15 pt deficit)
-        let tosafot_specs: Vec<(usize, f32)> = (0..7).map(|i| (i / 3, 65.0 + i as f32 * 70.0)).collect();
+        let tosafot_specs: Vec<(usize, f32)> =
+            (0..7).map(|i| (i / 3, 65.0 + i as f32 * 70.0)).collect();
 
         let mut frames = vec![
             make_test_frame("gemara", &gemara_specs),
@@ -252,11 +260,17 @@ mod tests {
 
         // Rashi and Tosafot should now reach 500.0 pt
         let rashi_rep = reports.iter().find(|r| r.flow_id == "rashi").unwrap();
-        assert!((rashi_rep.balanced_bottom_y - 500.0).abs() < 0.1, "Rashi bottom must align to 500.0");
+        assert!(
+            (rashi_rep.balanced_bottom_y - 500.0).abs() < 0.1,
+            "Rashi bottom must align to 500.0"
+        );
         assert!(rashi_rep.spring_injected_pt > 0.0);
 
         let tosafot_rep = reports.iter().find(|r| r.flow_id == "tosafot").unwrap();
-        assert!((tosafot_rep.balanced_bottom_y - 500.0).abs() < 0.1, "Tosafot bottom must align to 500.0");
+        assert!(
+            (tosafot_rep.balanced_bottom_y - 500.0).abs() < 0.1,
+            "Tosafot bottom must align to 500.0"
+        );
         assert!(tosafot_rep.spring_injected_pt > 0.0);
 
         // Verify strict monotonic increasing baselines in all columns
@@ -275,9 +289,12 @@ mod tests {
     fn test_mikraot_gedolot_4_stream_column_height_balancing() {
         // 4 streams: Torah (main), Targum, Rashi, Ramban
         let torah_specs: Vec<(usize, f32)> = (0..12).map(|i| (0, 40.0 + i as f32 * 45.0)).collect(); // ends at 535.0
-        let targum_specs: Vec<(usize, f32)> = (0..10).map(|i| (i / 5, 45.0 + i as f32 * 50.0)).collect(); // ends at 495.0
-        let rashi_specs: Vec<(usize, f32)> = (0..11).map(|i| (i / 4, 42.0 + i as f32 * 48.0)).collect(); // ends at 522.0
-        let ramban_specs: Vec<(usize, f32)> = (0..9).map(|i| (i / 3, 50.0 + i as f32 * 55.0)).collect(); // ends at 490.0
+        let targum_specs: Vec<(usize, f32)> =
+            (0..10).map(|i| (i / 5, 45.0 + i as f32 * 50.0)).collect(); // ends at 495.0
+        let rashi_specs: Vec<(usize, f32)> =
+            (0..11).map(|i| (i / 4, 42.0 + i as f32 * 48.0)).collect(); // ends at 522.0
+        let ramban_specs: Vec<(usize, f32)> =
+            (0..9).map(|i| (i / 3, 50.0 + i as f32 * 55.0)).collect(); // ends at 490.0
 
         let mut frames = vec![
             make_test_frame("torah", &torah_specs),
@@ -334,7 +351,10 @@ mod tests {
             "Spring must be clamped to max capacity (6.0), got {}",
             short_rep.spring_injected_pt
         );
-        assert_eq!(short_rep.balanced_bottom_y, 100.0 + short_rep.spring_injected_pt);
+        assert_eq!(
+            short_rep.balanced_bottom_y,
+            100.0 + short_rep.spring_injected_pt
+        );
     }
 
     #[test]
@@ -356,4 +376,3 @@ mod tests {
         assert_eq!(frames[0].lines.last().unwrap().baseline_y, 60.0);
     }
 }
-

@@ -221,7 +221,7 @@ impl TypesettingEngine {
             .style_patches
             .iter()
             .filter_map(|p| p.drop_cap.as_ref())
-            .last()
+            .next_back()
             .cloned();
 
         let line_height = if line_height_pt.is_finite() && line_height_pt > 0.0 {
@@ -248,8 +248,11 @@ impl TypesettingEngine {
                     line_height,
                     is_rtl,
                 ) {
-                    let notched_profile =
-                        profile.with_drop_cap_exclusion(line_height, &drop_layout.exclusion, is_rtl);
+                    let notched_profile = profile.with_drop_cap_exclusion(
+                        line_height,
+                        &drop_layout.exclusion,
+                        is_rtl,
+                    );
                     let mut rem_node = paragraph.clone();
                     rem_node.text = drop_layout.remaining_text;
                     rem_node.style_patches.retain(|p| p.drop_cap.is_none());
@@ -493,7 +496,12 @@ impl TypesettingEngine {
                 HebrewJustifier::justify_line(line_glyphs, target_w, font_size, is_last);
 
             let line_width: f32 = justified.glyphs.iter().map(|g| g.x_advance).sum();
-            let mut current_x = HebrewJustifier::calculate_line_start_x(line_width, target_w, span.x_offset, is_rtl);
+            let mut current_x = HebrewJustifier::calculate_line_start_x(
+                line_width,
+                target_w,
+                span.x_offset,
+                is_rtl,
+            );
             let glyph_boxes: Vec<GlyphBox> = justified
                 .glyphs
                 .into_iter()
@@ -1513,13 +1521,17 @@ impl TypesettingEngine {
             let comm_termination = if primary_target_h.is_none() {
                 current_specs
                     .iter()
-                    .filter(|s| s.role != FlowPlacementRole::Primary && s.role != FlowPlacementRole::BottomBand)
+                    .filter(|s| {
+                        s.role != FlowPlacementRole::Primary
+                            && s.role != FlowPlacementRole::BottomBand
+                    })
                     .find_map(|s| {
                         let cur = flow_cursors.get(&s.flow_id.0).copied().unwrap_or(0);
                         if let Some(lines) = flow_lines_map.get(&s.flow_id.0) {
                             let rem_lines = &lines[cur..];
                             let rem_h: f32 = rem_lines.iter().map(|l| l.height).sum();
-                            let max_h = self.config.page_height_pt - 2.0 * self.config.margin_top_pt;
+                            let max_h =
+                                self.config.page_height_pt - 2.0 * self.config.margin_top_pt;
                             if rem_h > 0.0 && rem_h < max_h - MultiFlowSolver::L_SHAPE_MIN_GAP_PT {
                                 Some((s.flow_id.clone(), rem_h))
                             } else {
@@ -1535,7 +1547,9 @@ impl TypesettingEngine {
 
             let expansion_id_derived = current_specs
                 .iter()
-                .filter(|s| s.role != FlowPlacementRole::Primary && s.role != FlowPlacementRole::BottomBand)
+                .filter(|s| {
+                    s.role != FlowPlacementRole::Primary && s.role != FlowPlacementRole::BottomBand
+                })
                 .max_by_key(|s| {
                     let cur = flow_cursors.get(&s.flow_id.0).copied().unwrap_or(0);
                     let total = flow_lines_map.get(&s.flow_id.0).map_or(0, |v| v.len());
@@ -2521,14 +2535,21 @@ mod tests {
         let flow_ids: Vec<&str> = p0.frames.iter().map(|f| f.flow_id.as_str()).collect();
         assert!(flow_ids.contains(&"main"), "Page must contain main flow");
         assert!(flow_ids.contains(&"rashi"), "Page must contain rashi flow");
-        assert!(flow_ids.contains(&"tosafot"), "Page must contain tosafot flow");
+        assert!(
+            flow_ids.contains(&"tosafot"),
+            "Page must contain tosafot flow"
+        );
         assert!(
             flow_ids.contains(&"tosafot_expansion"),
             "Tosafot must expand into absorption frame beneath terminating Rashi"
         );
 
         let rashi_frame = p0.frames.iter().find(|f| f.flow_id == "rashi").unwrap();
-        let exp_frame = p0.frames.iter().find(|f| f.flow_id == "tosafot_expansion").unwrap();
+        let exp_frame = p0
+            .frames
+            .iter()
+            .find(|f| f.flow_id == "tosafot_expansion")
+            .unwrap();
 
         // The expansion frame must be located below the terminating Rashi frame
         assert!(
@@ -2538,7 +2559,10 @@ mod tests {
             rashi_frame.rect.y + rashi_frame.rect.height
         );
         // The expansion frame must have placed lines
-        assert!(!exp_frame.lines.is_empty(), "Expansion frame must contain placed lines");
+        assert!(
+            !exp_frame.lines.is_empty(),
+            "Expansion frame must contain placed lines"
+        );
     }
 
     #[test]
@@ -3633,16 +3657,25 @@ mod tests {
 
         let lines = eng.typeset_paragraph_shaped(&p, DEFAULT_FONT_FAMILY, &profile, 11.0, line_h);
 
-        assert!(lines.len() >= 4, "Must produce drop cap plus multiple body lines");
+        assert!(
+            lines.len() >= 4,
+            "Must produce drop cap plus multiple body lines"
+        );
 
         // Line 0 is the drop cap window
         let drop_line = &lines[0];
         assert!(drop_line.is_drop_cap, "Line 0 must be marked as drop cap");
-        assert_eq!(drop_line.text, tok_core::normalizer::HebrewNormalizer::normalize("בְּרֵאשִׁ֖ית"));
+        assert_eq!(
+            drop_line.text,
+            tok_core::normalizer::HebrewNormalizer::normalize("בְּרֵאשִׁ֖ית")
+        );
         assert_eq!(drop_line.height, 3.0 * line_h);
         assert!(drop_line.width > 30.0);
         let win_x = drop_line.x_offset;
-        assert!((win_x + drop_line.width - col_w).abs() < 1e-2, "Drop cap must align to right in RTL");
+        assert!(
+            (win_x + drop_line.width - col_w).abs() < 1e-2,
+            "Drop cap must align to right in RTL"
+        );
 
         // Body lines 1, 2, 3 must be indented to the left of the drop cap window
         for bl in &lines[1..4] {
@@ -3681,11 +3714,16 @@ mod tests {
                     עַד סוֹף הָאַשְׁמוּרָה הָרִאשׁוֹנָה דִּבְרֵי רַבִּי אֱלִיעֶזֶר.";
         let p = para(text).with_drop_cap(dc);
 
-        let lines = eng.typeset_paragraph_shaped(&p, DEFAULT_FONT_FAMILY, &MeasureProfile::uniform(300.0), 12.0, 16.0);
+        let lines = eng.typeset_paragraph_shaped(
+            &p,
+            DEFAULT_FONT_FAMILY,
+            &MeasureProfile::uniform(300.0),
+            12.0,
+            16.0,
+        );
         assert!(lines.len() >= 3);
         assert!(lines[0].is_drop_cap);
         assert_eq!(lines[0].text, "מֵאֵימָתַי");
         assert_eq!(lines[0].height, 32.0); // 2 lines * 16.0
     }
 }
-

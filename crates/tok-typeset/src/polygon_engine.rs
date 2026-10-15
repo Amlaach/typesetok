@@ -133,11 +133,9 @@ impl PolygonFrame {
             if ex.intersects_y(y, height) {
                 let exp = ex.expanded_rect();
                 let remaining = span.subtract_range(exp.x, exp.x + exp.width);
-                if let Some(longest) = remaining.into_iter().max_by(|a, b| a.width.total_cmp(&b.width)) {
-                    span = longest;
-                } else {
-                    return None;
-                }
+                span = remaining
+                    .into_iter()
+                    .max_by(|a, b| a.width.total_cmp(&b.width))?;
             }
         }
 
@@ -263,8 +261,10 @@ mod tests {
 
     #[test]
     fn test_polygon_frame_with_exclusions_notching() {
-        let frame = PolygonFrame::from_rect(PhysicalRect::new(0.0, 0.0, 400.0, 500.0))
-            .with_exclusion(ExclusionZone::new(PhysicalRect::new(300.0, 0.0, 100.0, 45.0), 5.0));
+        let frame =
+            PolygonFrame::from_rect(PhysicalRect::new(0.0, 0.0, 400.0, 500.0)).with_exclusion(
+                ExclusionZone::new(PhysicalRect::new(300.0, 0.0, 100.0, 45.0), 5.0),
+            );
 
         let prof = frame.profile_for_paragraph(15.0, 0, 6);
         // Lines 0, 1, 2 intersect the exclusion at x >= 295
@@ -275,4 +275,3 @@ mod tests {
         assert_eq!(prof.width_for_line(4), 400.0);
     }
 }
-

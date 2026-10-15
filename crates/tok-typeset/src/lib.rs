@@ -83,14 +83,14 @@ pub use multi_flow::{
     DynamicPageResult, DynamicTalmudPageResult, FlowGeometrySpec, FlowPlacementRole,
     MultiFlowSolver, SolvedFlowAllocation, SpreadSide,
 };
+pub use page_break::{
+    compute_badness, score_page_break, BreakOpportunity, GlobalPageBreaker, PageBreakPenalty,
+    PageSlice, PaginationLineInput,
+};
 pub use polygon::{ExclusionZone, GeometricPolygon, ScanlineSpan};
 pub use polygon_engine::PolygonFrame;
 pub use polygon_flow::{
     CommentaryAbsorptionSpec, MultiColumnPolygonFlowSynthesizer, SynthesizedPolygonFlow,
-};
-pub use page_break::{
-    compute_badness, score_page_break, BreakOpportunity, GlobalPageBreaker, PageBreakPenalty,
-    PageSlice, PaginationLineInput,
 };
 pub use shaper::{PositionedGlyph, ShapedRun, TextShaper};
 pub use solver::{

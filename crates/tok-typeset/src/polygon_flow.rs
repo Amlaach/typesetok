@@ -115,6 +115,7 @@ impl MultiColumnPolygonFlowSynthesizer {
 
     /// Typesets a series of paragraphs into a `PolygonFrame`, calculating exact Knuth-Plass
     /// line breaking across variable column widths and stepped absorption transitions.
+    #[allow(clippy::too_many_arguments)]
     pub fn typeset_flow_into_polygon(
         engine: &TypesettingEngine,
         flow_id: FlowId,
@@ -149,15 +150,11 @@ impl MultiColumnPolygonFlowSynthesizer {
 
             let remaining_capacity = max_capacity - current_line_idx;
             // Generate variable profile starting at current line position within the polygon frame
-            let profile = frame.profile_for_paragraph(line_height_pt, current_line_idx, remaining_capacity);
+            let profile =
+                frame.profile_for_paragraph(line_height_pt, current_line_idx, remaining_capacity);
 
-            let mut p_lines = engine.typeset_paragraph_shaped(
-                p,
-                family,
-                &profile,
-                font_size_pt,
-                line_height_pt,
-            );
+            let mut p_lines =
+                engine.typeset_paragraph_shaped(p, family, &profile, font_size_pt, line_height_pt);
 
             // Re-position baseline and coordinate origins within the polygon frame
             let bounds = frame.total_bounds();
@@ -267,22 +264,42 @@ mod tests {
         );
 
         assert!(!result.lines.is_empty());
-        assert!(result.lines.len() >= 6, "Expected at least 6 lines placed, got {}", result.lines.len());
+        assert!(
+            result.lines.len() >= 6,
+            "Expected at least 6 lines placed, got {}",
+            result.lines.len()
+        );
 
         // First 4 lines should fall in the upper band (x_offset = 200, span width = 100)
         for i in 0..4 {
             let l = &result.lines[i];
-            assert_eq!(l.x_offset, 200.0, "Line {} x_offset should be in upper band", i);
-            assert!(l.width <= 100.5, "Line {} width ({}) exceeded upper band width 100", i, l.width);
+            assert_eq!(
+                l.x_offset, 200.0,
+                "Line {} x_offset should be in upper band",
+                i
+            );
+            assert!(
+                l.width <= 100.5,
+                "Line {} width ({}) exceeded upper band width 100",
+                i,
+                l.width
+            );
             assert_eq!(l.baseline_y, ((i + 1) as f32) * 15.0);
         }
 
         // Line 4 and subsequent lines should transition into lower expanded band (x_offset = 0, span width = 300)
         let l4 = &result.lines[4];
-        assert_eq!(l4.x_offset, 0.0, "Line 4 should transition into lower expanded band (x_offset=0)");
+        assert_eq!(
+            l4.x_offset, 0.0,
+            "Line 4 should transition into lower expanded band (x_offset=0)"
+        );
         assert_eq!(l4.baseline_y, 5.0 * 15.0);
 
         // Lines in the lower band should be significantly wider than lines in the upper band
-        assert!(l4.width > 120.0, "Expanded line 4 width ({}) should be wider than upper band (100)", l4.width);
+        assert!(
+            l4.width > 120.0,
+            "Expanded line 4 width ({}) should be wider than upper band (100)",
+            l4.width
+        );
     }
 }

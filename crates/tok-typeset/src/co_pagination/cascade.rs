@@ -45,7 +45,12 @@ pub struct CascadeNodeInput {
 }
 
 impl CascadeNodeInput {
-    pub fn new(id: NodeId, flow_id: impl Into<FlowId>, height_pt: f32, text: impl Into<String>) -> Self {
+    pub fn new(
+        id: NodeId,
+        flow_id: impl Into<FlowId>,
+        height_pt: f32,
+        text: impl Into<String>,
+    ) -> Self {
         Self {
             id,
             flow_id: flow_id.into(),
@@ -174,23 +179,27 @@ impl AnchorCascadeEngine {
                 let natural_page = curr_page;
 
                 // Check anchor dependency
-                let min_required_page = if let Some(anchor_def) = anchor_map.get_anchor_for_commentary(node.id) {
-                    let primary_page = node_to_page.get(&anchor_def.primary_node_id).copied().unwrap_or(1);
-                    if primary_page > curr_page {
-                        cascade_events.push(CascadedNodeEvent {
-                            commentary_flow_id: flow_id.clone(),
-                            commentary_node_id: node.id,
-                            anchor_id: Some(anchor_def.id.clone()),
-                            primary_node_id: Some(anchor_def.primary_node_id),
-                            original_page: natural_page,
-                            target_page: primary_page,
-                            reason: CascadeReason::PrimaryAnchorDisplaced,
-                        });
-                    }
-                    primary_page
-                } else {
-                    1
-                };
+                let min_required_page =
+                    if let Some(anchor_def) = anchor_map.get_anchor_for_commentary(node.id) {
+                        let primary_page = node_to_page
+                            .get(&anchor_def.primary_node_id)
+                            .copied()
+                            .unwrap_or(1);
+                        if primary_page > curr_page {
+                            cascade_events.push(CascadedNodeEvent {
+                                commentary_flow_id: flow_id.clone(),
+                                commentary_node_id: node.id,
+                                anchor_id: Some(anchor_def.id.clone()),
+                                primary_node_id: Some(anchor_def.primary_node_id),
+                                original_page: natural_page,
+                                target_page: primary_page,
+                                reason: CascadeReason::PrimaryAnchorDisplaced,
+                            });
+                        }
+                        primary_page
+                    } else {
+                        1
+                    };
 
                 // Enforce minimum required page due to anchor
                 if curr_page < min_required_page {
@@ -205,7 +214,9 @@ impl AnchorCascadeEngine {
                     cascade_events.push(CascadedNodeEvent {
                         commentary_flow_id: flow_id.clone(),
                         commentary_node_id: node.id,
-                        anchor_id: anchor_map.get_anchor_for_commentary(node.id).map(|a| a.id.clone()),
+                        anchor_id: anchor_map
+                            .get_anchor_for_commentary(node.id)
+                            .map(|a| a.id.clone()),
                         primary_node_id: anchor_map
                             .get_anchor_for_commentary(node.id)
                             .map(|d| d.primary_node_id),
@@ -327,11 +338,19 @@ mod tests {
         ));
 
         // C1 and C2 linked to P1
-        anchor_map.link_commentary(CommentaryLink::new(rashi_flow.clone(), c1_rashi_id, a1.clone()));
+        anchor_map.link_commentary(CommentaryLink::new(
+            rashi_flow.clone(),
+            c1_rashi_id,
+            a1.clone(),
+        ));
         anchor_map.link_commentary(CommentaryLink::new(tosafot_flow.clone(), c2_tosafot_id, a1));
 
         // C3 and C4 linked to P2
-        anchor_map.link_commentary(CommentaryLink::new(rashi_flow.clone(), c3_rashi_id, a2.clone()));
+        anchor_map.link_commentary(CommentaryLink::new(
+            rashi_flow.clone(),
+            c3_rashi_id,
+            a2.clone(),
+        ));
         anchor_map.link_commentary(CommentaryLink::new(ramban_flow.clone(), c4_ramban_id, a2));
 
         let max_page_height = 500.0;
@@ -354,11 +373,21 @@ mod tests {
         );
         baseline_nodes.insert(
             tosafot_flow.clone(),
-            vec![CascadeNodeInput::new(c2_tosafot_id, &tosafot_flow, 120.0, "Tosafot C2")],
+            vec![CascadeNodeInput::new(
+                c2_tosafot_id,
+                &tosafot_flow,
+                120.0,
+                "Tosafot C2",
+            )],
         );
         baseline_nodes.insert(
             ramban_flow.clone(),
-            vec![CascadeNodeInput::new(c4_ramban_id, &ramban_flow, 150.0, "Ramban C4")],
+            vec![CascadeNodeInput::new(
+                c4_ramban_id,
+                &ramban_flow,
+                150.0,
+                "Ramban C4",
+            )],
         );
 
         let baseline_res = AnchorCascadeEngine::paginate_with_cascade(
@@ -384,7 +413,12 @@ mod tests {
         expanded_nodes.insert(
             primary_flow.clone(),
             vec![
-                CascadeNodeInput::new(p1_id, &primary_flow, 450.0, "Gemara P1 expanded with more text"),
+                CascadeNodeInput::new(
+                    p1_id,
+                    &primary_flow,
+                    450.0,
+                    "Gemara P1 expanded with more text",
+                ),
                 CascadeNodeInput::new(p2_id, &primary_flow, 200.0, "Gemara P2"),
             ],
         );
@@ -400,7 +434,11 @@ mod tests {
         // P1 stays on Page 1
         assert_eq!(expanded_res.node_to_page.get(&p1_id), Some(&1));
         // P2 is pushed to Page 2
-        assert_eq!(expanded_res.node_to_page.get(&p2_id), Some(&2), "P2 must be pushed to Page 2");
+        assert_eq!(
+            expanded_res.node_to_page.get(&p2_id),
+            Some(&2),
+            "P2 must be pushed to Page 2"
+        );
 
         // Commentaries anchored to P1 (C1 Rashi, C2 Tosafot) stay on Page 1
         assert_eq!(expanded_res.node_to_page.get(&c1_rashi_id), Some(&1));
@@ -465,9 +503,24 @@ mod tests {
         let a3 = AnchorId::new("anc_3");
 
         let mut anchor_map = MultiFlowAnchorMap::new();
-        anchor_map.register_anchor(AnchorDefinition::new(a1.clone(), primary_flow.clone(), p1, TextAnchor::start_of(p1)));
-        anchor_map.register_anchor(AnchorDefinition::new(a2.clone(), primary_flow.clone(), p2, TextAnchor::start_of(p2)));
-        anchor_map.register_anchor(AnchorDefinition::new(a3.clone(), primary_flow.clone(), p3, TextAnchor::start_of(p3)));
+        anchor_map.register_anchor(AnchorDefinition::new(
+            a1.clone(),
+            primary_flow.clone(),
+            p1,
+            TextAnchor::start_of(p1),
+        ));
+        anchor_map.register_anchor(AnchorDefinition::new(
+            a2.clone(),
+            primary_flow.clone(),
+            p2,
+            TextAnchor::start_of(p2),
+        ));
+        anchor_map.register_anchor(AnchorDefinition::new(
+            a3.clone(),
+            primary_flow.clone(),
+            p3,
+            TextAnchor::start_of(p3),
+        ));
 
         anchor_map.link_commentary(CommentaryLink::new(rashi_flow.clone(), r1, a1));
         anchor_map.link_commentary(CommentaryLink::new(rashi_flow.clone(), r2, a2));
@@ -493,7 +546,8 @@ mod tests {
             ],
         );
 
-        let res = AnchorCascadeEngine::paginate_with_cascade(&primary_flow, &nodes, 500.0, &anchor_map);
+        let res =
+            AnchorCascadeEngine::paginate_with_cascade(&primary_flow, &nodes, 500.0, &anchor_map);
 
         assert_eq!(res.node_to_page.get(&p1), Some(&1));
         assert_eq!(res.node_to_page.get(&p2), Some(&2));
@@ -518,7 +572,12 @@ mod tests {
         let a1 = AnchorId::new("anc_test");
 
         let mut anchor_map = MultiFlowAnchorMap::new();
-        anchor_map.register_anchor(AnchorDefinition::new(a1.clone(), primary_flow.clone(), p1, TextAnchor::start_of(p1)));
+        anchor_map.register_anchor(AnchorDefinition::new(
+            a1.clone(),
+            primary_flow.clone(),
+            p1,
+            TextAnchor::start_of(p1),
+        ));
         anchor_map.link_commentary(CommentaryLink::new(rashi_flow.clone(), c1, a1.clone()));
 
         // Illegal construct: Commentary c1 is placed on Page 1, but primary anchor p1 is on Page 2
@@ -539,7 +598,10 @@ mod tests {
         };
 
         let check = AnchorCascadeEngine::verify_invariants(&bad_result, &anchor_map);
-        assert!(check.is_err(), "Must detect CommentaryLeadsPrimary violation");
+        assert!(
+            check.is_err(),
+            "Must detect CommentaryLeadsPrimary violation"
+        );
         match check.unwrap_err() {
             CascadeViolation::CommentaryLeadsPrimary {
                 commentary_node_id,
@@ -558,4 +620,3 @@ mod tests {
         }
     }
 }
-

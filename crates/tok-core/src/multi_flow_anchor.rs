@@ -139,7 +139,8 @@ impl MultiFlowAnchorMap {
         let comm_node = link.commentary_node_id;
         let anchor_id = link.anchor_id.clone();
 
-        self.commentary_to_anchor.insert(comm_node, anchor_id.clone());
+        self.commentary_to_anchor
+            .insert(comm_node, anchor_id.clone());
 
         let comm_list = self.anchor_to_commentaries.entry(anchor_id).or_default();
         // Remove prior link for same commentary node if exists
@@ -162,7 +163,10 @@ impl MultiFlowAnchorMap {
     }
 
     /// Retrieves all commentary links associated with any anchor in the given primary paragraph node.
-    pub fn get_commentaries_for_primary_node(&self, primary_node_id: NodeId) -> Vec<&CommentaryLink> {
+    pub fn get_commentaries_for_primary_node(
+        &self,
+        primary_node_id: NodeId,
+    ) -> Vec<&CommentaryLink> {
         let mut results = Vec::new();
         if let Some(anchor_ids) = self.primary_node_to_anchors.get(&primary_node_id) {
             for aid in anchor_ids {
@@ -177,7 +181,10 @@ impl MultiFlowAnchorMap {
     }
 
     /// Retrieves the anchor definition linked to a specific commentary paragraph node.
-    pub fn get_anchor_for_commentary(&self, commentary_node_id: NodeId) -> Option<&AnchorDefinition> {
+    pub fn get_anchor_for_commentary(
+        &self,
+        commentary_node_id: NodeId,
+    ) -> Option<&AnchorDefinition> {
         let aid = self.commentary_to_anchor.get(&commentary_node_id)?;
         self.anchors.get(aid)
     }
@@ -298,16 +305,23 @@ mod tests {
             FlowId::new("gemara"),
             p1,
             TextAnchor::new(p1, FractionalIndex::initial(), AnchorBias::Before),
-        ).with_label("ד\"ה מאימתי");
+        )
+        .with_label("ד\"ה מאימתי");
 
         map.register_anchor(def.clone());
 
         // Link Rashi
-        map.link_commentary(CommentaryLink::new(FlowId::new("rashi"), r1, a1.clone()).with_priority(0));
+        map.link_commentary(
+            CommentaryLink::new(FlowId::new("rashi"), r1, a1.clone()).with_priority(0),
+        );
         // Link Tosafot item 1
-        map.link_commentary(CommentaryLink::new(FlowId::new("tosafot"), t1, a1.clone()).with_priority(1));
+        map.link_commentary(
+            CommentaryLink::new(FlowId::new("tosafot"), t1, a1.clone()).with_priority(1),
+        );
         // Link Tosafot item 2
-        map.link_commentary(CommentaryLink::new(FlowId::new("tosafot"), t2, a1.clone()).with_priority(2));
+        map.link_commentary(
+            CommentaryLink::new(FlowId::new("tosafot"), t2, a1.clone()).with_priority(2),
+        );
 
         // 1. Verify anchor retrieval
         assert_eq!(map.get_anchor(&a1), Some(&def));
@@ -407,7 +421,10 @@ mod tests {
         // Verification after reindex
         assert_eq!(map.get_anchor(&a1).unwrap().primary_node_id, p_new);
         assert_eq!(map.get_primary_node_for_commentary(r_new), Some(p_new));
-        assert_eq!(map.get_commentaries_for_primary_node(p_new)[0].commentary_node_id, r_new);
+        assert_eq!(
+            map.get_commentaries_for_primary_node(p_new)[0].commentary_node_id,
+            r_new
+        );
     }
 
     #[test]

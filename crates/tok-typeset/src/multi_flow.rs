@@ -627,7 +627,8 @@ impl MultiFlowSolver {
             if let Some((ref term_id, term_h)) = commentary_termination {
                 let actual_term_h = non_negative(term_h).min(available_height);
                 if actual_term_h < available_height - Self::L_SHAPE_MIN_GAP_PT {
-                    if let Some(term_alloc) = allocations.iter_mut().find(|a| &a.flow_id == term_id) {
+                    if let Some(term_alloc) = allocations.iter_mut().find(|a| &a.flow_id == term_id)
+                    {
                         term_alloc.allocated_height_pt = actual_term_h;
                         let (tx, tw) = (term_alloc.allocated_x_pt, term_alloc.allocated_width_pt);
                         let expansion_y = margin_y_pt + actual_term_h + gutter;
@@ -638,14 +639,19 @@ impl MultiFlowSolver {
                             if exp_id != term_id {
                                 column_flows.iter().find(|f| &f.flow_id == exp_id)
                             } else {
-                                column_flows.iter().find(|f| &f.flow_id != term_id && f.role != FlowPlacementRole::Primary)
+                                column_flows.iter().find(|f| {
+                                    &f.flow_id != term_id && f.role != FlowPlacementRole::Primary
+                                })
                             }
                         } else {
-                            column_flows.iter().find(|f| &f.flow_id != term_id && f.role != FlowPlacementRole::Primary)
+                            column_flows.iter().find(|f| {
+                                &f.flow_id != term_id && f.role != FlowPlacementRole::Primary
+                            })
                         };
 
                         if let Some(absorb_spec) = absorbing_flow {
-                            let exp_id = FlowId::new(format!("{}_expansion", absorb_spec.flow_id.0));
+                            let exp_id =
+                                FlowId::new(format!("{}_expansion", absorb_spec.flow_id.0));
                             allocations.push(SolvedFlowAllocation {
                                 flow_id: exp_id,
                                 allocated_x_pt: tx,

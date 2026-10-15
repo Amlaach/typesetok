@@ -74,13 +74,29 @@ fn test_pillar1_dynamic_multi_flow_anchoring_cascades_commentaries_and_balances_
     ));
 
     // P1 anchors: Targum C1, Rashi C2, Ramban C3
-    anchor_map.link_commentary(CommentaryLink::new(targum_flow.clone(), c1_targum_id, a1.clone()));
-    anchor_map.link_commentary(CommentaryLink::new(rashi_flow.clone(), c2_rashi_id, a1.clone()));
+    anchor_map.link_commentary(CommentaryLink::new(
+        targum_flow.clone(),
+        c1_targum_id,
+        a1.clone(),
+    ));
+    anchor_map.link_commentary(CommentaryLink::new(
+        rashi_flow.clone(),
+        c2_rashi_id,
+        a1.clone(),
+    ));
     anchor_map.link_commentary(CommentaryLink::new(ramban_flow.clone(), c3_ramban_id, a1));
 
     // P2 anchors: Rashi C4, Ramban C5
-    anchor_map.link_commentary(CommentaryLink::new(rashi_flow.clone(), c4_rashi_p2_id, a2.clone()));
-    anchor_map.link_commentary(CommentaryLink::new(ramban_flow.clone(), c5_ramban_p2_id, a2));
+    anchor_map.link_commentary(CommentaryLink::new(
+        rashi_flow.clone(),
+        c4_rashi_p2_id,
+        a2.clone(),
+    ));
+    anchor_map.link_commentary(CommentaryLink::new(
+        ramban_flow.clone(),
+        c5_ramban_p2_id,
+        a2,
+    ));
 
     let max_column_height = 400.0;
 
@@ -95,7 +111,12 @@ fn test_pillar1_dynamic_multi_flow_anchoring_cascades_commentaries_and_balances_
     );
     nodes.insert(
         targum_flow.clone(),
-        vec![CascadeNodeInput::new(c1_targum_id, targum_flow.clone(), 80.0, "תרגום בראשית")],
+        vec![CascadeNodeInput::new(
+            c1_targum_id,
+            targum_flow.clone(),
+            80.0,
+            "תרגום בראשית",
+        )],
     );
     nodes.insert(
         rashi_flow.clone(),
@@ -108,7 +129,12 @@ fn test_pillar1_dynamic_multi_flow_anchoring_cascades_commentaries_and_balances_
         ramban_flow.clone(),
         vec![
             CascadeNodeInput::new(c3_ramban_id, ramban_flow.clone(), 120.0, "רמב\"ן בראשית"),
-            CascadeNodeInput::new(c5_ramban_p2_id, ramban_flow.clone(), 110.0, "רמב\"ן יהי אור"),
+            CascadeNodeInput::new(
+                c5_ramban_p2_id,
+                ramban_flow.clone(),
+                110.0,
+                "רמב\"ן יהי אור",
+            ),
         ],
     );
 
@@ -146,7 +172,11 @@ fn test_pillar1_dynamic_multi_flow_anchoring_cascades_commentaries_and_balances_
 
     // P1 stays on Page 1, but P2 moves to Page 2
     assert_eq!(cascaded.node_to_page.get(&p1_id), Some(&1));
-    assert_eq!(cascaded.node_to_page.get(&p2_id), Some(&2), "P2 must be pushed to Page 2");
+    assert_eq!(
+        cascaded.node_to_page.get(&p2_id),
+        Some(&2),
+        "P2 must be pushed to Page 2"
+    );
 
     // Commentaries on P1 (Targum C1, Rashi C2, Ramban C3) remain on Page 1
     assert_eq!(cascaded.node_to_page.get(&c1_targum_id), Some(&1));
@@ -188,25 +218,33 @@ fn test_pillar1_dynamic_multi_flow_anchoring_cascades_commentaries_and_balances_
             frame_id: "f_torah".to_string(),
             flow_id: "torah".to_string(),
             rect: PhysicalRect::new(10.0, 10.0, 150.0, 400.0),
-            lines: (0..10).map(|i| make_line(i, 40.0 + i as f32 * 36.0)).collect(), // ends at 364.0
+            lines: (0..10)
+                .map(|i| make_line(i, 40.0 + i as f32 * 36.0))
+                .collect(), // ends at 364.0
         },
         TextFrameBox {
             frame_id: "f_targum".to_string(),
             flow_id: "targum".to_string(),
             rect: PhysicalRect::new(170.0, 10.0, 150.0, 400.0),
-            lines: (0..8).map(|i| make_line(i, 45.0 + i as f32 * 40.0)).collect(), // ends at 325.0 (39pt deficit)
+            lines: (0..8)
+                .map(|i| make_line(i, 45.0 + i as f32 * 40.0))
+                .collect(), // ends at 325.0 (39pt deficit)
         },
         TextFrameBox {
             frame_id: "f_rashi".to_string(),
             flow_id: "rashi".to_string(),
             rect: PhysicalRect::new(330.0, 10.0, 150.0, 400.0),
-            lines: (0..9).map(|i| make_line(i, 42.0 + i as f32 * 38.0)).collect(), // ends at 346.0 (18pt deficit)
+            lines: (0..9)
+                .map(|i| make_line(i, 42.0 + i as f32 * 38.0))
+                .collect(), // ends at 346.0 (18pt deficit)
         },
         TextFrameBox {
             frame_id: "f_ramban".to_string(),
             flow_id: "ramban".to_string(),
             rect: PhysicalRect::new(490.0, 10.0, 150.0, 400.0),
-            lines: (0..9).map(|i| make_line(i, 40.0 + i as f32 * 39.0)).collect(), // ends at 352.0 (12pt deficit)
+            lines: (0..9)
+                .map(|i| make_line(i, 40.0 + i as f32 * 39.0))
+                .collect(), // ends at 352.0 (12pt deficit)
         },
     ];
 
@@ -261,15 +299,16 @@ fn test_pillar2_commentary_absorption_and_variable_width_polygon_flow() {
 
     // Verify Knuth-Plass line breaking inside L-shaped polygon
     let long_commentary = (0..20)
-        .map(|i| format!("דיבור המתחיל אות {} ביאור רחב ומעמיק בדברי הגמרא והמשנה עם הרחבה מלאה", i))
+        .map(|i| {
+            format!(
+                "דיבור המתחיל אות {} ביאור רחב ומעמיק בדברי הגמרא והמשנה עם הרחבה מלאה",
+                i
+            )
+        })
         .collect::<Vec<_>>()
         .join(" ");
 
-    let p_node = ParagraphNode::new(
-        FractionalIndex::new("r_abs_1"),
-        "rashi",
-        &long_commentary,
-    );
+    let p_node = ParagraphNode::new(FractionalIndex::new("r_abs_1"), "rashi", &long_commentary);
 
     let shaped_lines = engine.typeset_paragraph_shaped(
         &p_node,
@@ -292,7 +331,7 @@ fn test_pillar2_commentary_absorption_and_variable_width_polygon_flow() {
                 line.width,
                 narrow_w
             );
-        } else if idx >= rashi_narrow_lines + 1 && idx < shaped_lines.len() - 1 {
+        } else if idx > rashi_narrow_lines && idx < shaped_lines.len() - 1 {
             assert!(
                 line.width > narrow_w + 10.0,
                 "Expanded line {} width ({}) should exceed narrow measure ({})",
@@ -326,7 +365,10 @@ fn test_pillar2_commentary_absorption_and_variable_width_polygon_flow() {
     // In RTL, a line of 140pt inside a 150pt target span aligns flush-right:
     // start X = x_offset + (target_width - line_width) = 0.0 + (150.0 - 140.0) = 10.0
     let rtl_x_narrow = HebrewJustifier::calculate_line_start_x(140.0, 150.0, 0.0, true);
-    assert_eq!(rtl_x_narrow, 10.0, "RTL flush right alignment at offset 0 + remaining slack");
+    assert_eq!(
+        rtl_x_narrow, 10.0,
+        "RTL flush right alignment at offset 0 + remaining slack"
+    );
 
     // In LTR, lines align flush-left at x_offset:
     let ltr_x = HebrewJustifier::calculate_line_start_x(140.0, 150.0, 0.0, false);
@@ -370,9 +412,18 @@ fn test_pillar3_hebrew_drop_cap_window_with_complex_niqqud_and_taamim() {
     )
     .expect("Failed to shape Hebrew drop cap opening word");
 
-    assert!(drop_layout.window_rect.width > 20.0, "Drop cap width must be positive");
-    assert!(drop_layout.window_rect.height >= 3.0 * line_height - 0.1, "Drop cap height must cover 3 lines");
-    assert!(!drop_layout.glyphs.is_empty(), "Drop cap must contain shaped glyphs");
+    assert!(
+        drop_layout.window_rect.width > 20.0,
+        "Drop cap width must be positive"
+    );
+    assert!(
+        drop_layout.window_rect.height >= 3.0 * line_height - 0.1,
+        "Drop cap height must cover 3 lines"
+    );
+    assert!(
+        !drop_layout.glyphs.is_empty(),
+        "Drop cap must contain shaped glyphs"
+    );
 
     let notch_width = drop_layout.window_rect.width;
 
@@ -394,28 +445,28 @@ fn test_pillar3_hebrew_drop_cap_window_with_complex_niqqud_and_taamim() {
         line_height,
     );
 
-    assert!(lines.len() >= 5, "Expected at least 5 lines in shaped paragraph");
+    assert!(
+        lines.len() >= 5,
+        "Expected at least 5 lines in shaped paragraph"
+    );
 
     // Line 0 is the drop cap line itself
     assert!(lines[0].is_drop_cap, "Line 0 must be flagged as drop cap");
 
     // Lines 1, 2, 3 (the subsequent 3 lines within the 3-line drop cap window)
     // MUST notch within the remaining measure next to the drop cap window
-    for line_idx in 1..=3 {
-        let line = &lines[line_idx];
+    for line in &lines[1..=3] {
         assert!(!line.is_drop_cap);
         assert!(
             line.width <= col_width - notch_width + 1.0,
-            "Line {} width ({}) exceeded window measure ({})",
-            line_idx,
+            "Line width ({}) exceeded window measure ({})",
             line.width,
             col_width - notch_width
         );
         for g in &line.glyphs {
             assert!(
                 g.x <= drop_layout.window_rect.x + 1.0,
-                "Line {} glyph at {} overlaps drop cap window at {}",
-                line_idx,
+                "Glyph at {} overlaps drop cap window at {}",
                 g.x,
                 drop_layout.window_rect.x
             );
@@ -469,7 +520,10 @@ fn test_grand_unified_all_three_typographic_pillars_integrated() {
         },
         CoPaginatedChunk {
             text: gemara_chunk2,
-            anchors: vec![(tok_typeset::AnchorKey::new("dh_m3"), "תנא היכא קאי".to_string())],
+            anchors: vec![(
+                tok_typeset::AnchorKey::new("dh_m3"),
+                "תנא היכא קאי".to_string(),
+            )],
         },
     ]);
 
@@ -491,7 +545,12 @@ fn test_grand_unified_all_three_typographic_pillars_integrated() {
 
     // Tosafot has substantial text that will absorb beneath Rashi / Gemara
     let tosafot_long = (0..12)
-        .map(|i| format!("תוספות אות {} תימא דבכל מקום מקדים תפלת שחרית לתפלת ערבית ומשני קרא דבשכבך ובקומך", i))
+        .map(|i| {
+            format!(
+                "תוספות אות {} תימא דבכל מקום מקדים תפלת שחרית לתפלת ערבית ומשני קרא דבשכבך ובקומך",
+                i
+            )
+        })
         .collect::<Vec<_>>()
         .join(" ");
 
@@ -532,7 +591,10 @@ fn test_grand_unified_all_three_typographic_pillars_integrated() {
     };
 
     let balance_reports = SharedColumnHeightBalancer::balance_page_frames(&mut frames, &bal_config);
-    assert!(!balance_reports.is_empty(), "Balance reports must be generated");
+    assert!(
+        !balance_reports.is_empty(),
+        "Balance reports must be generated"
+    );
 
     // All active frames should converge to the tallest column baseline
     let tallest_baseline = balance_reports
