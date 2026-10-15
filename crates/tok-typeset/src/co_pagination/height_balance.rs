@@ -172,3 +172,188 @@ impl SharedColumnHeightBalancer {
         reports
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry::{LineBox, PhysicalRect};
+    use tok_core::id::NodeId;
+
+    fn deterministic_node_id(idx: usize) -> NodeId {
+        let chars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'];
+        let c1 = chars[(idx / 16) % 16];
+        let c2 = chars[idx % 16];
+        NodeId::from_string(&format!("01ARZ3NDEKTSV4RRFFQ69G5F{}{}", c1, c2))
+            .unwrap_or_else(|_| NodeId::new())
+    }
+
+    fn make_test_line(line_index: usize, paragraph_id: usize, baseline_y: f32) -> LineBox {
+        LineBox {
+            line_index,
+            paragraph_id: Some(deterministic_node_id(paragraph_id)),
+            baseline_y,
+            height: 14.0,
+            width: 150.0,
+            x_offset: 0.0,
+            is_drop_cap: false,
+            glyphs: Vec::new(),
+            text: format!("Line {} in paragraph {}", line_index, paragraph_id),
+            is_rtl: true,
+            fonts: vec!["Frank Ruhl Libre".to_string()],
+        }
+    }
+
+    fn make_test_frame(flow_id: &str, line_specs: &[(usize, f32)]) -> TextFrameBox {
+        let lines = line_specs
+            .iter()
+            .enumerate()
+            .map(|(idx, &(p_id, y))| make_test_line(idx, p_id, y))
+            .collect();
+        TextFrameBox {
+            frame_id: format!("frame_{}", flow_id),
+            flow_id: flow_id.to_string(),
+            rect: PhysicalRect::new(0.0, 0.0, 200.0, 600.0),
+            lines,
+        }
+    }
+
+    #[test]
+    fn test_talmud_spread_shared_column_height_balancing() {
+        // Gemara has 10 lines ending at 500.0 pt (tallest column)
+        let gemara_specs: Vec<(usize, f32)> = (0..10).map(|i| (0, 50.0 + i as f32 * 50.0)).collect();
+
+        // Rashi has 8 lines ending at 480.0 pt (20 pt deficit)
+        let rashi_specs: Vec<(usize, f32)> = (0..8).map(|i| (i / 4, 60.0 + i as f32 * 60.0)).collect();
+
+        // Tosafot has 7 lines ending at 485.0 pt (15 pt deficit)
+        let tosafot_specs: Vec<(usize, f32)> = (0..7).map(|i| (i / 3, 65.0 + i as f32 * 70.0)).collect();
+
+        let mut frames = vec![
+            make_test_frame("gemara", &gemara_specs),
+            make_test_frame("rashi", &rashi_specs),
+            make_test_frame("tosafot", &tosafot_specs),
+        ];
+
+        let config = HeightBalanceConfig {
+            max_line_expansion_pt: 4.0,
+            max_paragraph_expansion_pt: 15.0,
+            min_lines_for_balance: 3,
+            target_mode: BalanceTargetMode::TallestColumn,
+        };
+
+        let reports = SharedColumnHeightBalancer::balance_page_frames(&mut frames, &config);
+
+        assert_eq!(reports.len(), 3);
+
+        // Gemara was the tallest column -> 0 spring injected
+        let gemara_rep = reports.iter().find(|r| r.flow_id == "gemara").unwrap();
+        assert_eq!(gemara_rep.spring_injected_pt, 0.0);
+        assert_eq!(gemara_rep.balanced_bottom_y, 500.0);
+
+        // Rashi and Tosafot should now reach 500.0 pt
+        let rashi_rep = reports.iter().find(|r| r.flow_id == "rashi").unwrap();
+        assert!((rashi_rep.balanced_bottom_y - 500.0).abs() < 0.1, "Rashi bottom must align to 500.0");
+        assert!(rashi_rep.spring_injected_pt > 0.0);
+
+        let tosafot_rep = reports.iter().find(|r| r.flow_id == "tosafot").unwrap();
+        assert!((tosafot_rep.balanced_bottom_y - 500.0).abs() < 0.1, "Tosafot bottom must align to 500.0");
+        assert!(tosafot_rep.spring_injected_pt > 0.0);
+
+        // Verify strict monotonic increasing baselines in all columns
+        for frame in &frames {
+            for i in 0..(frame.lines.len() - 1) {
+                assert!(
+                    frame.lines[i + 1].baseline_y > frame.lines[i].baseline_y,
+                    "Baselines must be strictly monotonic in flow {}",
+                    frame.flow_id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_mikraot_gedolot_4_stream_column_height_balancing() {
+        // 4 streams: Torah (main), Targum, Rashi, Ramban
+        let torah_specs: Vec<(usize, f32)> = (0..12).map(|i| (0, 40.0 + i as f32 * 45.0)).collect(); // ends at 535.0
+        let targum_specs: Vec<(usize, f32)> = (0..10).map(|i| (i / 5, 45.0 + i as f32 * 50.0)).collect(); // ends at 495.0
+        let rashi_specs: Vec<(usize, f32)> = (0..11).map(|i| (i / 4, 42.0 + i as f32 * 48.0)).collect(); // ends at 522.0
+        let ramban_specs: Vec<(usize, f32)> = (0..9).map(|i| (i / 3, 50.0 + i as f32 * 55.0)).collect(); // ends at 490.0
+
+        let mut frames = vec![
+            make_test_frame("torah", &torah_specs),
+            make_test_frame("targum", &targum_specs),
+            make_test_frame("rashi", &rashi_specs),
+            make_test_frame("ramban", &ramban_specs),
+        ];
+
+        let config = HeightBalanceConfig {
+            max_line_expansion_pt: 5.0,
+            max_paragraph_expansion_pt: 20.0,
+            min_lines_for_balance: 3,
+            target_mode: BalanceTargetMode::TallestColumn,
+        };
+
+        let reports = SharedColumnHeightBalancer::balance_page_frames(&mut frames, &config);
+
+        assert_eq!(reports.len(), 4);
+        let tallest = 535.0;
+
+        for rep in &reports {
+            assert!(
+                (rep.balanced_bottom_y - tallest).abs() < 0.2,
+                "Stream {} failed to balance to target tallest baseline {}: got {}",
+                rep.flow_id,
+                tallest,
+                rep.balanced_bottom_y
+            );
+        }
+    }
+
+    #[test]
+    fn test_height_balancing_respects_max_spring_clamp() {
+        // 3 lines ending at 100.0 pt (deficit = 100.0 pt to target 200.0 pt)
+        let specs = vec![(0, 20.0), (0, 60.0), (0, 100.0)];
+        let mut frames = vec![
+            make_test_frame("short", &specs),
+            make_test_frame("tall", &[(0, 50.0), (0, 100.0), (0, 150.0), (0, 200.0)]),
+        ];
+
+        let config = HeightBalanceConfig {
+            max_line_expansion_pt: 3.0,
+            max_paragraph_expansion_pt: 10.0,
+            min_lines_for_balance: 3,
+            target_mode: BalanceTargetMode::TallestColumn,
+        };
+
+        let reports = SharedColumnHeightBalancer::balance_page_frames(&mut frames, &config);
+        let short_rep = reports.iter().find(|r| r.flow_id == "short").unwrap();
+
+        // 2 line gaps with 3.0 max expansion = max 6.0 pt total expansion
+        assert!(
+            short_rep.spring_injected_pt <= 6.01,
+            "Spring must be clamped to max capacity (6.0), got {}",
+            short_rep.spring_injected_pt
+        );
+        assert_eq!(short_rep.balanced_bottom_y, 100.0 + short_rep.spring_injected_pt);
+    }
+
+    #[test]
+    fn test_height_balancing_skips_short_columns_below_threshold() {
+        // 2 lines in frame (below threshold of 3)
+        let specs = vec![(0, 20.0), (0, 60.0)];
+        let mut frames = vec![
+            make_test_frame("tiny", &specs),
+            make_test_frame("main", &[(0, 50.0), (0, 100.0), (0, 150.0)]),
+        ];
+
+        let config = HeightBalanceConfig {
+            min_lines_for_balance: 3,
+            ..Default::default()
+        };
+
+        let reports = SharedColumnHeightBalancer::balance_page_frames(&mut frames, &config);
+        assert!(!reports.iter().any(|r| r.flow_id == "tiny"));
+        assert_eq!(frames[0].lines.last().unwrap().baseline_y, 60.0);
+    }
+}
+
