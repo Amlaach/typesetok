@@ -22,7 +22,6 @@ export interface DocumentSettings {
   baselineOffsetPt: number;
   gematriaFormat: 'standard' | 'with-geresh' | 'talmudic';
   preflightStatus: 'clean' | 'warning' | 'error';
-  templateType?: string;
 }
 
 export interface FrameGeometry {

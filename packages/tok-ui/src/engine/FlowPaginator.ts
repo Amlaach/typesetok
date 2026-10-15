@@ -183,125 +183,6 @@ export const DEFAULT_PROSE_FLOWS: MultiFlowDocumentState['flows'] = {
   notes: []
 };
 
-export const DEFAULT_MIKRAOT_FLOWS: MultiFlowDocumentState['flows'] = {
-  gemara: [
-    {
-      id: 'm-1',
-      styleId: 'chumash-main',
-      text: 'בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם וְאֵ֥ת הָאָֽרֶץ׃ וְהָאָ֗רֶץ הָיְתָ֥ה תֹ֙הוּ֙ וָבֹ֔הוּ וְחֹ֖שֶׁךְ עַל־פְּנֵ֣י תְה֑וֹם וְר֣וּחַ אֱלֹהִ֔ים מְרַחֶ֖פֶת עַל־פְּנֵ֥י הַמָּֽיִם׃'
-    },
-    {
-      id: 'm-2',
-      styleId: 'chumash-main',
-      text: 'וַיֹּ֥אמֶר אֱלֹהִ֖ים יְהִ֣י א֑וֹר וַֽיְהִי־אֽוֹר׃ וַיַּ֧רְא אֱלֹהִ֛ים אֶת־הָא֖וֹר כִּי־ט֑וֹב וַיַּבְדֵּ֣ל אֱלֹהִ֔ים בֵּ֥ין הָא֖וֹר וּבֵ֥ין הַחֹֽשֶׁךְ׃'
-    },
-    {
-      id: 'm-3',
-      styleId: 'chumash-main',
-      text: 'וַיִּקְרָ֨א אֱלֹהִ֤ים ׀ לָאוֹר֙ י֔וֹם וְלַחֹ֖שֶׁךְ קָ֣רָא לָ֑יְלָה וַֽיְהִי־עֶ֥רֶב וַֽיְהִי־בֹ֖קֶר י֥וֹם אֶחָֽד׃'
-    }
-  ],
-  rashi: [
-    {
-      id: 'mr-1',
-      styleId: 'rashi-chumash',
-      text: '<b>בְּרֵאשִׁית</b> – אָמַר רַבִּי יִצְחָק: לֹא הָיָה צָרִיךְ לְהַתְחִיל אֶת הַתּוֹרָה אֶלָּא מֵ״הַחֹדֶשׁ הַזֶּה לָכֶם״ (שמות יב, ב), שֶׁהִיא מִצְוָה רִאשׁוֹנָה שֶׁנִּצְטַוּוּ בָּהּ יִשְׂרָאֵל, וּמַה טַּעַם פָּתַח בִּבְרֵאשִׁית? מִשּׁוּם ״כֹּחַ מַעֲשָׂיו הִגִּיד לְעַמּוֹ לָתֵת לָהֶם נַחֲלַת גּוֹיִם״ (תהלים קיא, ו).'
-    },
-    {
-      id: 'mr-2',
-      styleId: 'rashi-chumash',
-      text: '<b>בָּרָא אֱלֹהִים</b> – וְלֹא נֶאֱמַר ״בָּרָא ה׳״, שֶׁבַּתְּחִלָּה עָלָה בְּמַחֲשָׁבָה לִבְרֹאתוֹ בְּמִדַּת הַדִּין, רָאָה שֶׁאֵין הָעוֹלָם מִתְקַיֵּם, הִקְדִּים מִדַּת רַחֲמִים וְשִׁתְּפָהּ לְמִדַּת הַדִּין.'
-    }
-  ],
-  tosafot: [
-    {
-      id: 'mi-1',
-      styleId: 'ibnezra-main',
-      text: '<b>בְּרֵאשִׁית</b> – אָמַר אַבְרָהָם הַמְחַבֵּר: דַּע כִּי בֵּי״ת ״בְּרֵאשִׁית״ כְּמוֹ בֵּי״ת ״בָּרִאשֹׁנָה״. וְטַעַם הַפָּסוּק כִּי בַּתְּחִלָּה בָּרָא אֱלֹהִים אֶת מַעֲרֶכֶת הַשָּׁמַיִם וְהָאָרֶץ וְכָל צְבָאָם.'
-    },
-    {
-      id: 'mi-2',
-      styleId: 'ramban-main',
-      text: '<b>רַמְבַּ״ן:</b> אָמְרוּ רַבּוֹתֵינוּ כִּי הָעוֹלָם נִבְרָא בְּי׳ מַאֲמָרוֹת, וּבְרֵאשִׁית נַמֵּי מַאֲמָר הוּא. וְכָתַב הָרַב רַבֵּנוּ מֹשֶׁה זַ״ל שֶׁהַבְּרִיאָה הִיא הוֹצָאַת יֵשׁ מֵאַיִן גָּמוּר.'
-    }
-  ],
-  notes: [
-    {
-      id: 'mn-1',
-      styleId: 'targum-main',
-      text: '<b>תַּרְגּוּם אוּנְקְלוֹס:</b> בְּקַדְמִיתָא בְּרָא יְיָ יָת שְׁמַיָּא וְיָת אַרְעָא. וְאַרְעָא הֲוָת צָדְיָא וְרֵיקַנְיָא וַחֲשׁוֹכָא עַל אַפֵּי תְהוֹמָא, וְרוּחָא מִן קֳדָם יְיָ מְנַשְּׁבָא עַל אַפֵּי מַיָּא.'
-    }
-  ]
-};
-
-export const DEFAULT_NOTES_FLOWS: MultiFlowDocumentState['flows'] = {
-  gemara: [
-    {
-      id: 'nb-1',
-      styleId: 'body-with-notes',
-      text: 'סוגיית היסוד בדיני מנהגי ישראל וקביעת פוסקי ההלכה [א] נסמכת על עקרון שימור המסורת מדור דור, כפי ששנינו במשנה ובתלמוד.'
-    },
-    {
-      id: 'nb-2',
-      styleId: 'body-with-notes',
-      text: 'מכאן הורו גדולי הדורות [ב] כי בכל מקום שיש בו ספק בשיטת העימוד או במיקום הערות השוליים, יש לנקוט בקו המאזן בין נוחות הקורא לבין בהירות המקורות.'
-    },
-    {
-      id: 'nb-3',
-      styleId: 'body-with-notes',
-      text: 'בספרים מרובי הערות, מן הראוי לפצל את ההערות לתחתית העמוד [ג] כך שהטקסט העיוני ישמור על רציפותו ללא הפרעה.'
-    }
-  ],
-  rashi: [],
-  tosafot: [],
-  notes: [
-    {
-      id: 'fn-1',
-      styleId: 'footnote-text',
-      text: '[א] ראה שולחן ערוך אורח חיים סימן א סעיף א, ובמשנה ברורה שם ס״ק ד בשם הפוסקים.'
-    },
-    {
-      id: 'fn-2',
-      styleId: 'footnote-text',
-      text: '[ב] שו״ת הרא״ש כלל כו סימן ב, וכן בביאור הגר״א יו״ד סימן רמו.'
-    },
-    {
-      id: 'fn-3',
-      styleId: 'footnote-text',
-      text: '[ג] מנהג דפוסי ליוורנו ופפד״א לחלק את ההערות לשני טורים מאוזנים כמבואר בסדר הדורות.'
-    }
-  ]
-};
-
-export const DEFAULT_BULLETIN_FLOWS: MultiFlowDocumentState['flows'] = {
-  gemara: [
-    {
-      id: 'b1-1',
-      styleId: 'col-right',
-      text: '<b>מאמר מרכזי: חשיבות שמירת מנהגי אבות</b><br>בעולם העימוד והדפוס המסורתי, כל אות ותג מייצגים עמל של דורות. הטור הימני משמש למאמרי השקפה והלכה המביאים את דברי הפוסקים בלשון ברורה ותמציתית.'
-    },
-    {
-      id: 'b1-2',
-      styleId: 'col-right',
-      text: 'הרחבת השורות ויישורן בשני טורים דורשת הקפדה על רווחים מדויקים ומניעת נהרות לבנים בתוך הפסקאות.'
-    }
-  ],
-  rashi: [
-    {
-      id: 'b2-1',
-      styleId: 'col-left',
-      text: '<b>פינת ההלכה למעשה: שאלות ותשובות</b><br>שאלות מצויות שנשאלו בהלכות שבת ומועדים עם מקורות מקיפים ופסקי מרנן ורבנן גדולי הפוסקים.'
-    },
-    {
-      id: 'b2-2',
-      styleId: 'col-left',
-      text: 'נמצאנו למדים כי העימוד הדו-טורי מציע קריאות מהירה וחלוקה נוחה לקריאה בציבור ובבתי המדרש.'
-    }
-  ],
-  tosafot: [],
-  notes: []
-};
-
 /** Flow capacity estimates per page in words/characters for balanced pagination */
 const CAPACITY = {
   gemaraWordsPerPage: 95,
@@ -365,15 +246,15 @@ export class FlowPaginator {
     minPages = 1,
     isExplicitFallback = false
   ): PageDescriptor[] {
+    const isTalmud = doc.templateType === 'gemara' || doc.templateType === 'mikraot';
+    const isProse = doc.templateType === 'prose';
+    const isNotes = doc.templateType === 'notes';
+
     let pages: PageDescriptor[];
-    if (doc.templateType === 'prose') {
+    if (isProse) {
       pages = this.paginateProse(doc, minPages);
-    } else if (doc.templateType === 'notes') {
+    } else if (isNotes) {
       pages = this.paginateWithFootnotes(doc, minPages);
-    } else if (doc.templateType === 'mikraot') {
-      pages = this.paginateMikraot(doc, minPages);
-    } else if (doc.templateType === 'bulletin') {
-      pages = this.paginateBulletin(doc, minPages);
     } else {
       // Default: Full Talmudic Multi-flow layout (Gemara + Rashi + Tosafot + Notes)
       pages = this.paginateTalmud(doc, minPages);
@@ -563,203 +444,7 @@ export class FlowPaginator {
   }
 
   /**
-   * Paginates Mikraot Gedolot:
-   * Upper tier: Chumash (sacred text with Nikud & Ta'amim) + Targum Onkelos.
-   * Lower tier: Multi-column commentaries (Rashi, Ibn Ezra, Ramban).
-   */
-  private static paginateMikraot(
-    doc: MultiFlowDocumentState,
-    minPages: number
-  ): PageDescriptor[] {
-    const chumashParas = doc.flows.gemara || [];
-    const targumParas = doc.flows.notes || [];
-    const rashiParas = doc.flows.rashi || [];
-    const ibnezraParas = doc.flows.tosafot || [];
-
-    const chumashChunks = partitionParagraphs(chumashParas, 80);
-    const targumChunks = partitionParagraphs(targumParas, 85);
-    const rashiChunks = partitionParagraphs(rashiParas, 110);
-    const ibnezraChunks = partitionParagraphs(ibnezraParas, 100);
-
-    const totalPages = Math.max(
-      minPages,
-      Math.max(
-        chumashChunks.length,
-        targumChunks.length,
-        rashiChunks.length,
-        ibnezraChunks.length,
-        1
-      )
-    );
-    const pages: PageDescriptor[] = [];
-    const { widthPt, heightPt } = getDocDimensionsPt(doc);
-
-    for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
-      const pChumash = chumashChunks[pageIdx] || [];
-      const pTargum = targumChunks[pageIdx] || [];
-      const pRashi = rashiChunks[pageIdx] || [];
-      const pIbnEzra = ibnezraChunks[pageIdx] || [];
-      const gematria = toHebrewGematria(pageIdx + 1);
-
-      const html = `
-        <div class="tok-page-content tok-mikraot-page" style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 22px 26px; overflow: hidden; gap: 10px;">
-          <!-- Upper Tier: Chumash & Targum -->
-          <div class="tok-mikraot-upper" style="display: grid; grid-template-columns: 2.2fr 1fr; gap: 14px; border-bottom: 2px solid var(--tok-ink-rule); padding-bottom: 10px; flex: none;">
-            <!-- Chumash -->
-            <div class="tok-interactive-frame tok-frame-chumash" data-frame-id="frame-chumash-${pageIdx}" data-flow-id="gemara" style="border-inline-end: 1px dashed var(--tok-ink-rule); padding-inline-end: 12px;">
-              <div class="tok-frame-label" style="font-size: 11px; font-weight: 800; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px; color: var(--tok-ink);">
-                פסוקי המקרא (חומש)
-              </div>
-              <div class="tok-frame-text" style="font-size: 14px; line-height: 1.7; font-weight: 700; text-align: justify; color: var(--tok-ink);">
-                ${pChumash.map((p) => `<p data-para-id="${p.id}" style="margin: 0 0 0.5em;">${p.text || '&nbsp;'}</p>`).join('')}
-              </div>
-            </div>
-            <!-- Targum Onkelos -->
-            <div class="tok-interactive-frame tok-frame-targum" data-frame-id="frame-targum-${pageIdx}" data-flow-id="notes">
-              <div class="tok-frame-label" style="font-size: 10px; font-weight: 700; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px; color: var(--tok-ink-soft);">
-                תרגום אונקלוס
-              </div>
-              <div class="tok-frame-text" style="font-size: 10.5px; line-height: 1.45; text-align: justify; color: var(--tok-ink-soft);">
-                ${pTargum.map((p) => `<p data-para-id="${p.id}" style="margin: 0 0 0.4em;">${p.text || '&nbsp;'}</p>`).join('')}
-              </div>
-            </div>
-          </div>
-
-          <!-- Lower Tier: Classic Commentaries Columns -->
-          <div class="tok-mikraot-lower" style="flex: 1; min-height: 0; display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; overflow: hidden;">
-            <!-- Rashi Column -->
-            <div class="tok-interactive-frame tok-frame-rashi" data-frame-id="frame-rashi-${pageIdx}" data-flow-id="rashi" style="display: flex; flex-direction: column; overflow: hidden; border-inline-end: 1px solid rgba(0,0,0,0.06); padding-inline-end: 10px;">
-              <div class="tok-frame-label" style="font-size: 10.5px; font-weight: 800; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px; color: #B45309;">
-                פירוש רש״י
-              </div>
-              <div class="tok-frame-text" style="flex: 1; overflow: hidden; font-size: 11px; line-height: 1.5; text-align: justify; font-family: var(--tok-font-hebrew-rashi);">
-                ${pRashi.map((p) => `<p data-para-id="${p.id}" style="margin: 0 0 0.6em;">${p.text || '&nbsp;'}</p>`).join('')}
-              </div>
-            </div>
-            <!-- Ibn Ezra / Commentaries Column -->
-            <div class="tok-interactive-frame tok-frame-ibnezra" data-frame-id="frame-ibnezra-${pageIdx}" data-flow-id="tosafot" style="display: flex; flex-direction: column; overflow: hidden;">
-              <div class="tok-frame-label" style="font-size: 10.5px; font-weight: 800; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px; color: #15803D;">
-                אבן עזרא ומפרשים
-              </div>
-              <div class="tok-frame-text" style="flex: 1; overflow: hidden; font-size: 10.5px; line-height: 1.48; text-align: justify;">
-                ${pIbnEzra.map((p) => `<p data-para-id="${p.id}" style="margin: 0 0 0.6em;">${p.text || '&nbsp;'}</p>`).join('')}
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-
-      pages.push({
-        pageIndex: pageIdx,
-        gematriaNumber: gematria,
-        widthPt,
-        heightPt,
-        htmlContent: html
-      });
-    }
-
-    return pages;
-  }
-
-  /**
-   * Paginates Bulletin / Two-column document layout.
-   */
-  private static paginateBulletin(
-    doc: MultiFlowDocumentState,
-    minPages: number
-  ): PageDescriptor[] {
-    const colRightParas = doc.flows.gemara || [];
-    const colLeftParas = doc.flows.rashi || [];
-
-    const rightChunks = partitionParagraphs(colRightParas, 140);
-    const leftChunks = partitionParagraphs(colLeftParas, 140);
-
-    const totalPages = Math.max(minPages, Math.max(rightChunks.length, leftChunks.length, 1));
-    const pages: PageDescriptor[] = [];
-    const { widthPt, heightPt } = getDocDimensionsPt(doc);
-
-    for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
-      const pRight = rightChunks[pageIdx] || [];
-      const pLeft = leftChunks[pageIdx] || [];
-      const gematria = toHebrewGematria(pageIdx + 1);
-
-      const html = `
-        <div class="tok-page-content tok-bulletin-page" style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 24px 28px; overflow: hidden; gap: 12px;">
-          <div class="tok-bulletin-grid" style="flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; overflow: hidden;">
-            <!-- Column Right -->
-            <div class="tok-interactive-frame tok-col-right" data-frame-id="frame-col1-${pageIdx}" data-flow-id="gemara" style="display: flex; flex-direction: column; overflow: hidden; border-inline-end: 1px solid var(--tok-ink-rule); padding-inline-end: 14px;">
-              <div class="tok-frame-text" style="flex: 1; overflow: hidden; font-size: 12.5px; line-height: 1.55; text-align: justify;">
-                ${pRight.map((p) => `<p data-para-id="${p.id}" style="margin: 0 0 0.7em;">${p.text || '&nbsp;'}</p>`).join('')}
-              </div>
-            </div>
-            <!-- Column Left -->
-            <div class="tok-interactive-frame tok-col-left" data-frame-id="frame-col2-${pageIdx}" data-flow-id="rashi" style="display: flex; flex-direction: column; overflow: hidden;">
-              <div class="tok-frame-text" style="flex: 1; overflow: hidden; font-size: 12.5px; line-height: 1.55; text-align: justify;">
-                ${pLeft.map((p) => `<p data-para-id="${p.id}" style="margin: 0 0 0.7em;">${p.text || '&nbsp;'}</p>`).join('')}
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-
-      pages.push({
-        pageIndex: pageIdx,
-        gematriaNumber: gematria,
-        widthPt,
-        heightPt,
-        htmlContent: html
-      });
-    }
-
-    return pages;
-  }
-
-  /**
-   * Rule 2 Algorithmic Implementation:
-   * Calculates vertical line distributions and inter-paragraph spacings
-   * to achieve identical horizontal Y-axis baseline termination across all active columns.
-   */
-  public static calculateEqualBaselineDistribution(
-    activeColCount: number,
-    paraCounts: { right: number; center: number; left: number },
-    targetBodyHeightPx = 520
-  ): {
-    rightSpacingPx: number;
-    centerSpacingPx: number;
-    leftSpacingPx: number;
-    targetBaselineYPx: number;
-  } {
-    const calcSpacing = (count: number) => {
-      if (count <= 1) return 10;
-      const raw = Math.floor((targetBodyHeightPx * 0.16) / (count - 1));
-      return Math.max(4, Math.min(22, raw));
-    };
-
-    return {
-      rightSpacingPx: calcSpacing(paraCounts.right),
-      centerSpacingPx: calcSpacing(paraCounts.center),
-      leftSpacingPx: calcSpacing(paraCounts.left),
-      targetBaselineYPx: targetBodyHeightPx
-    };
-  }
-
-  /**
-   * Builds the complex multi-column dynamic layout for Talmud/Mikraot pages.
-   *
-   * Architectural & Algorithmic Rules Enforced:
-   * - Rule 1 (Top Offset & Adaptive Wrapping):
-   *     * Outer envelope columns initialize at the top (start line 1).
-   *     * First 4 lines consist exclusively of the two outer envelope columns (Header Shift).
-   *     * Primary/center column begins exactly at line 5 between the two wrapping columns.
-   *     * Center column has higher visual weight/emphasis (font, width, lead styling).
-   *     * Dynamic step-like / slanted boundaries wrap around the bottom of the center column.
-   * - Rule 2 (Strict Bottom Alignment):
-   *     * Identical horizontal Y-axis baseline termination across all active columns (1, 2, or 3).
-   *     * Balanced vertical distribution across active columns.
-   * - Rule 3 (Column Separation & Missing Content Expansion):
-   *     * Boundary integrity: strict text isolation, no overflow across column regions.
-   *     * Fallback expansion: when one outer envelope column is completely missing, the remaining
-   *       outer column expands horizontally across the missing column's space.
+   * Builds the complete, interactive 3-column HTML layout for a Talmud page.
    */
   private static buildTalmudPageHtml(params: {
     pageIndex: number;
@@ -790,114 +475,58 @@ export class FlowPaginator {
       lShapeCommentary
     } = params;
 
-    // Check content presence for Rule 3 Fallback Expansion
-    const hasRight = rightParas.length > 0 && rightParas.some((p) => (p.text || '').trim().length > 0);
-    const hasLeft = leftParas.length > 0 && leftParas.some((p) => (p.text || '').trim().length > 0);
-    const hasCenter = gemaraParas.length > 0 && gemaraParas.some((p) => (p.text || '').trim().length > 0);
-
-    const activeColCount = (hasRight ? 1 : 0) + (hasCenter ? 1 : 0) + (hasLeft ? 1 : 0);
-
-    // Rule 3: Dynamic Grid Proportion & Fallback Expansion
-    let gridTemplate = '1fr 1.65fr 1fr';
-    let rightExpanded = false;
-    let leftExpanded = false;
-
-    if (!hasRight && hasLeft) {
-      // Left outer envelope expands horizontally across missing right envelope space
-      gridTemplate = '2.1fr 1.65fr';
-      leftExpanded = true;
-    } else if (hasRight && !hasLeft) {
-      // Right outer envelope expands horizontally across missing left envelope space
-      gridTemplate = '1.65fr 2.1fr';
-      rightExpanded = true;
-    } else if (!hasRight && !hasLeft) {
-      // Both outer columns missing, center column takes entire width
-      gridTemplate = '1fr';
-    }
-
-    // Rule 1: Header shift metrics
-    const HEADER_SHIFT_LINES = 4;
-    const HEADER_LINE_HEIGHT_PX = 18;
-    const HEADER_OFFSET_PX = HEADER_SHIFT_LINES * HEADER_LINE_HEIGHT_PX; // 72px
-
-    // Rule 2: Calculate balanced distribution for equal baseline termination
-    const baselineDist = this.calculateEqualBaselineDistribution(
-      activeColCount,
-      {
-        right: rightParas.length,
-        center: gemaraParas.length,
-        left: leftParas.length
-      },
-      520
-    );
-
-    const renderParas = (paras: StoryParagraph[], spacingPx: number) =>
+    const renderParas = (paras: StoryParagraph[]) =>
       paras.length > 0
         ? paras
             .map(
               (p) =>
-                `<p data-para-id="${p.id}" style="margin: 0 0 ${spacingPx}px; text-align: justify; text-justify: inter-word; word-break: break-word;">${p.text || '&nbsp;'}</p>`
+                `<p data-para-id="${p.id}" style="margin: 0 0 0.55em; text-align: justify;">${p.text || '&nbsp;'}</p>`
             )
             .join('')
         : `<div style="font-size: 10px; color: var(--tok-text-muted); font-style: italic; text-align: center; padding-top: 20px;">[אין טקסט בעמוד זה]</div>`;
 
     return `
-      <div class="tok-page-content" style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 20px 24px; overflow: hidden; gap: 8px;">
-        <!-- Adaptive Multi-Column Talmud Body Grid -->
-        <div class="tok-talmud-grid tok-dynamic-multi-column" data-active-columns="${activeColCount}" style="flex: 1; min-height: 0; display: grid; grid-template-columns: ${gridTemplate}; column-gap: 14px; row-gap: 8px; overflow: hidden; contain: layout style; isolation: isolate;">
+      <div class="tok-page-content" style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 22px 24px; overflow: hidden; gap: 8px;">
+        <!-- 3-Column Talmud Spread Grid -->
+        <div class="tok-talmud-grid" style="flex: 1; min-height: 0; display: grid; grid-template-columns: 1.05fr 1.35fr 1.05fr; column-gap: 12px; row-gap: 8px; overflow: hidden;">
           
-          <!-- Column 1: Right Outer/Inner Envelope -->
-          <div class="tok-interactive-frame tok-col-right tok-col-envelope ${rightExpanded ? 'tok-col-expanded-fallback' : ''}" data-frame-id="frame-right-${pageIndex}" data-flow-id="${rightFlowId}" data-start-line="1" data-envelope-role="outer-envelope" ${rightExpanded ? 'data-fallback-expanded="true" data-expanded-from="left"' : ''} style="display: ${!hasRight && hasLeft ? 'none' : 'flex'}; flex-direction: column; justify-content: space-between; height: 100%; min-height: 0; overflow: hidden; contain: layout style; isolation: isolate; border-radius: 2px;">
-            <div class="tok-frame-label" style="font-size: 10px; font-weight: 700; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px; flex: none;">
-              ${rightTitle} ${rightExpanded ? '<span style="font-size: 8.5px; font-weight: normal; color: var(--tok-accent-text);">(הרחבה אופקית במקום עמודה חסרה)</span>' : ''}
+          <!-- Column 1: Right (Outer on Recto / Inner on Verso) -->
+          <div class="tok-interactive-frame tok-col-right" data-frame-id="frame-right-${pageIndex}" data-flow-id="${rightFlowId}" style="display: flex; flex-direction: column; overflow: hidden;">
+            <div class="tok-frame-label" style="font-size: 10px; font-weight: 700; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px;">
+              ${rightTitle}
             </div>
-            <div class="tok-frame-text ${rightClass}" style="flex: 1; min-height: 0; overflow: hidden; font-size: 10.5px; line-height: 1.48; display: flex; flex-direction: column;">
-              <div style="flex: 1; min-height: 0; overflow: hidden;">
-                ${renderParas(rightParas, baselineDist.rightSpacingPx)}
-              </div>
-              <!-- Rule 2: Synchronized Column Baseline Anchor -->
-              <div class="tok-baseline-terminator" data-baseline-sync="true" data-baseline-y="bottom-aligned" style="margin-top: auto; height: 1px; width: 100%; border-bottom: 0.5px solid transparent; flex: none;"></div>
+            <div class="tok-frame-text ${rightClass}" style="flex: 1; min-height: 0; overflow: hidden; font-size: 10px; line-height: 1.48;">
+              ${renderParas(rightParas)}
             </div>
           </div>
 
-          <!-- Column 2: Center Primary Column -->
-          <div class="tok-interactive-frame tok-col-center tok-primary-center tok-center-inserted" data-frame-id="frame-gemara-${pageIndex}" data-flow-id="gemara" data-start-line="5" data-header-shift-lines="${HEADER_SHIFT_LINES}" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; min-height: 0; overflow: hidden; contain: layout style; isolation: isolate; background: rgba(30, 74, 158, 0.02); padding: 0 6px; border-inline: 1px solid rgba(0,0,0,0.06); border-radius: 3px;">
-            <div class="tok-frame-label" style="font-size: 11.5px; font-weight: 800; text-align: center; border-bottom: 0.75px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px; color: var(--tok-ink); flex: none;">
-              גמרא (מרכז העמוד)
+          <!-- Column 2: Center (Gemara) -->
+          <div class="tok-interactive-frame tok-col-center" data-frame-id="frame-gemara-${pageIndex}" data-flow-id="gemara" style="display: flex; flex-direction: column; overflow: hidden; background: rgba(0,0,0,0.012); padding: 0 4px; border-radius: 2px;">
+            <div class="tok-frame-label" style="font-size: 11px; font-weight: 800; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px;">
+              גמרא (טקסט ראשי)
             </div>
-            <div class="tok-frame-text tok-frame-gemara" style="flex: 1; min-height: 0; overflow: hidden; font-size: 14px; line-height: 1.58; font-weight: 700; color: var(--tok-ink); display: flex; flex-direction: column;">
-              <div style="flex: 1; min-height: 0; overflow: hidden;">
-                ${renderParas(gemaraParas, baselineDist.centerSpacingPx)}
-              </div>
-              <!-- Rule 1: Adaptive Slanted / Stepped Wrapping Boundary under Center Column -->
+            <div class="tok-frame-text tok-frame-gemara" style="flex: 1; min-height: 0; overflow: hidden; font-size: 13.5px; line-height: 1.55; font-weight: 600;">
+              ${renderParas(gemaraParas)}
               ${lShapeCommentary ? `
-                <div class="tok-lshape-box tok-adaptive-step-boundary tok-slanted-boundary" data-boundary-type="step-slanted" data-wrapping="adaptive-envelope" style="margin-top: 8px; padding: 6px 8px; border-top: 2px solid var(--tok-ink-rule); background: linear-gradient(135deg, rgba(30, 74, 158, 0.03) 0%, transparent 100%); clip-path: polygon(0 0, 100% 4px, 100% 100%, 0 100%); font-size: 9.5px; font-family: var(--tok-font-hebrew-rashi); color: var(--tok-ink-soft); flex: none;">
+                <div class="tok-lshape-box" style="margin-top: 10px; padding: 6px; border-top: 1px dashed var(--tok-ink-rule); font-size: 9.5px; font-family: var(--tok-font-hebrew-rashi); color: var(--tok-ink-soft);">
                   <div style="font-weight: 700; margin-bottom: 2px;">◄ ${lShapeCommentary}</div>
+                  המשך לשון רש״י זורם ומתרחב ברוחב שני טורים מתחת לסיום הגמרא כמסורת דפוס וילנא.
                 </div>
               ` : ''}
-              <!-- Rule 2: Synchronized Column Baseline Anchor -->
-              <div class="tok-baseline-terminator" data-baseline-sync="true" data-baseline-y="bottom-aligned" style="margin-top: auto; height: 1px; width: 100%; border-bottom: 0.5px solid transparent; flex: none;"></div>
             </div>
           </div>
 
-          <!-- Column 3: Left Inner/Outer Envelope -->
-          <div class="tok-interactive-frame tok-col-left tok-col-envelope ${leftExpanded ? 'tok-col-expanded-fallback' : ''}" data-frame-id="frame-left-${pageIndex}" data-flow-id="${leftFlowId}" data-start-line="1" data-envelope-role="inner-envelope" ${leftExpanded ? 'data-fallback-expanded="true" data-expanded-from="right"' : ''} style="display: ${hasRight && !hasLeft ? 'none' : 'flex'}; flex-direction: column; justify-content: space-between; height: 100%; min-height: 0; overflow: hidden; contain: layout style; isolation: isolate; border-radius: 2px;">
-            <div class="tok-frame-label" style="font-size: 10px; font-weight: 700; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px; flex: none;">
+          <!-- Column 3: Left (Inner on Recto / Outer on Verso) -->
+          <div class="tok-interactive-frame tok-col-left" data-frame-id="frame-left-${pageIndex}" data-flow-id="${leftFlowId}" style="display: flex; flex-direction: column; overflow: hidden;">
+            <div class="tok-frame-label" style="font-size: 10px; font-weight: 700; text-align: center; border-bottom: 0.5px solid var(--tok-ink-rule); margin-bottom: 4px; padding-bottom: 2px;">
               ${leftTitle}
             </div>
-            <div class="tok-frame-text ${leftClass}" style="flex: 1; min-height: 0; overflow: hidden; font-size: 10.5px; line-height: 1.48; display: flex; flex-direction: column;">
-              <div style="flex: 1; min-height: 0; overflow: hidden;">
-                ${renderParas(leftParas, baselineDist.leftSpacingPx)}
-              </div>
-              <!-- Rule 2: Synchronized Column Baseline Anchor -->
-              <div class="tok-baseline-terminator" data-baseline-sync="true" data-baseline-y="bottom-aligned" style="margin-top: auto; height: 1px; width: 100%; border-bottom: 0.5px solid transparent; flex: none;"></div>
+            <div class="tok-frame-text ${leftClass}" style="flex: 1; min-height: 0; overflow: hidden; font-size: 10px; line-height: 1.48;">
+              ${renderParas(leftParas)}
             </div>
           </div>
 
         </div>
-
-        <!-- Synchronized Baseline Divider Rule -->
-        <div class="tok-uniform-grid-baseline" data-baseline-aligned="true" data-active-columns="${activeColCount}" style="width: 100%; border-bottom: 0.75px solid var(--tok-ink-rule); margin-top: 4px; flex: none;"></div>
 
         <!-- Optional Bottom Footnotes / Traditional References Frame -->
         ${notesParas.length > 0 ? `

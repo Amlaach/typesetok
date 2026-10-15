@@ -482,9 +482,8 @@ export function extractDocxXml(raw: Uint8Array | ArrayBuffer): string {
           if (typeof (globalThis as any).require === 'function') {
             try { zlib = (globalThis as any).require('zlib'); } catch {}
           }
-          const proc: any = (globalThis as any).process;
-          if (!zlib && typeof proc !== 'undefined' && typeof proc.getBuiltinModule === 'function') {
-            try { zlib = proc.getBuiltinModule('node:zlib') || proc.getBuiltinModule('zlib'); } catch {}
+          if (!zlib && typeof process !== 'undefined' && typeof (process as any).getBuiltinModule === 'function') {
+            try { zlib = (process as any).getBuiltinModule('node:zlib') || (process as any).getBuiltinModule('zlib'); } catch {}
           }
 
           if (zlib && typeof zlib.inflateRawSync === 'function') {

@@ -13,9 +13,7 @@
     "package:desktop": "node scripts/build-desktop-bundle.mjs",
     "package:installer": "node scripts/build-installer.mjs",
     "test": "node --test test/frontend.test.mjs test/milestone_features.test.mjs test/story_editor.test.mjs test/outcome_validation.test.mjs test/importer.test.mjs test/lifecycle_flow.test.mjs test/geometric_fidelity.test.mjs test/phase3_integration.test.mjs",
-    "dev": "node server.mjs",
-    "start": "node server.mjs",
-    "lint": "tsc --build",
+    "start": "electron packages/tok-electron/dist/main.js",
     "perf:startup": "node scripts/measure-startup.mjs"
   },
   "devDependencies": {

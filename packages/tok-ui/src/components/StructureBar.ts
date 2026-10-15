@@ -116,47 +116,6 @@ export class StructureBar {
     return this.flows.map((f) => ({ ...f }));
   }
 
-  public setTemplateType(templateType: string): void {
-    if (templateType === 'prose') {
-      this.flows = [
-        { id: 'gemara', name: 'טקסט ראשי (פרוזה)', color: '#1E4A9E', role: 'גוף הספר', wordCount: 0, isActive: true }
-      ];
-    } else if (templateType === 'notes') {
-      this.flows = [
-        { id: 'gemara', name: 'טקסט עיוני ראשי', color: '#1E4A9E', role: 'גוף הטקסט', wordCount: 0, isActive: true },
-        { id: 'notes', name: 'הערות שוליים', color: '#7C3AED', role: 'תחתית העמוד', wordCount: 0, isActive: false }
-      ];
-    } else if (templateType === 'mikraot') {
-      this.flows = [
-        { id: 'gemara', name: 'מקרא וחומש', color: '#1E4A9E', role: 'עליון - פסוקים', wordCount: 0, isActive: true },
-        { id: 'notes', name: 'תרגום אונקלוס', color: '#4B5563', role: 'עליון - תרגום', wordCount: 0, isActive: false },
-        { id: 'rashi', name: 'רש״י על התורה', color: '#B45309', role: 'פירוש ראשון', wordCount: 0, isActive: false },
-        { id: 'tosafot', name: 'אבן עזרא ומפרשים', color: '#15803D', role: 'פירוש שני', wordCount: 0, isActive: false }
-      ];
-    } else if (templateType === 'bulletin') {
-      this.flows = [
-        { id: 'gemara', name: 'טור א׳ (ימין)', color: '#1E4A9E', role: 'טור ראשי', wordCount: 0, isActive: true },
-        { id: 'rashi', name: 'טור ב׳ (שמאל)', color: '#15803D', role: 'טור משני', wordCount: 0, isActive: false }
-      ];
-    } else {
-      // gemara (default)
-      this.flows = [
-        { id: 'gemara', name: 'גמרא (ראשי)', color: '#1E4A9E', role: 'מרכז העמוד', wordCount: 0, isActive: true },
-        { id: 'rashi', name: 'רש"י', color: '#B45309', role: 'פירוש פנימי', wordCount: 0, isActive: false },
-        { id: 'tosafot', name: 'תוספות', color: '#15803D', role: 'פירוש חיצוני', wordCount: 0, isActive: false },
-        { id: 'notes', name: 'הערות ומסורת הש״ס', color: '#7C3AED', role: 'תחתית העמוד', wordCount: 0, isActive: false }
-      ];
-    }
-    const current = this.flows.find((f) => f.id === this.activeFlowId);
-    if (!current && this.flows.length > 0) {
-      this.activeFlowId = this.flows[0].id;
-      this.flows[0].isActive = true;
-    } else if (current) {
-      current.isActive = true;
-    }
-    if (this.activeTab === 'flows') this.renderPanel();
-  }
-
   /** Opens/closes the side panel (the rail always stays). */
   public setPanelOpen(open: boolean): void {
     this.panelOpen = open;

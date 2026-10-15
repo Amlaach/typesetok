@@ -178,21 +178,6 @@ export class ContextualInspector {
   private renderZeroSelection(): void {
     this.element.appendChild(this.createHeader(t('inspNothingSelected'), this.documentSettings.title, `${t('inspDocTitle')} · ${t('inspDocSubtitle')}`, 'file'));
 
-    // 0. Document Architecture & Layout Template
-    const archCard = this.createCard('ארכיטקטורת תבנית ועימוד');
-    const templates = [
-      { id: 'prose', label: 'ספר רציף (טקסט רציף / עיון)' },
-      { id: 'notes', label: 'ספר עם הערות שוליים' },
-      { id: 'gemara', label: 'דף גמרא (צורת הדף)' },
-      { id: 'mikraot', label: 'מקראות גדולות (מקרא ומפרשים)' },
-      { id: 'bulletin', label: 'עלון וקונטרס (2 טורים)' }
-    ];
-    archCard.appendChild(selectField('ארכיטקטורת תבנית', templates.map((tmpl) => ({ value: tmpl.id, label: tmpl.label })), this.documentSettings.templateType || 'gemara', (value) => {
-      this.documentSettings.templateType = value;
-      this.callbacks.onDocumentChange({ templateType: value });
-    }, { title: 'בחירת ארכיטקטורת עימוד' }));
-    this.element.appendChild(archCard);
-
     // 1. Page size
     const sizeCard = this.createCard(t('inspPageSize'));
     const presets = [
@@ -511,21 +496,17 @@ export class ContextualInspector {
     this.element.appendChild(this.createHeader(t('inspSelected'), t('inspMulti'), t('inspMultiCount'), 'layers'));
 
     const alignCard = this.createCard(t('inspAlignDist'));
-    const grid = el('div', undefined, { style: 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px' });
+    const grid = el('div', undefined, { style: 'display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px' });
     const actions = [
       { id: 'right', label: t('inspAlignRight') },
-      { id: 'left', label: t('inspAlignLeft') },
       { id: 'center', label: t('inspAlignCenter') },
-      { id: 'middle', label: t('inspAlignMiddle') },
+      { id: 'left', label: t('inspAlignLeft') },
       { id: 'top', label: t('inspAlignTop') },
+      { id: 'middle', label: t('inspAlignMiddle') },
       { id: 'bottom', label: t('inspAlignBottom') }
     ];
     for (const a of actions) {
-      grid.appendChild(button(a.label, {
-        className: 'tok-btn tok-btn-sm',
-        attrs: { style: 'font-size:11.5px;padding:0 6px;text-overflow:ellipsis;overflow:hidden;' },
-        onClick: () => this.callbacks.onAlignFrames(a.id)
-      }));
+      grid.appendChild(button(a.label, { className: 'tok-btn tok-btn-sm', onClick: () => this.callbacks.onAlignFrames(a.id) }));
     }
     alignCard.appendChild(grid);
     alignCard.appendChild(button(t('inspDistribute'), {
