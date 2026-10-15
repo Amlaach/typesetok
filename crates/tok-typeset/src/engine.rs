@@ -493,8 +493,7 @@ impl TypesettingEngine {
                 HebrewJustifier::justify_line(line_glyphs, target_w, font_size, is_last);
 
             let line_width: f32 = justified.glyphs.iter().map(|g| g.x_advance).sum();
-            // RTL lines start at the right edge of the assigned line measure, plus span.x_offset.
-            let mut current_x = span.x_offset + if is_rtl { target_w - line_width } else { 0.0 };
+            let mut current_x = HebrewJustifier::calculate_line_start_x(line_width, target_w, span.x_offset, is_rtl);
             let glyph_boxes: Vec<GlyphBox> = justified
                 .glyphs
                 .into_iter()
@@ -1580,11 +1579,12 @@ impl TypesettingEngine {
                                 false,
                             );
                             let new_w: f32 = justified.glyphs.iter().map(|g| g.x_advance).sum();
-                            let mut curr_x = if positioned_line.is_rtl {
-                                alloc.allocated_width_pt - new_w
-                            } else {
-                                0.0
-                            };
+                            let mut curr_x = HebrewJustifier::calculate_line_start_x(
+                                new_w,
+                                alloc.allocated_width_pt,
+                                0.0,
+                                positioned_line.is_rtl,
+                            );
                             positioned_line.width = new_w;
                             positioned_line.glyphs = justified
                                 .glyphs

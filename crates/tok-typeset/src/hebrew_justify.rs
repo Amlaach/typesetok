@@ -53,6 +53,14 @@ impl JustifiedLine {
     }
 }
 
+/// Layout positioning result for a line shaped into a variable-width polygon slice.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariableLineLayout {
+    pub justified: JustifiedLine,
+    pub total_width: f32,
+    pub start_x: f32,
+}
+
 pub struct HebrewJustifier;
 
 impl HebrewJustifier {
@@ -172,6 +180,46 @@ impl HebrewJustifier {
             space_multiplier,
             stretch_per_ahalterm_pt: 0.0,
             micro_tracking_pt: 0.0,
+        }
+    }
+
+    /// Calculates the starting X coordinate for a line within an offset measure span.
+    /// In RTL reading order, lines align flush-right to the measure (`x_offset + target_width - line_width`),
+    /// while LTR lines align flush-left (`x_offset`). If the line overflows the measure,
+    /// it clamps to `x_offset` to prevent negative coordinate clipping outside the frame.
+    pub fn calculate_line_start_x(
+        line_width: f32,
+        target_width: f32,
+        x_offset: f32,
+        is_rtl: bool,
+    ) -> f32 {
+        if is_rtl {
+            if target_width >= line_width {
+                x_offset + (target_width - line_width)
+            } else {
+                x_offset
+            }
+        } else {
+            x_offset
+        }
+    }
+
+    /// Justifies a line and computes its positioned X start within a variable-width polygon span.
+    pub fn justify_line_with_offset(
+        glyphs: Vec<PositionedGlyph>,
+        target_width_pt: f32,
+        x_offset_pt: f32,
+        font_size_pt: f32,
+        is_last_line_of_para: bool,
+        is_rtl: bool,
+    ) -> VariableLineLayout {
+        let justified = Self::justify_line(glyphs, target_width_pt, font_size_pt, is_last_line_of_para);
+        let total_width: f32 = justified.glyphs.iter().map(|g| g.x_advance).sum();
+        let start_x = Self::calculate_line_start_x(total_width, target_width_pt, x_offset_pt, is_rtl);
+        VariableLineLayout {
+            justified,
+            total_width,
+            start_x,
         }
     }
 }

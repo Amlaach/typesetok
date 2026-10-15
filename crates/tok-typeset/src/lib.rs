@@ -61,7 +61,9 @@ pub use gematria::{GematriaEngine, HEBREW_GERESH, HEBREW_GERSHAYIM};
 pub use geometry::{
     BreakToken, GlyphBox, LineBox, PageLayoutBox, PhysicalPoint, PhysicalRect, TextFrameBox,
 };
-pub use hebrew_justify::{HebrewJustifier, JustificationTier, JustifiedLine, AHALTERM_LETTERS};
+pub use hebrew_justify::{
+    HebrewJustifier, JustificationTier, JustifiedLine, VariableLineLayout, AHALTERM_LETTERS,
+};
 pub use hit_test::{HitTestResult, HitTester};
 pub use incremental::{
     IncrementalBreakDiagnostics, IncrementalPageBreaker, IncrementalTypesetDiagnostics,
