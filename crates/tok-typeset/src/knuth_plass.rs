@@ -1325,4 +1325,72 @@ mod tests {
         // Valid glue-only sequence completes without panic
         assert!(!lines.is_empty());
     }
+
+    #[test]
+    fn test_measure_profile_with_offsets_and_measures() {
+        let measures = vec![(0.0, 100.0), (30.0, 70.0), (0.0, 100.0)];
+        let profile = MeasureProfile::from_measures(&measures, true);
+
+        assert_eq!(profile.width_for_line(0), 100.0);
+        assert_eq!(profile.offset_for_line(0), 0.0);
+
+        assert_eq!(profile.width_for_line(1), 70.0);
+        assert_eq!(profile.offset_for_line(1), 30.0);
+
+        assert_eq!(profile.width_for_line(2), 100.0);
+        assert_eq!(profile.offset_for_line(2), 0.0);
+
+        // Repeated lines follow last
+        assert_eq!(profile.width_for_line(5), 100.0);
+        assert_eq!(profile.offset_for_line(5), 0.0);
+    }
+
+    #[test]
+    fn test_measure_profile_from_polygon_slicing() {
+        let l_poly = crate::polygon::GeometricPolygon::l_shape(0.0, 0.0, 120.0, 45.0, 240.0, 45.0);
+        let profile = MeasureProfile::from_polygon(&l_poly, 15.0, 0.0, 6);
+
+        // Lines 0, 1, 2 (y < 45) have width ~120
+        assert!((profile.width_for_line(0) - 120.0).abs() < 1e-2);
+        assert!((profile.width_for_line(1) - 120.0).abs() < 1e-2);
+        assert!((profile.width_for_line(2) - 120.0).abs() < 1e-2);
+
+        // Lines 3, 4, 5 (y >= 45) expand to ~240
+        assert!((profile.width_for_line(3) - 240.0).abs() < 1e-2);
+        assert!((profile.width_for_line(4) - 240.0).abs() < 1e-2);
+    }
+
+    #[test]
+    fn test_knuth_plass_breaking_with_drop_cap_notch() {
+        // Drop cap window in top right: 3 lines tall, 80pt wide with 5pt margin (total 90pt clearance)
+        let ex = crate::polygon::ExclusionZone::new(
+            crate::geometry::PhysicalRect::new(220.0, 0.0, 80.0, 42.0),
+            5.0,
+        );
+        let base_profile = MeasureProfile::uniform(300.0);
+        let notched_profile = base_profile.with_drop_cap_exclusion(14.0, &ex, true);
+
+        // Line 0..3 have reduced width: 300 - 90 = 210
+        assert!((notched_profile.width_for_line(0) - 210.0).abs() < 1e-2);
+        assert!((notched_profile.width_for_line(1) - 210.0).abs() < 1e-2);
+        assert!((notched_profile.width_for_line(2) - 210.0).abs() < 1e-2);
+        // Line 4+ has full 300
+        assert!((notched_profile.width_for_line(4) - 300.0).abs() < 1e-2);
+
+        // Break a stream of 12 words of 35pt each + 10pt spaces into optimal lines
+        let mut items = Vec::new();
+        for _ in 0..12 {
+            if !items.is_empty() {
+                items.push(space());
+            }
+            items.push(word(35.0));
+        }
+        items.push(forced());
+
+        let lines = KnuthPlassBreaker::break_paragraph_with_profile(&items, &notched_profile, 2.0);
+        assert!(lines.len() >= 3);
+        assert_eq!(lines[0].target_width, 210.0);
+        assert_eq!(lines[1].target_width, 210.0);
+    }
 }
+
