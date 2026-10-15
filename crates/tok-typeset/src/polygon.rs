@@ -218,9 +218,7 @@ impl GeometricPolygon {
         x_inters.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let mut spans = Vec::new();
-        for chunk in x_inters.chunks_exact(2) {
-            let left = chunk[0];
-            let right = chunk[1];
+        for &[left, right] in x_inters.as_chunks::<2>().0 {
             if right > left + 1e-3 {
                 spans.push(ScanlineSpan::new(left, right - left));
             }
