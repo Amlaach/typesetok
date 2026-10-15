@@ -5,7 +5,7 @@
  * space and punctuation cleanup, and automatic Dibur HaMatchil run-in heading styling.
  */
 
-import type { TextSpan, CharacterFormat } from 'tok-story-editor';
+import type { StoryParagraph, TextSpan, CharacterFormat } from 'tok-story-editor';
 
 function isFormatEmpty(fmt?: CharacterFormat | null): boolean {
   if (!fmt) return true;
@@ -230,4 +230,84 @@ function applyReplacementWithSpans(
     newSpans: normalizeSpans(currentSpans, resultText.length),
     count
   };
+}
+
+
+/**
+ * Analyzes paragraphs and computes how many cleanup fixes and heading bolds would be made.
+ */
+export function analyzeParagraphs(paragraphs: StoryParagraph[], options: CleanupOptions): CleanupStats {
+  const stats: CleanupStats = {
+    doubleSpacesFixed: 0,
+    spacesBeforePunctFixed: 0,
+    spacesAfterPunctFixed: 0,
+    quotesConverted: 0,
+    gereshConverted: 0,
+    emptyParagraphsRemoved: 0,
+    diburHaMatchilBolded: 0,
+    totalModifications: 0
+  };
+
+  let prevEmpty = false;
+
+  for (const p of paragraphs) {
+    const text = p.text || '';
+    const isEmpty = text.trim().length === 0;
+
+    if (isEmpty) {
+      if (options.collapseEmptyParagraphs && prevEmpty) {
+        stats.emptyParagraphsRemoved++;
+      }
+      prevEmpty = true;
+      continue;
+    }
+    prevEmpty = false;
+
+    if (options.cleanDoubleSpaces) {
+      const m = text.match(/[ \t]{2,}/g);
+      if (m) stats.doubleSpacesFixed += m.length;
+    }
+
+    if (options.cleanSpacesBeforePunct) {
+      const m = text.match(/[ \t]+([,.:;!?׃])/g);
+      if (m) stats.spacesBeforePunctFixed += m.length;
+    }
+
+    if (options.ensureSpaceAfterPunct) {
+      const m1 = text.match(/([,.;!?׃])([\u0590-\u05FF])/g);
+      if (m1) stats.spacesAfterPunctFixed += m1.length;
+      const m2 = text.match(/([:])([\u0590-\u05FF]{2,})/g);
+      if (m2) stats.spacesAfterPunctFixed += m2.length;
+    }
+
+    if (options.normalizeQuotesAndGeresh) {
+      const qm = text.match(/([\u0590-\u05FF])"([\u0590-\u05FF])/g);
+      if (qm) stats.quotesConverted += qm.length;
+
+      const gm = text.match(/([\u0590-\u05FF])'(?=\s|[,.:;!?׃\-]|$|[^\u0590-\u05FF])/g);
+      if (gm) stats.gereshConverted += gm.length;
+    }
+
+    if (options.boldDiburHaMatchil) {
+      const delimIdx = findDiburDelimiter(text, options.diburDelimiter);
+      if (delimIdx > 0) {
+        // Check if not already bold
+        const alreadyBold = (p.spans || []).some((s) => s.start === 0 && s.end >= delimIdx + 1 && s.format.fontWeight === 700);
+        if (!alreadyBold) {
+          stats.diburHaMatchilBolded++;
+        }
+      }
+    }
+  }
+
+  stats.totalModifications =
+    stats.doubleSpacesFixed +
+    stats.spacesBeforePunctFixed +
+    stats.spacesAfterPunctFixed +
+    stats.quotesConverted +
+    stats.gereshConverted +
+    stats.emptyParagraphsRemoved +
+    stats.diburHaMatchilBolded;
+
+  return stats;
 }
