@@ -275,3 +275,193 @@ impl MultiFlowAnchorMap {
         self.commentary_to_anchor = new_comm_map;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::anchor::AnchorBias;
+    use crate::id::FractionalIndex;
+    use crate::model::DocumentRoot;
+
+    #[test]
+    fn test_multi_flow_anchor_registration_and_bidirectional_lookup() {
+        let mut map = MultiFlowAnchorMap::new();
+
+        let p1 = NodeId::new();
+        let r1 = NodeId::new();
+        let t1 = NodeId::new();
+        let t2 = NodeId::new();
+
+        let a1 = AnchorId::new("anchor_berakhot_2a_1");
+        let def = AnchorDefinition::new(
+            a1.clone(),
+            FlowId::new("gemara"),
+            p1,
+            TextAnchor::new(p1, FractionalIndex::initial(), AnchorBias::Before),
+        ).with_label("ד\"ה מאימתי");
+
+        map.register_anchor(def.clone());
+
+        // Link Rashi
+        map.link_commentary(CommentaryLink::new(FlowId::new("rashi"), r1, a1.clone()).with_priority(0));
+        // Link Tosafot item 1
+        map.link_commentary(CommentaryLink::new(FlowId::new("tosafot"), t1, a1.clone()).with_priority(1));
+        // Link Tosafot item 2
+        map.link_commentary(CommentaryLink::new(FlowId::new("tosafot"), t2, a1.clone()).with_priority(2));
+
+        // 1. Verify anchor retrieval
+        assert_eq!(map.get_anchor(&a1), Some(&def));
+
+        // 2. Verify commentaries for anchor
+        let comms = map.get_commentaries_for_anchor(&a1);
+        assert_eq!(comms.len(), 3);
+        assert_eq!(comms[0].commentary_node_id, r1);
+        assert_eq!(comms[1].commentary_node_id, t1);
+        assert_eq!(comms[2].commentary_node_id, t2);
+
+        // 3. Verify commentaries for primary node
+        let p_comms = map.get_commentaries_for_primary_node(p1);
+        assert_eq!(p_comms.len(), 3);
+
+        // 4. Verify reverse lookups (commentary -> anchor and primary node)
+        assert_eq!(map.get_anchor_for_commentary(r1), Some(&def));
+        assert_eq!(map.get_primary_node_for_commentary(t1), Some(p1));
+        assert_eq!(map.get_primary_node_for_commentary(t2), Some(p1));
+    }
+
+    #[test]
+    fn test_detect_cascading_commentaries() {
+        let mut map = MultiFlowAnchorMap::new();
+
+        let p1 = NodeId::new();
+        let p2 = NodeId::new();
+
+        let r1 = NodeId::new();
+        let t1 = NodeId::new();
+        let r2 = NodeId::new();
+        let t2 = NodeId::new();
+
+        let a1 = AnchorId::new("a1");
+        let a2 = AnchorId::new("a2");
+
+        map.register_anchor(AnchorDefinition::new(
+            a1.clone(),
+            FlowId::new("gemara"),
+            p1,
+            TextAnchor::start_of(p1),
+        ));
+        map.register_anchor(AnchorDefinition::new(
+            a2.clone(),
+            FlowId::new("gemara"),
+            p2,
+            TextAnchor::start_of(p2),
+        ));
+
+        map.link_commentary(CommentaryLink::new(FlowId::new("rashi"), r1, a1.clone()));
+        map.link_commentary(CommentaryLink::new(FlowId::new("tosafot"), t1, a1.clone()));
+
+        map.link_commentary(CommentaryLink::new(FlowId::new("rashi"), r2, a2.clone()));
+        map.link_commentary(CommentaryLink::new(FlowId::new("tosafot"), t2, a2.clone()));
+
+        // Case A: Only P2 is moved forward (e.g. pushed to next page due to edits in P1)
+        let cascade_p2 = map.detect_cascading_commentaries(&[p2]);
+        assert_eq!(cascade_p2.len(), 2);
+        assert_eq!(cascade_p2[0], (FlowId::new("rashi"), r2));
+        assert_eq!(cascade_p2[1], (FlowId::new("tosafot"), t2));
+
+        // Case B: Both P1 and P2 moved
+        let cascade_both = map.detect_cascading_commentaries(&[p1, p2]);
+        assert_eq!(cascade_both.len(), 4);
+        assert_eq!(cascade_both[0], (FlowId::new("rashi"), r1));
+        assert_eq!(cascade_both[1], (FlowId::new("tosafot"), t1));
+        assert_eq!(cascade_both[2], (FlowId::new("rashi"), r2));
+        assert_eq!(cascade_both[3], (FlowId::new("tosafot"), t2));
+    }
+
+    #[test]
+    fn test_reindex_nodes_preserves_anchor_integrity() {
+        let mut map = MultiFlowAnchorMap::new();
+
+        let p_old = NodeId::new();
+        let r_old = NodeId::new();
+        let a1 = AnchorId::new("a1");
+
+        map.register_anchor(AnchorDefinition::new(
+            a1.clone(),
+            FlowId::new("main"),
+            p_old,
+            TextAnchor::start_of(p_old),
+        ));
+        map.link_commentary(CommentaryLink::new(FlowId::new("rashi"), r_old, a1.clone()));
+
+        // Create new IDs
+        let p_new = NodeId::new();
+        let r_new = NodeId::new();
+
+        let mut id_map = HashMap::new();
+        id_map.insert(p_old, p_new);
+        id_map.insert(r_old, r_new);
+
+        map.reindex_nodes(&id_map);
+
+        // Verification after reindex
+        assert_eq!(map.get_anchor(&a1).unwrap().primary_node_id, p_new);
+        assert_eq!(map.get_primary_node_for_commentary(r_new), Some(p_new));
+        assert_eq!(map.get_commentaries_for_primary_node(p_new)[0].commentary_node_id, r_new);
+    }
+
+    #[test]
+    fn test_remove_anchor_and_unlink_commentary() {
+        let mut map = MultiFlowAnchorMap::new();
+        let p = NodeId::new();
+        let r = NodeId::new();
+        let a = AnchorId::new("a");
+
+        map.register_anchor(AnchorDefinition::new(
+            a.clone(),
+            FlowId::new("main"),
+            p,
+            TextAnchor::start_of(p),
+        ));
+        map.link_commentary(CommentaryLink::new(FlowId::new("rashi"), r, a.clone()));
+
+        assert_eq!(map.get_primary_node_for_commentary(r), Some(p));
+
+        // 1. Unlink commentary
+        map.unlink_commentary(r);
+        assert_eq!(map.get_primary_node_for_commentary(r), None);
+        assert!(map.get_commentaries_for_anchor(&a).is_empty());
+        assert!(map.get_anchor(&a).is_some());
+
+        // 2. Remove anchor
+        map.remove_anchor(&a);
+        assert!(map.get_anchor(&a).is_none());
+        assert!(map.get_commentaries_for_primary_node(p).is_empty());
+    }
+
+    #[test]
+    fn test_serialization_roundtrip_with_document_root_and_section_node() {
+        let mut doc = DocumentRoot::new("תלמוד עם קישורים רב-פלגיים");
+        let p = NodeId::new();
+        let r = NodeId::new();
+        let a = AnchorId::new("a1");
+
+        let mut anchor_map = MultiFlowAnchorMap::new();
+        anchor_map.register_anchor(AnchorDefinition::new(
+            a.clone(),
+            FlowId::new("main"),
+            p,
+            TextAnchor::start_of(p),
+        ));
+        anchor_map.link_commentary(CommentaryLink::new(FlowId::new("rashi"), r, a.clone()));
+
+        doc.sections[0].anchors = anchor_map.clone();
+        doc.multi_flow_anchors = Some(anchor_map);
+
+        let json = serde_json::to_string_pretty(&doc).unwrap();
+        let deserialized: DocumentRoot = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(doc.sections[0].anchors, deserialized.sections[0].anchors);
+        assert_eq!(doc.multi_flow_anchors, deserialized.multi_flow_anchors);
+    }
+}
