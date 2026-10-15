@@ -6,6 +6,7 @@
 
 pub mod cascade;
 pub mod engine;
+pub mod height_balance;
 pub mod sync;
 pub mod template;
 pub mod worker;
@@ -17,6 +18,9 @@ pub use cascade::{
 pub use engine::{
     calculate_typographic_split, CoPaginatedChunk, CoPaginatedCommentary, CoPaginatedPage,
     CoPaginationDocument, CoPaginationEngine, CoPaginationResult,
+};
+pub use height_balance::{
+    BalanceTargetMode, ColumnBalanceReport, HeightBalanceConfig, SharedColumnHeightBalancer,
 };
 pub use sync::{
     ActiveSyncResult, ActiveSynchronizer, AnchorKey, AnchorPoint, SyncRemedy, SynchronizerConfig,
