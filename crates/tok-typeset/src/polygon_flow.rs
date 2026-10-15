@@ -191,3 +191,98 @@ impl MultiColumnPolygonFlowSynthesizer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::TypesettingEngineConfig;
+    use tok_core::FractionalIndex;
+
+    #[test]
+    fn test_synthesize_l_shaped_frame_combined_and_extension() {
+        let absorbing = PhysicalRect::new(310.0, 50.0, 140.0, 700.0);
+        let terminating = PhysicalRect::new(50.0, 50.0, 140.0, 250.0);
+        let gutter = 10.0;
+        let content_bottom = 750.0;
+
+        // 1. CombinedAdjacent: lower band merges from left edge (50) to right edge (450)
+        let frame_combined = MultiColumnPolygonFlowSynthesizer::synthesize_l_shaped_frame(
+            absorbing,
+            terminating,
+            gutter,
+            content_bottom,
+            AbsorptionKind::CombinedAdjacent,
+            true, // terminating on left
+        );
+        assert_eq!(frame_combined.bands.len(), 2);
+        // Upper band: absorbing column (x=310, w=140, y=50, h=260)
+        assert_eq!(frame_combined.bands[0].x, 310.0);
+        assert_eq!(frame_combined.bands[0].width, 140.0);
+        assert_eq!(frame_combined.bands[0].y, 50.0);
+        assert_eq!(frame_combined.bands[0].height, 260.0);
+
+        // Lower band: wide continuous band (x=50, w=400, y=310, h=440)
+        assert_eq!(frame_combined.bands[1].x, 50.0);
+        assert_eq!(frame_combined.bands[1].width, 400.0);
+        assert_eq!(frame_combined.bands[1].y, 310.0);
+        assert_eq!(frame_combined.bands[1].height, 440.0);
+
+        // 2. ColumnExtension: lower band stays under terminating column
+        let frame_ext = MultiColumnPolygonFlowSynthesizer::synthesize_l_shaped_frame(
+            absorbing,
+            terminating,
+            gutter,
+            content_bottom,
+            AbsorptionKind::ColumnExtension,
+            true,
+        );
+        assert_eq!(frame_ext.bands[1].x, 50.0);
+        assert_eq!(frame_ext.bands[1].width, 140.0);
+        assert_eq!(frame_ext.bands[1].y, 310.0);
+        assert_eq!(frame_ext.bands[1].height, 440.0);
+    }
+
+    #[test]
+    fn test_typeset_commentary_flow_into_l_shaped_absorbed_frame() {
+        let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
+        let flow_id = FlowId::new("tosafot");
+
+        // Upper band: x=200, y=0, w=100, h=60 (fits 4 lines at 15pt)
+        // Lower band: x=0, y=60, w=300, h=150 (fits 10 lines at 15pt)
+        let frame = PolygonFrame::l_shaped(200.0, 0.0, 100.0, 60.0, 0.0, 300.0, 150.0);
+
+        let commentary_text = "מאימתי קורין את שמע בערבין משעה שהכהנים נכנסין לאכול בתרומתן עד סוף האשמורה הראשונה דברי רבי אליעזר וחכמים אומרים עד חצות רבן גמליאל אומר עד שיעלה עמוד השחר מעשה ובאו בניו מבית המשתה אמרו לו לא קרינו את שמע אמר להם אם לא עלה עמוד השחר חייבין אתם לקרות ולא זו בלבד אמרו אלא כל מה שאמרו חכמים עד חצות מצותן עד שיעלה עמוד השחר הקטר חלבים ואברים מצותן עד שיעלה עמוד השחר וכל הנאכלים ליום אחד מצותן עד שיעלה עמוד השחר אם כן למה אמרו חכמים עד חצות כדי להרחיק את האדם מן העבירה";
+
+        let p1 = ParagraphNode::new(FractionalIndex::initial(), "default", commentary_text);
+
+        let result = MultiColumnPolygonFlowSynthesizer::typeset_flow_into_polygon(
+            &engine,
+            flow_id,
+            &[p1],
+            &[],
+            &frame,
+            "Noto Serif Hebrew",
+            10.0,
+            15.0,
+        );
+
+        assert!(!result.lines.is_empty());
+        assert!(result.lines.len() >= 6, "Expected at least 6 lines placed, got {}", result.lines.len());
+
+        // First 4 lines should fall in the upper band (x_offset = 200, span width = 100)
+        for i in 0..4 {
+            let l = &result.lines[i];
+            assert_eq!(l.x_offset, 200.0, "Line {} x_offset should be in upper band", i);
+            assert!(l.width <= 100.5, "Line {} width ({}) exceeded upper band width 100", i, l.width);
+            assert_eq!(l.baseline_y, ((i + 1) as f32) * 15.0);
+        }
+
+        // Line 4 and subsequent lines should transition into lower expanded band (x_offset = 0, span width = 300)
+        let l4 = &result.lines[4];
+        assert_eq!(l4.x_offset, 0.0, "Line 4 should transition into lower expanded band (x_offset=0)");
+        assert_eq!(l4.baseline_y, 5.0 * 15.0);
+
+        // Lines in the lower band should be significantly wider than lines in the upper band
+        assert!(l4.width > 120.0, "Expanded line 4 width ({}) should be wider than upper band (100)", l4.width);
+    }
+}
