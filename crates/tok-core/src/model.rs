@@ -19,6 +19,24 @@ impl FlowId {
     }
 }
 
+impl<T: Into<String>> From<T> for FlowId {
+    fn from(id: T) -> Self {
+        Self(id.into())
+    }
+}
+
+impl From<&FlowId> for FlowId {
+    fn from(id: &FlowId) -> Self {
+        id.clone()
+    }
+}
+
+impl std::fmt::Display for FlowId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FlowType {
     Main,
