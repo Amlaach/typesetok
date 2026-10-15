@@ -51,6 +51,8 @@ pub struct LineSpan {
     pub natural_width: f32,
     /// Target width assigned to this line.
     pub target_width: f32,
+    /// Horizontal start offset of this line (in pt).
+    pub x_offset: f32,
     /// r: < 0 is shrink, > 0 is stretch; 0 when the ratio is undefined
     /// (no stretch/shrink available) and on a short last line.
     pub adjustment_ratio: f32,
@@ -62,41 +64,65 @@ pub struct BrokenLine {
     pub items: Vec<LayoutItem>,
     pub width: f32,
     pub target_width: f32,
+    pub x_offset: f32,
     pub adjustment_ratio: f32,
 }
 
-/// Specification of target line widths for a paragraph, following TeX's `\parshape`.
+/// Specification of target line widths and horizontal offsets for a paragraph, following TeX's `\parshape`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MeasureProfile {
     /// Target width for each line (0-indexed: index 0 is line 1, index 1 is line 2, etc.)
     pub widths: Vec<f32>,
-    /// If true, lines beyond `widths.len() - 1` repeat the last width in `widths`.
+    /// Horizontal start offset for each line (0-indexed, default 0.0).
+    pub offsets: Vec<f32>,
+    /// If true, lines beyond `widths.len() - 1` repeat the last width and offset.
     pub repeat_last: bool,
 }
 
 impl MeasureProfile {
-    /// Creates a uniform measure where every line has the same width.
+    /// Creates a uniform measure where every line has the same width and zero offset.
     pub fn uniform(width: f32) -> Self {
         Self {
             widths: vec![width],
+            offsets: vec![0.0],
             repeat_last: true,
         }
     }
 
     /// Creates a profile from an explicit list of widths.
     pub fn from_widths(widths: Vec<f32>, repeat_last: bool) -> Self {
+        let offsets = vec![0.0; widths.len()];
         Self {
             widths,
+            offsets,
             repeat_last,
         }
     }
 
     /// Creates a profile from a slice of widths.
     pub fn from_slice(widths: &[f32], repeat_last: bool) -> Self {
+        Self::from_widths(widths.to_vec(), repeat_last)
+    }
+
+    /// Creates a profile from pairs of `(offset_x, width)`.
+    pub fn from_measures(measures: &[(f32, f32)], repeat_last: bool) -> Self {
+        let mut offsets = Vec::with_capacity(measures.len());
+        let mut widths = Vec::with_capacity(measures.len());
+        for &(x, w) in measures {
+            offsets.push(x);
+            widths.push(w);
+        }
         Self {
-            widths: widths.to_vec(),
+            widths,
+            offsets,
             repeat_last,
         }
+    }
+
+    /// Overrides horizontal start offsets for the profile.
+    pub fn with_offsets(mut self, offsets: Vec<f32>) -> Self {
+        self.offsets = offsets;
+        self
     }
 
     /// Creates an L-shaped profile: `first_lines` of `first_width`,
@@ -107,8 +133,33 @@ impl MeasureProfile {
             widths.push(first_width);
         }
         widths.push(remaining_width);
+        let offsets = vec![0.0; widths.len()];
         Self {
             widths,
+            offsets,
+            repeat_last: true,
+        }
+    }
+
+    /// Creates an L-shaped profile with independent horizontal offsets.
+    pub fn l_shape_with_offsets(
+        first_lines: usize,
+        first_offset: f32,
+        first_width: f32,
+        rem_offset: f32,
+        rem_width: f32,
+    ) -> Self {
+        let mut widths = Vec::with_capacity(first_lines + 1);
+        let mut offsets = Vec::with_capacity(first_lines + 1);
+        for _ in 0..first_lines {
+            offsets.push(first_offset);
+            widths.push(first_width);
+        }
+        offsets.push(rem_offset);
+        widths.push(rem_width);
+        Self {
+            widths,
+            offsets,
             repeat_last: true,
         }
     }
@@ -128,21 +179,121 @@ impl MeasureProfile {
         }
     }
 
+    /// Returns the horizontal start offset for line at `line_index` (0-indexed).
+    #[inline]
+    pub fn offset_for_line(&self, line_index: usize) -> f32 {
+        if self.offsets.is_empty() {
+            return 0.0;
+        }
+        if line_index < self.offsets.len() {
+            self.offsets[line_index]
+        } else if self.repeat_last {
+            *self.offsets.last().unwrap_or(&0.0)
+        } else {
+            0.0
+        }
+    }
+
+    /// Builds a MeasureProfile by slicing a polygon at regular line heights.
+    pub fn from_polygon(
+        polygon: &crate::polygon::GeometricPolygon,
+        line_height: f32,
+        start_y: f32,
+        max_lines: usize,
+    ) -> Self {
+        let mut widths = Vec::with_capacity(max_lines);
+        let mut offsets = Vec::with_capacity(max_lines);
+
+        for i in 0..max_lines {
+            let y = start_y + (i as f32) * line_height;
+            let spans = polygon.scanline_spans(y, line_height);
+            if let Some(span) = spans.iter().max_by(|a, b| a.width.total_cmp(&b.width)) {
+                offsets.push(span.x);
+                widths.push(span.width);
+            } else {
+                break;
+            }
+        }
+
+        if widths.is_empty() {
+            Self::uniform(200.0)
+        } else {
+            Self {
+                widths,
+                offsets,
+                repeat_last: true,
+            }
+        }
+    }
+
+    /// Modifies this profile to subtract an exclusion zone (e.g. drop cap window) on intersecting lines.
+    pub fn with_drop_cap_exclusion(
+        &self,
+        line_height: f32,
+        exclusion: &crate::polygon::ExclusionZone,
+        is_rtl: bool,
+    ) -> Self {
+        let mut new_widths = Vec::new();
+        let mut new_offsets = Vec::new();
+
+        let max_check = self.widths.len().max(10);
+        for i in 0..max_check {
+            let y = (i as f32) * line_height;
+            let orig_w = self.width_for_line(i);
+            let orig_x = self.offset_for_line(i);
+
+            if exclusion.intersects_y(y, line_height) {
+                let exp = exclusion.expanded_rect();
+                let ex_w = exp.width;
+                let notched_w = (orig_w - ex_w).max(20.0);
+                if is_rtl {
+                    // In RTL, drop cap is at the right edge; body text remains on the left
+                    new_offsets.push(orig_x);
+                    new_widths.push(notched_w);
+                } else {
+                    // In LTR, drop cap is at left edge; body text is indented
+                    new_offsets.push(orig_x + ex_w);
+                    new_widths.push(notched_w);
+                }
+            } else {
+                new_offsets.push(orig_x);
+                new_widths.push(orig_w);
+            }
+        }
+
+        Self {
+            widths: new_widths,
+            offsets: new_offsets,
+            repeat_last: self.repeat_last,
+        }
+    }
+
     /// Validates that the profile has at least one width and all widths are positive finite numbers.
     pub fn is_valid(&self) -> bool {
         !self.widths.is_empty() && self.widths.iter().all(|&w| w.is_finite() && w > 0.0)
     }
 
-    /// Returns true if all lines have the exact same target width.
+    /// Returns true if all lines have the exact same target width and horizontal offset.
     pub fn is_uniform(&self) -> bool {
         if self.widths.is_empty() {
             return false;
         }
-        if self.widths.len() == 1 {
-            return self.repeat_last;
-        }
-        let first = self.widths[0];
-        self.widths.iter().all(|&w| (w - first).abs() < 1e-4)
+        let first_w = self.widths[0];
+        let first_o = self.offset_for_line(0);
+
+        let widths_uniform = if self.widths.len() == 1 {
+            self.repeat_last
+        } else {
+            self.widths.iter().all(|&w| (w - first_w).abs() < 1e-4)
+        };
+
+        let offsets_uniform = if self.offsets.is_empty() || self.offsets.len() == 1 {
+            true
+        } else {
+            self.offsets.iter().all(|&o| (o - first_o).abs() < 1e-4)
+        };
+
+        widths_uniform && offsets_uniform
     }
 }
 
@@ -260,6 +411,7 @@ impl KnuthPlassBreaker {
                 items: items[span.start..span.end].to_vec(),
                 width: span.natural_width,
                 target_width: span.target_width,
+                x_offset: span.x_offset,
                 adjustment_ratio: span.adjustment_ratio,
             })
             .collect()
@@ -310,6 +462,7 @@ impl KnuthPlassBreaker {
                     end: items.len(),
                     natural_width: ctx.metrics.range(0, items.len()).0 as f32,
                     target_width: profile.width_for_line(0),
+                    x_offset: profile.offset_for_line(0),
                     adjustment_ratio: 0.0,
                 }]
             }
@@ -614,11 +767,13 @@ impl<'a> BreakContext<'a> {
             .windows(2)
             .map(|w| {
                 let (from, to) = (&nodes[w[0]], &nodes[w[1]]);
+                let line_idx = to.line_count.saturating_sub(1);
                 LineSpan {
                     start: from.line_start,
                     end: self.line_end(to.position).max(from.line_start),
                     natural_width: to.natural_width as f32,
                     target_width: to.target_width as f32,
+                    x_offset: self.profile.offset_for_line(line_idx),
                     adjustment_ratio: to.ratio as f32,
                 }
             })
