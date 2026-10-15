@@ -3,6 +3,8 @@
 //! Models commentary expansion below an early-terminating primary stream,
 //! enforcing non-overlap, column alignment, and vertical gutters.
 
+use crate::geometry::PhysicalRect;
+use crate::polygon_engine::PolygonFrame;
 use crate::solver::frame_model::ColumnFrameVariables;
 use crate::solver::model::{
     ConstraintStrength, ConstraintVariable, LinearExpression, RectVariables, SolvedRect,
@@ -114,6 +116,210 @@ impl LShapeExpansionVariables {
     /// Evaluates solved rectangular allocation.
     pub fn get_rect(&self, solver: &GeometricConstraintSolver) -> SolvedRect {
         solver.get_rect(self.rect)
+    }
+}
+
+/// The geometric pattern of commentary absorption below early terminating flows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AbsorptionKind {
+    /// Absorbs directly within the boundary of the terminating column.
+    ColumnExtension,
+    /// Merges the absorbing column and the terminating column into a single wide contiguous frame.
+    CombinedAdjacent,
+    /// Expands across the entire content width below all terminating columns.
+    FullWidth,
+}
+
+/// Configuration for dynamic commentary absorption.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommentaryAbsorptionConfig {
+    pub absorbing_flow_id: FlowId,
+    pub terminating_flow_id: FlowId,
+    pub terminating_target_height_pt: f32,
+    pub gutter_pt: f32,
+    pub kind: AbsorptionKind,
+}
+
+impl CommentaryAbsorptionConfig {
+    pub fn new(
+        absorbing_flow_id: FlowId,
+        terminating_flow_id: FlowId,
+        terminating_target_height_pt: f32,
+        gutter_pt: f32,
+        kind: AbsorptionKind,
+    ) -> Self {
+        Self {
+            absorbing_flow_id,
+            terminating_flow_id,
+            terminating_target_height_pt,
+            gutter_pt,
+            kind,
+        }
+    }
+}
+
+/// Variables allocated for adjacent commentary absorption ("מסגרת בליעה").
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CommentaryAbsorptionVariables {
+    pub absorbing_flow_id: FlowId,
+    pub rect: RectVariables,
+    pub gutter: ConstraintVariable,
+}
+
+impl CommentaryAbsorptionVariables {
+    pub fn new(absorbing_flow_id: FlowId) -> Self {
+        Self {
+            absorbing_flow_id,
+            rect: RectVariables::new(),
+            gutter: ConstraintVariable::new(),
+        }
+    }
+
+    /// Constrains the terminating column and sets up the absorbed region for an adjacent commentary.
+    pub fn apply_adjacent(
+        &self,
+        solver: &mut GeometricConstraintSolver,
+        terminating_col: &ColumnFrameVariables,
+        absorbing_col: &ColumnFrameVariables,
+        terminating_is_left: bool,
+        bottom_limit_expr: LinearExpression,
+        config: &CommentaryAbsorptionConfig,
+    ) -> Result<(), SolverError> {
+        let term_h = config.terminating_target_height_pt.max(0.0) as f64;
+
+        // Set fixed gutter
+        solver.add_eq(
+            self.gutter.to_expr(),
+            LinearExpression::constant(config.gutter_pt as f64),
+            ConstraintStrength::Required,
+        )?;
+
+        // 1. Constrain terminating column height
+        solver.add_eq(
+            terminating_col.rect.height.to_expr(),
+            LinearExpression::constant(term_h),
+            ConstraintStrength::Required,
+        )?;
+
+        // 2. Horizontal placement depending on AbsorptionKind
+        match config.kind {
+            AbsorptionKind::ColumnExtension => {
+                // Aligns exactly within the terminating column
+                solver.add_eq(
+                    self.rect.x.to_expr(),
+                    terminating_col.rect.x.to_expr(),
+                    ConstraintStrength::Required,
+                )?;
+                solver.add_eq(
+                    self.rect.width.to_expr(),
+                    terminating_col.rect.width.to_expr(),
+                    ConstraintStrength::Required,
+                )?;
+            }
+            AbsorptionKind::CombinedAdjacent | AbsorptionKind::FullWidth => {
+                // Unites both columns continuously
+                let (left_x, right_x) = if terminating_is_left {
+                    (terminating_col.rect.x.to_expr(), absorbing_col.rect.right_expr())
+                } else {
+                    (absorbing_col.rect.x.to_expr(), terminating_col.rect.right_expr())
+                };
+                solver.add_eq(self.rect.x.to_expr(), left_x, ConstraintStrength::Required)?;
+                solver.add_eq(self.rect.right_expr(), right_x, ConstraintStrength::Required)?;
+            }
+        }
+
+        // 3. Vertical position: starts below terminating column + gutter
+        let top_target = terminating_col.rect.bottom_expr().plus(&self.gutter.to_expr());
+        solver.add_eq(self.rect.y.to_expr(), top_target, ConstraintStrength::Required)?;
+
+        // 4. Vertical extent: reaches bottom limit
+        solver.add_eq(
+            self.rect.bottom_expr(),
+            bottom_limit_expr,
+            ConstraintStrength::Required,
+        )?;
+
+        // 5. Non-negativity
+        solver.add_non_negative(self.rect.height)?;
+
+        Ok(())
+    }
+
+    /// Constrains absorption across the full page content width below the terminating flow.
+    pub fn apply_full_width(
+        &self,
+        solver: &mut GeometricConstraintSolver,
+        terminating_col: &ColumnFrameVariables,
+        left_bound_expr: LinearExpression,
+        right_bound_expr: LinearExpression,
+        bottom_limit_expr: LinearExpression,
+        config: &CommentaryAbsorptionConfig,
+    ) -> Result<(), SolverError> {
+        let term_h = config.terminating_target_height_pt.max(0.0) as f64;
+
+        solver.add_eq(
+            self.gutter.to_expr(),
+            LinearExpression::constant(config.gutter_pt as f64),
+            ConstraintStrength::Required,
+        )?;
+
+        solver.add_eq(
+            terminating_col.rect.height.to_expr(),
+            LinearExpression::constant(term_h),
+            ConstraintStrength::Required,
+        )?;
+
+        // Full width bounds
+        solver.add_eq(self.rect.x.to_expr(), left_bound_expr, ConstraintStrength::Required)?;
+        solver.add_eq(self.rect.right_expr(), right_bound_expr, ConstraintStrength::Required)?;
+
+        // Vertical position: below terminating column + gutter
+        let top_target = terminating_col.rect.bottom_expr().plus(&self.gutter.to_expr());
+        solver.add_eq(self.rect.y.to_expr(), top_target, ConstraintStrength::Required)?;
+
+        // Vertical bottom
+        solver.add_eq(
+            self.rect.bottom_expr(),
+            bottom_limit_expr,
+            ConstraintStrength::Required,
+        )?;
+
+        solver.add_non_negative(self.rect.height)?;
+
+        Ok(())
+    }
+
+    /// Evaluates solved rectangular allocation.
+    pub fn get_rect(&self, solver: &GeometricConstraintSolver) -> SolvedRect {
+        solver.get_rect(self.rect)
+    }
+
+    /// Synthesizes an L-shaped `PolygonFrame` combining the upper absorbing column
+    /// and the lower absorbed expansion region.
+    pub fn to_polygon_frame(
+        &self,
+        solver: &GeometricConstraintSolver,
+        absorbing_col_rect: SolvedRect,
+    ) -> PolygonFrame {
+        let absorbed = self.get_rect(solver);
+        let upper_h = (absorbed.y - absorbing_col_rect.y).max(0.0);
+        let upper_rect = PhysicalRect::new(
+            absorbing_col_rect.x,
+            absorbing_col_rect.y,
+            absorbing_col_rect.width,
+            upper_h,
+        );
+        let lower_rect = PhysicalRect::new(
+            absorbed.x,
+            absorbed.y,
+            absorbed.width,
+            absorbed.height,
+        );
+        PolygonFrame {
+            bands: vec![upper_rect, lower_rect],
+            polygon: None,
+            exclusions: Vec::new(),
+        }
     }
 }
 

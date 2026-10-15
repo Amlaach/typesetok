@@ -31,7 +31,10 @@ pub use footnote_model::{FootnoteBandConfig, FootnoteBandVariables};
 pub use frame_model::{
     ColumnFrameVariables, ColumnSpec, MultiColumnConstraintModel, SolvedColumnAllocation,
 };
-pub use l_shape_model::{LShapeConfig, LShapeExpansionVariables};
+pub use l_shape_model::{
+    AbsorptionKind, CommentaryAbsorptionConfig, CommentaryAbsorptionVariables, LShapeConfig,
+    LShapeExpansionVariables,
+};
 pub use model::{
     ConstraintRelation, ConstraintStrength, ConstraintVariable, GeometricConstraint,
     LinearExpression, LinearTerm, RectVariables, SolvedRect,

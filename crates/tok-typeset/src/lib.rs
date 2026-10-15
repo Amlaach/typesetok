@@ -88,7 +88,8 @@ pub use page_break::{
 };
 pub use shaper::{PositionedGlyph, ShapedRun, TextShaper};
 pub use solver::{
-    ColumnFrameVariables, ColumnSpec, ColumnWidthDistribution, ConstraintRelation,
+    AbsorptionKind, ColumnFrameVariables, ColumnSpec, ColumnWidthDistribution,
+    CommentaryAbsorptionConfig, CommentaryAbsorptionVariables, ConstraintRelation,
     ConstraintStrength, ConstraintVariable, FootnoteBandConfig, FootnoteBandVariables,
     GeometricConstraint, GeometricConstraintSolver, LShapeConfig, LShapeExpansionVariables,
     LinearExpression, LinearTerm, MultiColumnConstraintModel, PageConstraintModel,
