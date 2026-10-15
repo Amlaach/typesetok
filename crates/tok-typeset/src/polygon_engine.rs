@@ -219,3 +219,60 @@ impl PolygonFrame {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_polygon_frame_rectangular_capacity_and_profile() {
+        let frame = PolygonFrame::from_rect(PhysicalRect::new(50.0, 100.0, 200.0, 300.0));
+        assert_eq!(frame.capacity_lines(15.0), 20);
+
+        let profile = frame.profile_for_paragraph(15.0, 0, 5);
+        assert_eq!(profile.width_for_line(0), 200.0);
+        assert_eq!(profile.offset_for_line(0), 50.0);
+    }
+
+    #[test]
+    fn test_polygon_frame_l_shaped_commentary_absorption() {
+        // Commentary frame with upper narrow column (120pt wide, 150pt tall, x=0)
+        // and lower expanded absorption band (300pt wide, 150pt tall, x=0)
+        let frame = PolygonFrame::l_shaped(0.0, 0.0, 120.0, 150.0, 0.0, 300.0, 150.0);
+
+        // 10 lines of 15pt in upper band (150pt), 10 lines in lower band (150pt)
+        assert_eq!(frame.capacity_lines(15.0), 20);
+
+        // Paragraph 1 starts at line 0: spans 10 narrow lines, then expands to 300pt
+        let prof1 = frame.profile_for_paragraph(15.0, 0, 15);
+        for l in 0..10 {
+            assert_eq!(prof1.width_for_line(l), 120.0);
+        }
+        for l in 10..15 {
+            assert_eq!(prof1.width_for_line(l), 300.0);
+        }
+
+        // Paragraph 2 starts at line 8 (after paragraph 1 took 8 lines):
+        // line 0 and 1 of paragraph 2 are narrow (120pt), then expands to 300pt from line 2 onwards!
+        let prof2 = frame.profile_for_paragraph(15.0, 8, 10);
+        assert_eq!(prof2.width_for_line(0), 120.0);
+        assert_eq!(prof2.width_for_line(1), 120.0);
+        assert_eq!(prof2.width_for_line(2), 300.0);
+        assert_eq!(prof2.width_for_line(3), 300.0);
+    }
+
+    #[test]
+    fn test_polygon_frame_with_exclusions_notching() {
+        let frame = PolygonFrame::from_rect(PhysicalRect::new(0.0, 0.0, 400.0, 500.0))
+            .with_exclusion(ExclusionZone::new(PhysicalRect::new(300.0, 0.0, 100.0, 45.0), 5.0));
+
+        let prof = frame.profile_for_paragraph(15.0, 0, 6);
+        // Lines 0, 1, 2 intersect the exclusion at x >= 295
+        assert!((prof.width_for_line(0) - 295.0).abs() < 1e-2);
+        assert!((prof.width_for_line(1) - 295.0).abs() < 1e-2);
+        assert!((prof.width_for_line(2) - 295.0).abs() < 1e-2);
+        // Line 4+ is full 400 (starts at y=60, past exclusion bottom at 50)
+        assert_eq!(prof.width_for_line(4), 400.0);
+    }
+}
+
