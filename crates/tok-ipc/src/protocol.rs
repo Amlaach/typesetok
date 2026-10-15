@@ -31,6 +31,59 @@ pub enum IpcCommand {
         format: String, // "pdf" or "html"
         output_path: String,
     },
+    ConfigureDropCap {
+        paragraph_id: NodeId,
+        config: DropCapIpcConfig,
+    },
+    AddExclusionZone {
+        frame_id: String,
+        zone: ExclusionZoneIpcPayload,
+    },
+    LinkMultiFlowAnchor {
+        primary_node_id: NodeId,
+        commentary_node_id: NodeId,
+        anchor_id: String,
+        commentary_flow_id: String,
+    },
+    BalanceColumnHeights {
+        page_index: u32,
+        config: Option<HeightBalanceIpcConfig>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DropCapIpcConfig {
+    pub lines: usize,
+    pub characters_count: usize,
+    pub distance_pt: f32,
+    pub is_bold: bool,
+    pub font_family: Option<String>,
+    pub scale_factor: Option<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExclusionZoneIpcPayload {
+    pub id: String,
+    pub x_pt: f32,
+    pub y_pt: f32,
+    pub width_pt: f32,
+    pub height_pt: f32,
+    pub standoff_pt: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HeightBalanceIpcConfig {
+    pub max_line_expansion_pt: f32,
+    pub max_paragraph_expansion_pt: f32,
+    pub min_lines_for_balance: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ColumnBalanceIpcReport {
+    pub flow_id: String,
+    pub original_bottom_y_pt: f32,
+    pub balanced_bottom_y_pt: f32,
+    pub spring_injected_pt: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -48,6 +101,10 @@ pub struct LineGeometry {
     pub line_index: u32,
     pub baseline_y_pt: f32,
     pub height_pt: f32,
+    #[serde(default)]
+    pub x_offset_pt: f32,
+    #[serde(default)]
+    pub is_drop_cap: bool,
     pub text: String,
     pub glyphs: Vec<GlyphGeometry>,
 }
@@ -85,6 +142,15 @@ pub enum IpcEvent {
     RenderCompleted {
         output_path: String,
         bytes_count: usize,
+    },
+    AnchorCascadeTriggered {
+        displaced_primary_node: NodeId,
+        cascaded_commentaries: Vec<(String, NodeId, u32)>,
+    },
+    ColumnsBalanced {
+        page_index: u32,
+        balanced_bottom_baseline_pt: f32,
+        reports: Vec<ColumnBalanceIpcReport>,
     },
     Error {
         code: u32,

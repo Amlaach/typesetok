@@ -44,6 +44,32 @@ export interface TextFrameData extends FrameGeometry {
   verticalAlign: 'top' | 'center' | 'bottom' | 'justify';
   nextFrameId?: string;
   text: string;
+  polygonVertices?: PolygonVertex[];
+  exclusions?: ExclusionZoneData[];
+  isLShaped?: boolean;
+}
+
+export interface PolygonVertex {
+  xMm: number;
+  yMm: number;
+}
+
+export interface ExclusionZoneData {
+  id: string;
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+  standoffMm: number;
+}
+
+export interface DropCapSettings {
+  lines: number;
+  charactersCount: number;
+  distanceMm: number;
+  isBold: boolean;
+  fontFamily?: string;
+  scaleFactor?: number;
 }
 
 export interface HebrewJustificationSettings {
@@ -72,6 +98,7 @@ export interface TypographySettings {
   normalizeNiqqud: boolean;
   shieldDivineNames: boolean;
   keepLinesTogether: number; // Orphans/widows minimum lines
+  dropCap?: DropCapSettings;
 }
 
 export interface MultiFlowItem {
@@ -81,6 +108,32 @@ export interface MultiFlowItem {
   role: string;
   wordCount: number;
   isActive: boolean;
+}
+
+export interface MultiFlowAnchorLink {
+  anchorId: string;
+  primaryFlowId: string;
+  primaryNodeId: string;
+  commentaryFlowId: string;
+  commentaryNodeId: string;
+  label?: string;
+  cascadedPage?: number;
+}
+
+export interface HeightBalanceSettings {
+  enabled: boolean;
+  maxLineExpansionMm: number;
+  maxParagraphExpansionMm: number;
+  minLinesForBalance: number;
+  targetMode: 'tallest-column' | 'page-bottom' | 'average';
+}
+
+export interface MultiFlowSpreadStatus {
+  spreadIndex: number;
+  columnsCount: number;
+  isBalanced: boolean;
+  bottomBaselineMm: number;
+  activeFlows: string[];
 }
 
 export interface StyleToken {
