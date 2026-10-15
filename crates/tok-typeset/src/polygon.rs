@@ -256,3 +256,86 @@ impl GeometricPolygon {
         current_spans
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scanline_span_subtraction() {
+        let span = ScanlineSpan::new(10.0, 100.0); // [10, 110]
+
+        // Outside exclusion (no effect)
+        let rem1 = span.subtract_range(120.0, 150.0);
+        assert_eq!(rem1.len(), 1);
+        assert_eq!(rem1[0], span);
+
+        // Right-side exclusion (drop cap in RTL)
+        let rem2 = span.subtract_range(80.0, 120.0);
+        assert_eq!(rem2.len(), 1);
+        assert_eq!(rem2[0], ScanlineSpan::new(10.0, 70.0));
+
+        // Left-side exclusion (drop cap in LTR)
+        let rem3 = span.subtract_range(0.0, 40.0);
+        assert_eq!(rem3.len(), 1);
+        assert_eq!(rem3[0], ScanlineSpan::new(40.0, 70.0));
+
+        // Middle exclusion (split into 2)
+        let rem4 = span.subtract_range(40.0, 70.0);
+        assert_eq!(rem4.len(), 2);
+        assert_eq!(rem4[0], ScanlineSpan::new(10.0, 30.0));
+        assert_eq!(rem4[1], ScanlineSpan::new(70.0, 40.0));
+    }
+
+    #[test]
+    fn test_rectangular_polygon_scanline() {
+        let rect = PhysicalRect::new(50.0, 100.0, 200.0, 400.0);
+        let poly = GeometricPolygon::from_rect(&rect);
+
+        assert_eq!(poly.bounds(), rect);
+
+        // Within rect
+        let spans = poly.scanline_spans(150.0, 15.0);
+        assert_eq!(spans.len(), 1);
+        assert!((spans[0].x - 50.0).abs() < 1e-3);
+        assert!((spans[0].width - 200.0).abs() < 1e-3);
+
+        // Outside rect
+        let outside = poly.scanline_spans(50.0, 15.0);
+        assert!(outside.is_empty());
+    }
+
+    #[test]
+    fn test_l_shaped_polygon_scanline_expansion() {
+        // L-shape: upper narrow (100pt wide, 200pt tall), lower wide (300pt wide, 200pt tall)
+        let l_poly = GeometricPolygon::l_shape(0.0, 0.0, 100.0, 200.0, 300.0, 200.0);
+
+        // Upper section (y = 50)
+        let upper_spans = l_poly.scanline_spans(50.0, 14.0);
+        assert_eq!(upper_spans.len(), 1);
+        assert!((upper_spans[0].width - 100.0).abs() < 1e-3);
+
+        // Lower expanded section (y = 250)
+        let lower_spans = l_poly.scanline_spans(250.0, 14.0);
+        assert_eq!(lower_spans.len(), 1);
+        assert!((lower_spans[0].width - 300.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_exclusion_zone_drop_cap_notch() {
+        let poly = GeometricPolygon::from_rect(&PhysicalRect::new(0.0, 0.0, 400.0, 600.0));
+        // Drop cap window in top-right corner of RTL text: x: 320 to 400, y: 0 to 45 (3 lines of 15pt)
+        let ex = ExclusionZone::new(PhysicalRect::new(320.0, 0.0, 80.0, 45.0), 5.0);
+
+        // Line 1: y = 0 to 15 (intersecting drop cap exclusion)
+        let line1_spans = poly.scanline_spans_with_exclusions(0.0, 15.0, &[ex.clone()]);
+        assert_eq!(line1_spans.len(), 1);
+        // Available width should be 320 - 5.0 = 315.0
+        assert!((line1_spans[0].width - 315.0).abs() < 1e-2);
+
+        // Line 4: y = 60 to 75 (below drop cap window + margin)
+        let line4_spans = poly.scanline_spans_with_exclusions(60.0, 15.0, &[ex]);
+        assert_eq!(line4_spans.len(), 1);
+        assert!((line4_spans[0].width - 400.0).abs() < 1e-2);
+    }
+}
