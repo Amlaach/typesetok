@@ -3144,5 +3144,163 @@ describe('Phase 2 UI Integration: Hebrew Typography, Fallback Stacks, and Lifecy
   });
 });
 
+describe('Core Feature: Hebrew Text Cleanup & Dibur HaMatchil Wizard (Proposals B.3 & A.2)', () => {
+  test('analyzeParagraphs calculates correct counts for spaces, punctuation, quotes and dibur hamatchil', async () => {
+    const { analyzeParagraphs, DEFAULT_CLEANUP_OPTIONS } = await loadTs('packages/tok-ui/src/engine/textCleanup.ts');
+
+    const sampleParas = [
+      {
+        id: 'p1',
+        styleId: 'body',
+        text: 'רש"י. ד"ה בראשית  ברא  אלהים .'
+      },
+      {
+        id: 'p2',
+        styleId: 'body',
+        text: 'תוספות:שם בגמרא עמ\' כב.'
+      },
+      {
+        id: 'p3',
+        styleId: 'body',
+        text: '   '
+      },
+      {
+        id: 'p4',
+        styleId: 'body',
+        text: ''
+      }
+    ];
+
+    const stats = analyzeParagraphs(sampleParas, DEFAULT_CLEANUP_OPTIONS);
+    assert.ok(stats.doubleSpacesFixed >= 2, 'Should detect double spaces');
+    assert.ok(stats.spacesBeforePunctFixed >= 1, 'Should detect space before period');
+    assert.ok(stats.spacesAfterPunctFixed >= 1, 'Should detect missing space after colon');
+    assert.ok(stats.quotesConverted >= 2, 'Should detect double quotes in Hebrew words');
+    assert.ok(stats.gereshConverted >= 1, 'Should detect single quote in Hebrew abbreviation');
+    assert.ok(stats.diburHaMatchilBolded >= 2, 'Should detect dibur hamatchil in both paragraphs');
+    assert.ok(stats.emptyParagraphsRemoved >= 1, 'Should detect consecutive empty paragraphs');
+    assert.ok(stats.totalModifications > 0, 'Total modifications should be positive');
+  });
+
+  test('cleanupParagraphs performs complete text cleanup, space normalization and quotes conversion', async () => {
+    const { cleanupParagraphs } = await loadTs('packages/tok-ui/src/engine/textCleanup.ts');
+
+    const paras = [
+      {
+        id: 'p1',
+        styleId: 'body',
+        text: 'רמב"ם .  הלכות   תפילה  , פרק א\' .'
+      }
+    ];
+
+    const { paragraphs: cleaned, stats } = cleanupParagraphs(paras, {
+      cleanDoubleSpaces: true,
+      cleanSpacesBeforePunct: true,
+      ensureSpaceAfterPunct: true,
+      normalizeQuotesAndGeresh: true,
+      collapseEmptyParagraphs: true,
+      boldDiburHaMatchil: false,
+      diburDelimiter: 'any',
+      scope: 'activeFlow'
+    });
+
+    assert.equal(cleaned.length, 1);
+    // Double spaces removed, space before period removed, space before comma removed, quotes converted
+    assert.equal(cleaned[0].text, 'רמב״ם. הלכות תפילה, פרק א׳.');
+    assert.ok(stats.doubleSpacesFixed >= 2);
+    assert.ok(stats.spacesBeforePunctFixed >= 2);
+    assert.ok(stats.quotesConverted >= 1);
+    assert.ok(stats.gereshConverted >= 1);
+  });
+
+  test('cleanupParagraphs bolds Dibur HaMatchil with period, colon, and dash delimiters', async () => {
+    const { cleanupParagraphs } = await loadTs('packages/tok-ui/src/engine/textCleanup.ts');
+
+    const paras = [
+      {
+        id: 'p1',
+        styleId: 'rashi',
+        text: 'בראשית. ברא אלהים את השמים ואת הארץ.'
+      },
+      {
+        id: 'p2',
+        styleId: 'tosafot',
+        text: 'כוונת המחבר: הנה ראוי לבאר את שורש העניין.'
+      },
+      {
+        id: 'p3',
+        styleId: 'body',
+        text: 'פרק ראשון – כל המצוות כולן נתנו למשה מסיני.'
+      }
+    ];
+
+    const { paragraphs: cleaned, stats } = cleanupParagraphs(paras, {
+      cleanDoubleSpaces: true,
+      cleanSpacesBeforePunct: true,
+      ensureSpaceAfterPunct: true,
+      normalizeQuotesAndGeresh: true,
+      collapseEmptyParagraphs: true,
+      boldDiburHaMatchil: true,
+      diburDelimiter: 'any',
+      scope: 'activeFlow'
+    });
+
+    assert.equal(stats.diburHaMatchilBolded, 3, 'All 3 paragraphs should receive bold dibur hamatchil');
+
+    // Paragraph 1: "בראשית." (length 7) should be bold
+    assert.ok(cleaned[0].spans, 'p1 must have spans');
+    assert.equal(cleaned[0].spans[0].start, 0);
+    assert.equal(cleaned[0].spans[0].end, 7);
+    assert.equal(cleaned[0].spans[0].format.fontWeight, 700);
+
+    // Paragraph 2: "כוונת המחבר:" (length 12) should be bold
+    assert.ok(cleaned[1].spans, 'p2 must have spans');
+    assert.equal(cleaned[1].spans[0].start, 0);
+    assert.equal(cleaned[1].spans[0].end, 12);
+    assert.equal(cleaned[1].spans[0].format.fontWeight, 700);
+
+    // Paragraph 3: "פרק ראשון –" (length 11) should be bold
+    assert.ok(cleaned[2].spans, 'p3 must have spans');
+    assert.equal(cleaned[2].spans[0].start, 0);
+    assert.equal(cleaned[2].spans[0].end, 11);
+    assert.equal(cleaned[2].spans[0].format.fontWeight, 700);
+  });
+
+  test('cleanupParagraphs correctly preserves and shifts existing TextSpans', async () => {
+    const { cleanupParagraphs } = await loadTs('packages/tok-ui/src/engine/textCleanup.ts');
+
+    // Paragraph has a double space before "שלום" and an italic span over "שלום"
+    // "א  שלום" -> double space at index 1-3. "שלום" is at index 3..7
+    const paras = [
+      {
+        id: 'p1',
+        styleId: 'body',
+        text: 'א  שלום',
+        spans: [
+          { start: 3, end: 7, format: { italic: true } }
+        ]
+      }
+    ];
+
+    const { paragraphs: cleaned } = cleanupParagraphs(paras, {
+      cleanDoubleSpaces: true,
+      cleanSpacesBeforePunct: false,
+      ensureSpaceAfterPunct: false,
+      normalizeQuotesAndGeresh: false,
+      collapseEmptyParagraphs: false,
+      boldDiburHaMatchil: false,
+      diburDelimiter: 'any',
+      scope: 'activeFlow'
+    });
+
+    assert.equal(cleaned[0].text, 'א שלום');
+    assert.ok(cleaned[0].spans);
+    // After collapsing 2 spaces to 1, "שלום" shifts from offset 3 to offset 2!
+    assert.equal(cleaned[0].spans[0].start, 2);
+    assert.equal(cleaned[0].spans[0].end, 6);
+    assert.equal(cleaned[0].spans[0].format.italic, true);
+  });
+});
+
 
 
