@@ -161,3 +161,73 @@ export function findDiburDelimiter(text: string, delimiter: CleanupOptions['dibu
 
   return bestIdx;
 }
+
+
+/**
+ * Replaces patterns in text while maintaining accurate TextSpan offset tracking.
+ */
+function applyReplacementWithSpans(
+  text: string,
+  regex: RegExp,
+  replacer: (match: string, ...args: any[]) => string,
+  spans: TextSpan[]
+): { newText: string; newSpans: TextSpan[]; count: number } {
+  let count = 0;
+  let resultText = '';
+  let lastIndex = 0;
+  let currentSpans = spans ? spans.map((s) => ({ ...s, format: { ...s.format } })) : [];
+
+  const matches: { index: number; matchLen: number; replacement: string }[] = [];
+
+  let m: RegExpExecArray | null;
+  // Ensure global flag is set
+  const re = new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : regex.flags + 'g');
+
+  while ((m = re.exec(text)) !== null) {
+    const matchStr = m[0];
+    const matchIdx = m.index;
+    const repStr = replacer(matchStr, ...m.slice(1));
+    matches.push({ index: matchIdx, matchLen: matchStr.length, replacement: repStr });
+    count++;
+  }
+
+  if (matches.length === 0) {
+    return { newText: text, newSpans: spans || [], count: 0 };
+  }
+
+  // Apply replacements from left to right and adjust span coordinates
+  let offsetDelta = 0;
+  for (const item of matches) {
+    resultText += text.slice(lastIndex, item.index) + item.replacement;
+    lastIndex = item.index + item.matchLen;
+
+    const delta = item.replacement.length - item.matchLen;
+    const cutStart = item.index + offsetDelta;
+    const cutEnd = cutStart + item.matchLen;
+
+    if (delta !== 0) {
+      currentSpans = currentSpans
+        .map((s) => {
+          if (s.end <= cutStart) {
+            return s;
+          } else if (s.start >= cutEnd) {
+            return { ...s, start: s.start + delta, end: s.end + delta };
+          } else {
+            // Span overlaps the replacement point
+            const newStart = Math.min(s.start, cutStart);
+            const newEnd = Math.max(newStart, s.end + delta);
+            return { ...s, start: newStart, end: newEnd };
+          }
+        })
+        .filter((s) => s.start < s.end);
+      offsetDelta += delta;
+    }
+  }
+
+  resultText += text.slice(lastIndex);
+  return {
+    newText: resultText,
+    newSpans: normalizeSpans(currentSpans, resultText.length),
+    count
+  };
+}
