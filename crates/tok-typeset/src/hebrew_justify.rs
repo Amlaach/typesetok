@@ -338,4 +338,87 @@ mod tests {
         let justified = HebrewJustifier::justify_line(Vec::new(), 100.0, 12.0, false);
         assert!(justified.glyphs.is_empty());
     }
+
+    #[test]
+    fn test_calculate_line_start_x_rtl_and_ltr() {
+        // RTL line narrower than target width: should sit flush-right
+        let start_rtl = HebrewJustifier::calculate_line_start_x(120.0, 200.0, 40.0, true);
+        assert_eq!(start_rtl, 40.0 + (200.0 - 120.0)); // 120.0
+
+        // RTL line overflowing target width: clamps to x_offset
+        let overflow_rtl = HebrewJustifier::calculate_line_start_x(250.0, 200.0, 40.0, true);
+        assert_eq!(overflow_rtl, 40.0);
+
+        // LTR line: always starts at x_offset
+        let start_ltr = HebrewJustifier::calculate_line_start_x(120.0, 200.0, 40.0, false);
+        assert_eq!(start_ltr, 40.0);
+    }
+
+    #[test]
+    fn test_justify_line_with_offset_intermediate_and_last_lines() {
+        let text = "אמר רבא כל המחובר לקרקע הרי הוא כקרקע";
+        let run = TextShaper::shape_fallback(text, 12.0, true);
+
+        // 1. Intermediate line (is_last = false): fully justified to target_width
+        let layout_mid = HebrewJustifier::justify_line_with_offset(
+            run.glyphs.clone(),
+            run.total_width_pt + 30.0,
+            55.0,
+            12.0,
+            false,
+            true,
+        );
+        assert!((layout_mid.total_width - (run.total_width_pt + 30.0)).abs() < 0.5);
+        // Fully justified: starts exactly at x_offset because total_width == target_width
+        assert!((layout_mid.start_x - 55.0).abs() < 0.5);
+
+        // 2. Last line (is_last = true): not justified, sits flush-right in RTL
+        let target_w = run.total_width_pt + 80.0;
+        let layout_last = HebrewJustifier::justify_line_with_offset(
+            run.glyphs.clone(),
+            target_w,
+            55.0,
+            12.0,
+            true,
+            true,
+        );
+        // Total width remains natural width
+        assert!((layout_last.total_width - run.total_width_pt).abs() < 0.1);
+        // Start X sits flush right within the offset measure: 55.0 + (target_w - natural_width)
+        let expected_x = 55.0 + (target_w - run.total_width_pt);
+        assert!((layout_last.start_x - expected_x).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_stepped_polygon_line_justification_l_shape() {
+        let line1_text = "רש\"י בדבור המתחיל";
+        let line2_text = "הרחבת טור תוספות על פני כל הרוחב התחתון של הדף";
+
+        let run1 = TextShaper::shape_fallback(line1_text, 11.0, true);
+        let run2 = TextShaper::shape_fallback(line2_text, 11.0, true);
+
+        // Line 1: narrow upper column (x_offset = 200.0, width = 100.0)
+        let l1 = HebrewJustifier::justify_line_with_offset(
+            run1.glyphs,
+            100.0,
+            200.0,
+            11.0,
+            false,
+            true,
+        );
+        assert!((l1.total_width - 100.0).abs() < 0.5);
+        assert!((l1.start_x - 200.0).abs() < 0.5);
+
+        // Line 2: wide expanded lower absorption band (x_offset = 0.0, width = 300.0)
+        let l2 = HebrewJustifier::justify_line_with_offset(
+            run2.glyphs,
+            300.0,
+            0.0,
+            11.0,
+            false,
+            true,
+        );
+        assert!((l2.total_width - 300.0).abs() < 0.5);
+        assert!((l2.start_x - 0.0).abs() < 0.5);
+    }
 }
