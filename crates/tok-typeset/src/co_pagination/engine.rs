@@ -65,28 +65,28 @@ impl CoPaginationDocument {
 
     pub fn with_stream(
         mut self,
-        flow_id: impl Into<FlowId>,
+        flow_id: impl Into<String>,
         items: Vec<CoPaginatedCommentary>,
     ) -> Self {
-        let fid = flow_id.into();
-        match fid.0.as_str() {
+        let name = flow_id.into();
+        match name.as_str() {
             "rashi" => self.rashi_items.extend(items),
             "tosafot" => self.tosafot_items.extend(items),
-            _ => self.additional_streams.entry(fid).or_default().extend(items),
+            _ => self.additional_streams.entry(FlowId::new(&name)).or_default().extend(items),
         }
         self
     }
 
     pub fn add_commentary(
         &mut self,
-        flow_id: impl Into<FlowId>,
+        flow_id: impl Into<String>,
         item: CoPaginatedCommentary,
     ) {
-        let fid = flow_id.into();
-        match fid.0.as_str() {
+        let name = flow_id.into();
+        match name.as_str() {
             "rashi" => self.rashi_items.push(item),
             "tosafot" => self.tosafot_items.push(item),
-            _ => self.additional_streams.entry(fid).or_default().push(item),
+            _ => self.additional_streams.entry(FlowId::new(&name)).or_default().push(item),
         }
     }
 }
@@ -977,6 +977,111 @@ mod tests {
                     page.rashi_lines_count
                 );
             }
+        }
+    }
+
+    #[test]
+    fn test_co_pagination_mikraot_gedolot_4_stream_layout() {
+        use crate::co_pagination::TemplateKind;
+
+        let engine = test_engine();
+        let config = TemplateConfig {
+            page_width_pt: 700.0,
+            page_height_pt: 500.0,
+            kind: TemplateKind::MikraotGedolot,
+            ..Default::default()
+        };
+        let sync_config = SynchronizerConfig::default();
+
+        let mut doc = CoPaginationDocument::new().with_main(vec![
+            CoPaginatedChunk {
+                text: "בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ: וְהָאָרֶץ הָיְתָה תֹהוּ וָבֹהוּ וְחֹשֶׁךְ עַל פְּנֵי תְהוֹם וְרוּחַ אֱלֹהִים מְרַחֶפֶת עַל פְּנֵי הַמָּיִם:".to_string(),
+                anchors: vec![
+                    (AnchorKey::new("mg_1"), "בְּרֵאשִׁית".to_string()),
+                    (AnchorKey::new("mg_2"), "תֹהוּ וָבֹהוּ".to_string()),
+                ],
+            },
+            CoPaginatedChunk {
+                text: "וַיֹּאמֶר אֱלֹהִים יְהִי אוֹר וַיְהִי אוֹר: וַיַּרְא אֱלֹהִים אֶת הָאוֹר כִּי טוֹב וַיַּבְדֵּל אֱלֹהִים בֵּין הָאוֹר וּבֵין הַחֹשֶׁךְ:".to_string(),
+                anchors: vec![(AnchorKey::new("mg_3"), "יְהִי אוֹר".to_string())],
+            },
+        ]);
+
+        doc.add_commentary(
+            "rashi",
+            CoPaginatedCommentary {
+                target_anchor: AnchorKey::new("mg_1"),
+                text: "בראשית - אמר רבי יצחק לא היה צריך להתחיל את התורה אלא מהחודש הזה לכם".to_string(),
+            },
+        );
+        doc.add_commentary(
+            "rashi",
+            CoPaginatedCommentary {
+                target_anchor: AnchorKey::new("mg_2"),
+                text: "תהו ובהו - תהו לשון תמה ושממון שאדם תוהא ומשתומם על בהו שבה".to_string(),
+            },
+        );
+
+        doc.add_commentary(
+            "targum",
+            CoPaginatedCommentary {
+                target_anchor: AnchorKey::new("mg_1"),
+                text: "בְּקַדְמִין בְּרָא יְיָ יָת שְׁמַיָּא וְיָת אַרְעָא: וְאַרְעָא הֲוָת צַדְיָא וְרֵיקַנְיָא".to_string(),
+            },
+        );
+        doc.add_commentary(
+            "targum",
+            CoPaginatedCommentary {
+                target_anchor: AnchorKey::new("mg_3"),
+                text: "וַאֲמַר יְיָ יְהֵי נְהוֹרָא וַהֲוָה נְהוֹרָא:".to_string(),
+            },
+        );
+
+        doc.add_commentary(
+            "ramban",
+            CoPaginatedCommentary {
+                target_anchor: AnchorKey::new("mg_1"),
+                text: "בראשית ברא - דע כי ששת ימי בראשית היו בהם רמזים לכל ימות עולם, והבריאה כולה היא יש מאין המוחלט הנקרא היולי".to_string(),
+            },
+        );
+        doc.add_commentary(
+            "ramban",
+            CoPaginatedCommentary {
+                target_anchor: AnchorKey::new("mg_2"),
+                text: "והארץ היתה תהו - החומר הראשון קראו תהו, והצורה שנתלבשה בו קראה בהו".to_string(),
+            },
+        );
+
+        let result = CoPaginationEngine::co_paginate(&config, &sync_config, &doc, &engine);
+
+        assert!(result.total_pages >= 1, "Expected at least 1 page generated");
+        assert!(result.total_gemara_lines > 0, "Torah lines missing");
+        assert!(result.total_rashi_lines > 0, "Rashi lines missing");
+
+        // Verify Targum and Ramban stream lines recorded
+        let total_targum = result.total_stream_lines.get(&FlowId::new("targum")).copied().unwrap_or(0);
+        let total_ramban = result.total_stream_lines.get(&FlowId::new("ramban")).copied().unwrap_or(0);
+        assert!(total_targum > 0, "Targum lines should be greater than 0, got {}", total_targum);
+        assert!(total_ramban > 0, "Ramban lines should be greater than 0, got {}", total_ramban);
+
+        let page1 = &result.pages[0];
+        assert_eq!(page1.page_number, 1);
+        // Mikraot Gedolot template on page 1 (Recto) produces 4 column frames: rashi, main, targum, ramban
+        assert_eq!(page1.page_layout.frames.len(), 4, "Expected 4 frames on Mikraot Gedolot page");
+
+        let flow_ids: Vec<&str> = page1.page_layout.frames.iter().map(|f| f.flow_id.as_str()).collect();
+        assert!(flow_ids.contains(&"rashi"));
+        assert!(flow_ids.contains(&"main"));
+        assert!(flow_ids.contains(&"targum"));
+        assert!(flow_ids.contains(&"ramban"));
+
+        // Verify each frame contains actual text lines
+        for frame in &page1.page_layout.frames {
+            assert!(
+                !frame.lines.is_empty(),
+                "Frame for flow {} should have lines",
+                frame.flow_id
+            );
         }
     }
 }
