@@ -38,6 +38,7 @@ pub mod multi_flow;
 pub mod page_break;
 pub mod polygon;
 pub mod polygon_engine;
+pub mod polygon_flow;
 pub mod shaper;
 pub mod solver;
 pub mod template_synthesizer;
@@ -82,6 +83,9 @@ pub use multi_flow::{
 };
 pub use polygon::{ExclusionZone, GeometricPolygon, ScanlineSpan};
 pub use polygon_engine::PolygonFrame;
+pub use polygon_flow::{
+    CommentaryAbsorptionSpec, MultiColumnPolygonFlowSynthesizer, SynthesizedPolygonFlow,
+};
 pub use page_break::{
     compute_badness, score_page_break, BreakOpportunity, GlobalPageBreaker, PageBreakPenalty,
     PageSlice, PaginationLineInput,
