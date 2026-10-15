@@ -26,6 +26,7 @@ const MENU_ITEMS: MenuItem[] = [
   { labelKey: 'menuSave', shortcut: 'Ctrl+S', action: 'save-document' },
   { labelKey: 'menuSaveAs', shortcut: 'Ctrl+Shift+S', action: 'save-as' },
   { type: 'separator' },
+  { labelKey: 'menuTextCleanup', shortcut: 'Ctrl+Shift+C', action: 'open-text-cleanup' },
   { labelKey: 'menuNormalizeNiqqud', action: 'normalize-hebrew' },
   { labelKey: 'menuShieldDivineNames', action: 'shield-divine-names' },
   { labelKey: 'menuRecalcGematria', action: 'recalculate-gematria' },

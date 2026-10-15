@@ -35,6 +35,7 @@ export interface InspectorCallbacks {
   onTypographyChange: (typo: Partial<TypographySettings>) => void;
   onSyncStyleToken: () => void;
   onNormalizeNiqqud: () => void;
+  onOpenTextCleanup?: () => void;
   onAlignFrames: (alignType: string) => void;
 }
 
@@ -461,6 +462,12 @@ export class ContextualInspector {
 
     // 5. Niqqud, cantillation & divine names
     const sacredCard = this.createCard(t('inspSacred'));
+    sacredCard.appendChild(button(t('menuTextCleanup'), {
+      className: 'tok-btn tok-btn-block tok-btn-sm',
+      icon: 'sparkle',
+      iconSize: 14,
+      onClick: () => this.callbacks.onOpenTextCleanup?.()
+    }));
     sacredCard.appendChild(button(t('inspNormalize'), {
       className: 'tok-btn tok-btn-block tok-btn-sm',
       icon: 'sparkle',
