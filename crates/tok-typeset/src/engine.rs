@@ -3508,4 +3508,84 @@ mod tests {
             .iter()
             .any(|l| l.paragraph_id == Some(p3_id)));
     }
+
+    #[test]
+    fn test_typeset_paragraph_with_hebrew_drop_cap() {
+        let eng = engine();
+        let dc = tok_core::styles::DropCapConfig {
+            enabled: true,
+            lines: 3,
+            whole_word: true,
+            margin_pt: 8.0,
+            ..Default::default()
+        };
+
+        let text = "בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם וְאֵ֥ת הָאָֽרֶץ. \
+                    וְהָאָ֗רֶץ הָיְתָ֥ה תֹ֙הוּ֙ וָבֹ֔הוּ וְחֹ֖שֶׁךְ עַל־פְּנֵ֣י תְה֑וֹם \
+                    וְר֣וּחַ אֱלֹהִ֔ים מְרַחֶ֖פֶת עַל־פְּנֵ֥י הַמָּֽיִם. \
+                    וַיֹּ֥אמֶר אֱלֹהִ֖ים יְהִ֣י א֑וֹר וַֽיְהִי־אֽוֹר. \
+                    וַיַּ֧רְא אֱלֹהִ֛ים אֶת־הָא֖וֹר כִּי־ט֑וֹב וַיַּבְדֵּ֣ל אֱלֹהִ֔ים בֵּ֥ין הָא֖וֹר וּבֵ֥ין הַחֹֽשֶׁךְ.";
+        let p = para(text).with_drop_cap(dc);
+
+        let col_w = 320.0;
+        let line_h = 16.0;
+        let profile = MeasureProfile::uniform(col_w);
+
+        let lines = eng.typeset_paragraph_shaped(&p, DEFAULT_FONT_FAMILY, &profile, 11.0, line_h);
+
+        assert!(lines.len() >= 4, "Must produce drop cap plus multiple body lines");
+
+        // Line 0 is the drop cap window
+        let drop_line = &lines[0];
+        assert!(drop_line.is_drop_cap, "Line 0 must be marked as drop cap");
+        assert_eq!(drop_line.text, tok_core::normalizer::HebrewNormalizer::normalize("בְּרֵאשִׁ֖ית"));
+        assert_eq!(drop_line.height, 3.0 * line_h);
+        assert!(drop_line.width > 30.0);
+        let win_x = drop_line.x_offset;
+        assert!((win_x + drop_line.width - col_w).abs() < 1e-2, "Drop cap must align to right in RTL");
+
+        // Body lines 1, 2, 3 must be indented to the left of the drop cap window
+        for bl in &lines[1..4] {
+            assert!(!bl.is_drop_cap);
+            assert!(
+                bl.width <= col_w - drop_line.width + 1.0,
+                "Body lines adjacent to drop cap must notch within available measure"
+            );
+            for g in &bl.glyphs {
+                assert!(
+                    g.x <= win_x + 1.0,
+                    "Body glyphs must not overlap drop cap window horizontally"
+                );
+            }
+        }
+
+        // Lines 4+ (below the drop cap window) should have full width potential
+        if lines.len() > 4 {
+            let last_line = lines.last().unwrap();
+            assert!(!last_line.is_drop_cap);
+        }
+    }
+
+    #[test]
+    fn test_typeset_paragraph_talmud_drop_cap() {
+        let eng = engine();
+        let dc = tok_core::styles::DropCapConfig {
+            enabled: true,
+            lines: 2,
+            whole_word: true,
+            margin_pt: 6.0,
+            ..Default::default()
+        };
+
+        let text = "מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית מִשָּׁעָה שֶׁהַכֹּהֲנִים נִכְנָסִים לֶאֱכֹל בִּתְרוּמָתָן \
+                    עַד סוֹף הָאַשְׁמוּרָה הָרִאשׁוֹנָה דִּבְרֵי רַבִּי אֱלִיעֶזֶר.";
+        let p = para(text).with_drop_cap(dc);
+
+        let lines = eng.typeset_paragraph_shaped(&p, DEFAULT_FONT_FAMILY, &MeasureProfile::uniform(300.0), 12.0, 16.0);
+        assert!(lines.len() >= 3);
+        assert!(lines[0].is_drop_cap);
+        assert_eq!(lines[0].text, "מֵאֵימָתַי");
+        assert_eq!(lines[0].height, 32.0); // 2 lines * 16.0
+    }
 }
+

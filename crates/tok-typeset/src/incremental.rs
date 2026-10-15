@@ -191,6 +191,8 @@ mod tests {
                 text: format!("Line s{} p{} l{}", sec, p, l),
                 is_rtl: true,
                 fonts: Vec::new(),
+                is_drop_cap: false,
+                x_offset: 0.0,
             },
             section_idx: sec,
             paragraph_idx: p,

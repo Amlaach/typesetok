@@ -252,6 +252,8 @@ mod tests {
                 text: "line 0".to_string(),
                 is_rtl: true,
                 fonts: Vec::new(),
+                is_drop_cap: false,
+                x_offset: 0.0,
             },
             LineBox {
                 line_index: 1,
@@ -263,6 +265,8 @@ mod tests {
                 text: "line 1".to_string(),
                 is_rtl: true,
                 fonts: Vec::new(),
+                is_drop_cap: false,
+                x_offset: 0.0,
             },
         ];
 

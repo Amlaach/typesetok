@@ -519,6 +519,8 @@ mod tests {
             text: format!("line {}", idx),
             is_rtl: true,
             fonts: Vec::new(),
+            is_drop_cap: false,
+            x_offset: 0.0,
         }
     }
 
