@@ -56,6 +56,68 @@ pub enum AhaltermStretchMode {
     StaticSwash,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+fn default_drop_cap_lines() -> usize {
+    3
+}
+
+fn default_drop_cap_chars() -> usize {
+    1
+}
+
+fn default_drop_cap_weight() -> u16 {
+    FONT_WEIGHT_BOLD
+}
+
+fn default_drop_cap_margin() -> f32 {
+    6.0
+}
+
+/// Hebrew Opening Word / Drop Cap configuration ("חלון במילת פתיחה").
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DropCapConfig {
+    pub enabled: bool,
+    /// Number of lines the drop cap window spans vertically (default: 3).
+    #[serde(default = "default_drop_cap_lines")]
+    pub lines: usize,
+    /// Number of characters/letters included if whole_word is false.
+    #[serde(default = "default_drop_cap_chars")]
+    pub characters_count: usize,
+    /// If true, the entire first word is used as opening word (traditional Hebrew "חלון").
+    #[serde(default = "default_true")]
+    pub whole_word: bool,
+    /// Font family for the drop cap (None = inherits paragraph font).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
+    /// Font weight (default: 700 bold).
+    #[serde(default = "default_drop_cap_weight")]
+    pub font_weight: u16,
+    /// Margin / clearance (pt) around the drop cap window.
+    #[serde(default = "default_drop_cap_margin")]
+    pub margin_pt: f32,
+    /// Explicit font size (pt). If None, automatically scaled to fit `lines * line_height`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_size_pt: Option<f32>,
+}
+
+impl Default for DropCapConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            lines: 3,
+            characters_count: 1,
+            whole_word: true,
+            font_family: None,
+            font_weight: FONT_WEIGHT_BOLD,
+            margin_pt: 6.0,
+            font_size_pt: None,
+        }
+    }
+}
+
 pub const FONT_WEIGHT_REGULAR: u16 = 400;
 pub const FONT_WEIGHT_BOLD: u16 = 700;
 
@@ -92,6 +154,9 @@ pub struct ParagraphStyle {
     pub keep_with_next: bool,
     pub orphan_control: u8,
     pub widow_control: u8,
+    /// Optional drop cap or Hebrew opening word window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drop_cap: Option<DropCapConfig>,
 }
 
 impl Default for ParagraphStyle {
@@ -115,6 +180,7 @@ impl Default for ParagraphStyle {
             keep_with_next: false,
             orphan_control: 2,
             widow_control: 2,
+            drop_cap: None,
         }
     }
 }
@@ -159,6 +225,9 @@ impl ParagraphStyle {
         if let Some(v) = &patch.color {
             self.color = v.clone();
         }
+        if let Some(v) = &patch.drop_cap {
+            self.drop_cap = Some(v.clone());
+        }
     }
 }
 
@@ -198,6 +267,8 @@ pub struct StylePatch {
     pub indent_end_pt: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub direction: Option<Progression>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drop_cap: Option<DropCapConfig>,
 }
 
 impl StylePatch {

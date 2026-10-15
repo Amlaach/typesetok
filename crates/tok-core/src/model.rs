@@ -66,6 +66,13 @@ impl ParagraphNode {
         self
     }
 
+    pub fn with_drop_cap(self, config: crate::styles::DropCapConfig) -> Self {
+        self.with_patch(StylePatch {
+            drop_cap: Some(config),
+            ..Default::default()
+        })
+    }
+
     pub fn with_overrides(mut self, overrides: crate::overrides::LayoutLockOverrides) -> Self {
         self.overrides = Some(overrides);
         self
