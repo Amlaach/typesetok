@@ -435,18 +435,26 @@ function createWindow(): void {
 
       if (choice.response === 0) {
         // Save before exit
-        await win.webContents.executeJavaScript(
-          'Boolean((window as any).appInstance?.handleSystemAction?.("save-document"))'
+        const saveResult = await win.webContents.executeJavaScript(
+          'Promise.resolve((window as any).appInstance?.handleSystemAction?.("save-document"))'
         ).catch(() => false);
+
+        if (saveResult === false) {
+          logger.info('[MAIN] Save before exit was cancelled or failed; keeping window open');
+          isClosingPromptActive = false;
+          return;
+        }
 
         // Allow save I/O to flush
         setTimeout(() => {
           isForceClosing = true;
+          isClosingPromptActive = false;
           if (!win.isDestroyed()) win.close();
         }, 300);
       } else if (choice.response === 1) {
         // Discard without saving
         isForceClosing = true;
+        isClosingPromptActive = false;
         win.close();
       } else {
         // Cancel: keep window open
@@ -455,6 +463,7 @@ function createWindow(): void {
       }
     } catch (err: any) {
       logger.warn('[MAIN] Exception in window close guard; closing safely', { error: err?.message });
+      isClosingPromptActive = false;
       isForceClosing = true;
       if (!win.isDestroyed()) win.close();
     }
