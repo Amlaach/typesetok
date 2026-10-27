@@ -761,7 +761,9 @@ export class TypesetOkApp {
         onSelectTemplate: (tmpl) => this.handleTemplateSelect(tmpl),
         onOpenProject: (path) => this.handleSystemAction('open-document', path),
         onImportDocument: () => this.handleSystemAction('import-document'),
-        onClose: () => {},
+        onClose: () => {
+          this.welcomeModalInstance?.hide();
+        },
         onOpenSettings: () => this.settingsModal.show(),
         onOpenAbout: () => this.aboutModal.show(),
         onOpenGuide: () => this.userGuideModal.show(),
@@ -1988,6 +1990,7 @@ export class TypesetOkApp {
     this.topBar.setDocumentTitle(name, false);
     addRecentProject({ name, pages: this.pages.length, lastSavedAt: new Date().toISOString() });
     this.welcomeModal.setHasOpenDocument(true);
+    this.welcomeModal.hide();
 
     if (isDemo) {
       this.showToast(t('toastDemoLoaded'));
@@ -2100,6 +2103,7 @@ export class TypesetOkApp {
     return this.repaginateAndSync(true).then(() => {
       this.hasOpenDocument = true;
       this.welcomeModal.setHasOpenDocument(true);
+      this.welcomeModal.hide();
       this.canvas.scrollToPage(0);
       addRecentProject({
         name: displayTitle,
@@ -2147,6 +2151,7 @@ export class TypesetOkApp {
     this.hasOpenDocument = true;
     addRecentProject({ name: baseName, path: filePath, pages: this.pages.length || 1, lastSavedAt: new Date().toISOString() });
     this.welcomeModal.setHasOpenDocument(true);
+    this.welcomeModal.hide();
     this.showToast(tf('toastOpenFile', { path: baseName }));
   }
 
@@ -2250,6 +2255,7 @@ export class TypesetOkApp {
     this.setDirty(true);
     this.hasOpenDocument = true;
     this.welcomeModal.setHasOpenDocument(true);
+    this.welcomeModal.hide();
 
     this.documentState = importResultToDocumentState(result, templateType);
     this.activeFlowId = 'gemara';
