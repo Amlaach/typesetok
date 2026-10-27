@@ -18,9 +18,9 @@ import { StoryParagraph } from 'tok-story-editor';
 import { PageDescriptor } from 'tok-viewer';
 import { toHebrewGematria } from '../gematria.js';
 import { isRectoPage, isRightHandPage } from '../components/SpreadCanvas.js';
-import { DocumentSettings } from '../types.js';
+import { DocumentSettings, MultiFlowItem } from '../types.js';
 
-export type TemplateType = 'gemara' | 'mikraot' | 'prose' | 'notes' | 'bulletin';
+export type TemplateType = 'gemara' | 'mikraot' | 'prose' | 'notes' | 'bulletin' | 'blank';
 
 export interface MultiFlowDocumentState {
   title: string;
@@ -182,6 +182,181 @@ export const DEFAULT_PROSE_FLOWS: MultiFlowDocumentState['flows'] = {
   tosafot: [],
   notes: []
 };
+
+export const DEFAULT_MIKRAOT_FLOWS: MultiFlowDocumentState['flows'] = {
+  gemara: [
+    {
+      id: 'm-1',
+      styleId: 'style-gemara-main',
+      text: 'בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ׃ וְהָאָרֶץ הָיְתָה תֹהוּ וָבֹהוּ וְחֹשֶׁךְ עַל־פְּנֵי תְהוֹם וְרוּחַ אֱלֹהִים מְרַחֶפֶת עַל־פְּנֵי הַמָּיִם׃'
+    },
+    {
+      id: 'm-2',
+      styleId: 'style-gemara-main',
+      text: 'וַיֹּאמֶר אֱלֹהִים יְהִי אוֹר וַיְהִי־אוֹר׃ וַיַּרְא אֱלֹהִים אֶת־הָאוֹר כִּי־טוֹב וַיַּבְדֵּל אֱלֹהִים בֵּין הָאוֹר וּבֵין הַחֹשֶׁךְ׃'
+    }
+  ],
+  rashi: [
+    {
+      id: 'mr-1',
+      styleId: 'style-rashi-body',
+      text: 'בְּרֵאשִׁית בָּרָא — אָמַר רַבִּי יִצְחָק: לֹא הָיָה צָרִיךְ לְהַתְחִיל אֶת הַתּוֹרָה אֶלָּא מֵ״הַחֹדֶשׁ הַזֶּה לָכֶם״, שֶׁהִיא מִצְוָה רִאשׁוֹנָה שֶׁנִּצְטַוּוּ בָּהּ יִשְׂרָאֵל, וּמַה טַּעַם פָּתַח בִּבְרֵאשִׁית? מִשּׁוּם כֹּחַ מַעֲשָׂיו הִגִּיד לְעַמּוֹ לָתֵת לָהֶם נַחֲלַת גּוֹיִם.'
+    },
+    {
+      id: 'mr-2',
+      styleId: 'style-rashi-body',
+      text: 'שֶׁאִם יֹאמְרוּ אֻמּוֹת הָעוֹלָם לְיִשְׂרָאֵל: לִסְטִים אַתֶּם, שֶׁכְּבַשְׁתֶּם אַרְצוֹת שִׁבְעָה גוֹיִם, הֵם אוֹמְרִים לָהֶם: כָּל הָאָרֶץ שֶׁל הַקָּדוֹשׁ בָּרוּךְ הוּא הִיא, הוּא בְּרָאָהּ וּנְתָנָהּ לַאֲשֶׁר יָשַׁר בְּעֵינָיו.'
+    }
+  ],
+  tosafot: [
+    {
+      id: 'mt-1',
+      styleId: 'style-tosafot-body',
+      text: 'בְּקַדְמִין בְּרָא יְיָ יָת שְׁמַיָּא וְיָת אַרְעָא. וְאַרְעָא הֲוָת צָדְיָא וְרֵיקַנְיָא וַחֲשׁוֹכָא עַל אַפֵּי תְהוֹמָא וְרוּחָא מִן קֳדָם יְיָ מְנַשְּׁבָא עַל אַפֵּי מַיָּא.'
+    },
+    {
+      id: 'mt-2',
+      styleId: 'style-tosafot-body',
+      text: 'וַאֲמַר יְיָ יְהֵי נְהוֹרָא וַהֲוָה נְהוֹרָא. וַחֲזָא יְיָ יָת נְהוֹרָא אֲרֵי טָב וְאַפְרֵישׁ יְיָ בֵּין נְהוֹרָא וּבֵין חֲשׁוֹכָא.'
+    }
+  ],
+  notes: [
+    {
+      id: 'mn-1',
+      styleId: 'style-footnotes',
+      text: 'רמב״ן: פתח במעשה בראשית להודיע כי העולם מחודש ולא קדמון, וכי הבריאה יש מאין הגמור היתה בחפץ הבורא יתברך שמו.'
+    }
+  ]
+};
+
+export const DEFAULT_NOTES_FLOWS: MultiFlowDocumentState['flows'] = {
+  gemara: [
+    {
+      id: 'n-1',
+      styleId: 'normal',
+      text: 'פרק ראשון: יסודות חכמת העימוד וסדרי אותיות הקודש. מלאכת הדפוס והעימוד בספרי ישראל אינה רק עניין טכני של סידור שורות, אלא מעשה אומנות קדוש המשפיע ישירות על ישוב דעתו של הלומד ועל בהירות השגת הסוגיה.'
+    },
+    {
+      id: 'n-2',
+      styleId: 'normal',
+      text: 'המדפיסים הנודעים בדורות עברו הקפידו על גודל השוליים, מרחב הנשימה בין הפסקאות ואיזון מופתי בין גוף הטקסט לבין הערות הביאור הנלוות אליו בתחתית העמוד.'
+    }
+  ],
+  rashi: [],
+  tosafot: [],
+  notes: [
+    {
+      id: 'fn-1',
+      styleId: 'style-footnotes',
+      text: '1. עיין בהקדמת המדפיסים בוונציה שנת שכ״ח, שכתבו כי אות נאה ומאירת עיניים מרחבת דעתו של אדם לתורה.'
+    },
+    {
+      id: 'fn-2',
+      styleId: 'style-footnotes',
+      text: '2. וכן מצינו בספר חסידים סימן תשפ״ו שהזהיר על כתיבה נאה ומדויקת שלא יטעו בה הקוראים.'
+    }
+  ]
+};
+
+export const DEFAULT_BULLETIN_FLOWS: MultiFlowDocumentState['flows'] = {
+  gemara: [
+    {
+      id: 'b-1',
+      styleId: 'normal',
+      text: 'עלון שבת קודש — פניני הפרשה והלכה. שבת קודש היא מקור הברכה והשלווה לנפש, יום של התעלות רוחנית ולימוד תורה מתוך שמחה ושלום בית.'
+    },
+    {
+      id: 'b-2',
+      styleId: 'normal',
+      text: 'בפרשתנו אנו למדים על מעלת השלום והאחדות בעם ישראל, ועל החובה לחזק איש את רעהו בדברי חיזוק ובמאור פנים.'
+    }
+  ],
+  rashi: [
+    {
+      id: 'br-1',
+      styleId: 'normal',
+      text: 'הלכה למעשה: דיני הכנה משבת ליום חול. ראוי לכל אדם להיזהר שלא לעשות שום מלאכה או טורח בשבת לצורך ימי החול הבאים.'
+    }
+  ],
+  tosafot: [],
+  notes: [
+    {
+      id: 'bn-1',
+      styleId: 'style-footnotes',
+      text: 'זמני תפילות השבת: מנחה ערב שבת 18:20, שחרית בהנץ 06:15, שיעור בהלכה 17:30.'
+    }
+  ]
+};
+
+export const DEFAULT_BLANK_FLOWS: MultiFlowDocumentState['flows'] = {
+  gemara: [
+    {
+      id: 'p-blank-1',
+      styleId: 'normal',
+      text: ''
+    }
+  ],
+  rashi: [],
+  tosafot: [],
+  notes: []
+};
+
+export function getDefaultFlowsForTemplate(templateType: TemplateType): MultiFlowDocumentState['flows'] {
+  switch (templateType) {
+    case 'mikraot':
+      return JSON.parse(JSON.stringify(DEFAULT_MIKRAOT_FLOWS));
+    case 'notes':
+      return JSON.parse(JSON.stringify(DEFAULT_NOTES_FLOWS));
+    case 'bulletin':
+      return JSON.parse(JSON.stringify(DEFAULT_BULLETIN_FLOWS));
+    case 'prose':
+      return JSON.parse(JSON.stringify(DEFAULT_PROSE_FLOWS));
+    case 'blank':
+      return JSON.parse(JSON.stringify(DEFAULT_BLANK_FLOWS));
+    case 'gemara':
+    default:
+      return JSON.parse(JSON.stringify(DEFAULT_TALMUD_FLOWS));
+  }
+}
+
+export function getFlowsForTemplate(templateType: TemplateType): MultiFlowItem[] {
+  switch (templateType) {
+    case 'mikraot':
+      return [
+        { id: 'gemara', name: 'מקרא (חומש)', color: '#1E4A9E', role: 'מרכז העמוד', wordCount: 0, isActive: true },
+        { id: 'rashi', name: 'רש"י', color: '#B45309', role: 'פירוש עיקרי', wordCount: 0, isActive: false },
+        { id: 'tosafot', name: 'תרגום אונקלוס', color: '#15803D', role: 'עמודת תרגום', wordCount: 0, isActive: false },
+        { id: 'notes', name: 'רמב"ן ומפרשים', color: '#7C3AED', role: 'תחתית העמוד', wordCount: 0, isActive: false }
+      ];
+    case 'notes':
+      return [
+        { id: 'gemara', name: 'טקסט ראשי', color: '#1E4A9E', role: 'גוף הספר', wordCount: 0, isActive: true },
+        { id: 'notes', name: 'הערות שוליים', color: '#7C3AED', role: 'תחתית העמוד', wordCount: 0, isActive: false }
+      ];
+    case 'bulletin':
+      return [
+        { id: 'gemara', name: 'מאמר ראשי', color: '#1E4A9E', role: 'עמודה ראשית', wordCount: 0, isActive: true },
+        { id: 'rashi', name: 'טור משני', color: '#B45309', role: 'עמודה שניה', wordCount: 0, isActive: false },
+        { id: 'notes', name: 'מסגרת והודעות', color: '#7C3AED', role: 'תחתית העלון', wordCount: 0, isActive: false }
+      ];
+    case 'prose':
+      return [
+        { id: 'gemara', name: 'טקסט הספר', color: '#1E4A9E', role: 'רציף', wordCount: 0, isActive: true }
+      ];
+    case 'blank':
+      return [
+        { id: 'gemara', name: 'דף ראשי', color: '#1E4A9E', role: 'טקסט', wordCount: 0, isActive: true }
+      ];
+    case 'gemara':
+    default:
+      return [
+        { id: 'gemara', name: 'גמרא (ראשי)', color: '#1E4A9E', role: 'מרכז העמוד', wordCount: 0, isActive: true },
+        { id: 'rashi', name: 'רש"י', color: '#B45309', role: 'פירוש פנימי', wordCount: 0, isActive: false },
+        { id: 'tosafot', name: 'תוספות', color: '#15803D', role: 'פירוש חיצוני', wordCount: 0, isActive: false },
+        { id: 'notes', name: 'הערות שוליים', color: '#7C3AED', role: 'תחתית העמוד', wordCount: 0, isActive: false }
+      ];
+  }
+}
 
 /** Flow capacity estimates per page in words/characters for balanced pagination */
 const CAPACITY = {
