@@ -209,7 +209,7 @@ impl TokPackage {
         // 1. Validate every entry before trusting any of them.
         for i in 0..archive.len() {
             let entry = archive.by_index_raw(i)?;
-            let name = entry.name().to_string();
+            let name = entry.name()?.to_string();
             validate_entry_name(&name)?;
             if entry.is_symlink() {
                 return Err(StorageError::CorruptedPackage(format!(
@@ -243,7 +243,7 @@ impl TokPackage {
 
         for i in 0..archive.len() {
             let file = archive.by_index(i)?;
-            let name = file.name().to_string();
+            let name = file.name()?.to_string();
             if name.ends_with('/') {
                 continue;
             }

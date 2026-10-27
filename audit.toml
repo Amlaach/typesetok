@@ -1,0 +1,10 @@
+# TypesetOK Cargo Audit Configuration
+# https://github.com/rustsec/rustsec/tree/main/cargo-audit
+
+[advisories]
+# Informational notices for archived upstream crates that are stable, functional,
+# and used strictly for font parsing (ttf-parser) and harfbuzz shaping (rustybuzz).
+ignore = [
+    "RUSTSEC-2026-0192", # ttf-parser is unmaintained
+    "RUSTSEC-2026-0206", # rustybuzz is unmaintained
+]

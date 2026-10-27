@@ -35,7 +35,7 @@ describe('GitHub Issue #20 Regression Tests: All Bugs Verified', () => {
     it('app.ts hides welcomeModal on template select, import, and document open', () => {
       const appTs = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/app.ts'), 'utf-8');
       assert.ok(appTs.includes('this.welcomeModal.hide()'), 'WelcomeModal.hide() must be called');
-      assert.ok(appTs.includes('onClose: () => {\n          this.welcomeModalInstance?.hide();'), 'Modal onClose must hide modal');
+      assert.ok(/onClose:\s*\(\)\s*=>\s*\{\s*this\.welcomeModalInstance\?\.hide\(\);/.test(appTs), 'Modal onClose must hide modal');
     });
 
     it('ImportTemplateModal uses tok-overlay and dismisses cleanly without ghost backdrop', () => {

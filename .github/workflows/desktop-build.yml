@@ -12,7 +12,7 @@ env:
 
 jobs:
   build-desktop:
-    name: Build Desktop App (${{ matrix.os }})
+    name: Build Desktop App (Windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

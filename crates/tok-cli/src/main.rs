@@ -479,6 +479,14 @@ fn handle_benchmark(pages_target: usize) -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
+fn format_hex(bytes: impl AsRef<[u8]>) -> String {
+    bytes
+        .as_ref()
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect()
+}
+
 fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
     use sha2::{Digest, Sha256};
 
@@ -498,11 +506,11 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut hasher1 = Sha256::new();
     hasher1.update(&pdf1);
-    let pdf_hash1 = format!("{:x}", hasher1.finalize());
+    let pdf_hash1 = format_hex(hasher1.finalize());
 
     let mut hasher1_h = Sha256::new();
     hasher1_h.update(html1.as_bytes());
-    let html_hash1 = format!("{:x}", hasher1_h.finalize());
+    let html_hash1 = format_hex(hasher1_h.finalize());
 
     let pages2 = engine.typeset_document(doc.root());
     let pdf2 =
@@ -511,11 +519,11 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut hasher2 = Sha256::new();
     hasher2.update(&pdf2);
-    let pdf_hash2 = format!("{:x}", hasher2.finalize());
+    let pdf_hash2 = format_hex(hasher2.finalize());
 
     let mut hasher2_h = Sha256::new();
     hasher2_h.update(html2.as_bytes());
-    let html_hash2 = format!("{:x}", hasher2_h.finalize());
+    let html_hash2 = format_hex(hasher2_h.finalize());
 
     if pdf_hash1 != pdf_hash2 {
         return Err("Single-flow PDF outputs must be bit-for-bit identical".into());
@@ -542,11 +550,11 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut t_hasher1 = Sha256::new();
     t_hasher1.update(&talmud_pdf1);
-    let talmud_pdf_hash1 = format!("{:x}", t_hasher1.finalize());
+    let talmud_pdf_hash1 = format_hex(t_hasher1.finalize());
 
     let mut t_hasher1_h = Sha256::new();
     t_hasher1_h.update(talmud_html1.as_bytes());
-    let talmud_html_hash1 = format!("{:x}", t_hasher1_h.finalize());
+    let talmud_html_hash1 = format_hex(t_hasher1_h.finalize());
 
     let talmud_pages2 = engine.typeset_document_multi_flow(&talmud_doc);
     let talmud_pdf2 = PdfPrePressEngine::export_pdf_with_fonts(
@@ -558,11 +566,11 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut t_hasher2 = Sha256::new();
     t_hasher2.update(&talmud_pdf2);
-    let talmud_pdf_hash2 = format!("{:x}", t_hasher2.finalize());
+    let talmud_pdf_hash2 = format_hex(t_hasher2.finalize());
 
     let mut t_hasher2_h = Sha256::new();
     t_hasher2_h.update(talmud_html2.as_bytes());
-    let talmud_html_hash2 = format!("{:x}", t_hasher2_h.finalize());
+    let talmud_html_hash2 = format_hex(t_hasher2_h.finalize());
 
     if talmud_pdf_hash1 != talmud_pdf_hash2 {
         return Err("Multi-flow PDF outputs must be bit-for-bit identical".into());
