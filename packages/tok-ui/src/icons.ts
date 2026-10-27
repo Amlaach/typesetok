@@ -64,6 +64,7 @@ export type IconName =
   | 'chevronRight'
   | 'bold'
   | 'history'
+  | 'edit'
   | 'documentEmpty';
 
 const ICONS_SVG: Record<IconName, string> = {
@@ -397,6 +398,11 @@ const ICONS_SVG: Record<IconName, string> = {
       <line x1="8.5" y1="6" x2="8.5" y2="11"/>
       <line x1="11.5" y1="6" x2="11.5" y2="9"/>
       <line x1="14.5" y1="6" x2="14.5" y2="11"/>
+    </svg>
+  `,
+  edit: `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.5 3.5l4 4L6 18H2v-4L12.5 3.5z"/>
     </svg>
   `
 };

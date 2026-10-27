@@ -7,13 +7,13 @@ export interface TopSystemBarCallbacks {
   onOpenCommandPalette: () => void;
   onViewModeChange: (mode: ViewMode) => void;
   onExportPdf: () => void;
-  onRenameDocument?: (newTitle: string) => void;
   onOpenProjects?: () => void;
   onToggleLanguage?: () => void;
   onOpenSettings?: () => void;
   onOpenAbout?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
+  onRenameDocument?: (newTitle: string) => void;
 }
 
 type MenuItem = { type: 'separator' } | { labelKey: string; shortcut?: string; action: string };
@@ -26,6 +26,7 @@ const MENU_ITEMS: MenuItem[] = [
   { labelKey: 'menuImportDocument', shortcut: 'Ctrl+I', action: 'import-document' },
   { labelKey: 'menuSave', shortcut: 'Ctrl+S', action: 'save-document' },
   { labelKey: 'menuSaveAs', shortcut: 'Ctrl+Shift+S', action: 'save-as' },
+  { labelKey: 'menuRenameDocument', shortcut: 'F2', action: 'rename-document' },
   { type: 'separator' },
   { labelKey: 'menuTextCleanup', shortcut: 'Ctrl+Shift+C', action: 'open-text-cleanup' },
   { labelKey: 'menuNormalizeNiqqud', action: 'normalize-hebrew' },
@@ -139,6 +140,55 @@ export class TopSystemBar {
     }
   }
 
+  public startRenaming(): void {
+    const titleContainer = this.element.querySelector<HTMLElement>('.tok-doc-title');
+    if (!titleContainer) return;
+    const titleEl = titleContainer.querySelector<HTMLElement>('.tok-doc-title-name');
+    if (!titleEl || titleEl.querySelector('input')) return;
+
+    const currentTitle = this.documentTitle.replace(/\.tok$/i, '');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tok-doc-title-input tok-title-inline-input';
+    input.value = currentTitle;
+    input.setAttribute('aria-label', t('menuRenameDocument'));
+    input.style.cssText = 'background: var(--tok-bg-surface-2); color: var(--tok-text-primary); border: 1px solid var(--tok-accent-text); border-radius: 4px; padding: 1px 6px; font-size: 13px; font-weight: 600; width: 180px; outline: none; font-family: inherit;';
+
+    let committed = false;
+    const commit = () => {
+      if (committed) return;
+      committed = true;
+      const next = input.value.trim();
+      if (next && next !== currentTitle) {
+        this.callbacks.onRenameDocument?.(next);
+      } else {
+        titleEl.textContent = this.isDirty ? `• ${currentTitle}` : currentTitle;
+      }
+    };
+
+    const cancel = () => {
+      if (committed) return;
+      committed = true;
+      titleEl.textContent = this.isDirty ? `• ${currentTitle}` : currentTitle;
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancel();
+      }
+    });
+
+    input.addEventListener('blur', () => commit());
+
+    titleEl.replaceChildren(input);
+    input.focus();
+    input.select();
+  }
+
   private render(): void {
     // innerHTML='' detaches an open dropdown; drop the reference too.
     this.closeDropdown();
@@ -160,68 +210,30 @@ export class TopSystemBar {
     if (this.documentTitle) {
       const doc = el('div', 'tok-doc-title', { title: this.documentTitle });
       const cleanTitle = this.documentTitle.replace(/\.tok$/i, '');
-      const titleName = el('span', 'tok-doc-title-name', {
-        role: 'button',
+
+      const titleSpan = el('span', 'tok-doc-title-name', {
         tabindex: '0',
-        title: i18n.getLanguage() === 'en' ? 'Click to rename document' : 'לחץ לשינוי שם המסמך',
-        style: 'cursor: pointer; border-radius: 4px; padding: 1px 4px; transition: background 0.15s ease;'
+        role: 'button',
+        title: t('renameDocumentTooltip'),
+        style: 'cursor: pointer; border-radius: 3px; padding: 1px 4px;'
       }, this.isDirty ? `• ${cleanTitle}` : cleanTitle);
-
-      titleName.addEventListener('mouseenter', () => {
-        titleName.style.background = 'var(--tok-bg-surface-2, rgba(255,255,255,0.08))';
-      });
-      titleName.addEventListener('mouseleave', () => {
-        titleName.style.background = 'transparent';
-      });
-
-      const startEditing = () => {
-        const input = el('input', 'tok-doc-title-input', {
-          type: 'text',
-          value: cleanTitle,
-          style: 'background: var(--tok-bg-surface-2); color: var(--tok-text-primary); border: 1px solid var(--tok-accent-primary); border-radius: 4px; padding: 1px 6px; font-size: 13px; font-weight: 600; font-family: inherit; outline: none; width: ' + Math.max(120, cleanTitle.length * 9) + 'px;'
-        }) as HTMLInputElement;
-
-        let committed = false;
-        const commit = () => {
-          if (committed) return;
-          committed = true;
-          const trimmed = input.value.trim();
-          if (trimmed && trimmed !== cleanTitle) {
-            this.callbacks.onRenameDocument?.(trimmed);
-          } else {
-            this.render();
-          }
-        };
-
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            commit();
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            committed = true;
-            this.render();
-          }
-        });
-        input.addEventListener('blur', () => commit());
-
-        titleName.replaceWith(input);
-        input.focus();
-        input.select();
-      };
-
-      titleName.addEventListener('click', (e) => {
+      titleSpan.addEventListener('dblclick', (e) => {
         e.stopPropagation();
-        startEditing();
+        this.startRenaming();
       });
-      titleName.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+      titleSpan.addEventListener('keydown', (e) => {
+        if (e.key === 'F2' || e.key === 'Enter') {
           e.preventDefault();
-          startEditing();
+          this.startRenaming();
         }
       });
+      doc.appendChild(titleSpan);
 
-      doc.appendChild(titleName);
+      const renameBtn = iconButton('edit', t('renameDocumentTooltip'), () => {
+        this.startRenaming();
+      }, { size: 12, className: 'tok-btn tok-btn-ghost tok-btn-xs', attrs: { style: 'height: 20px; width: 20px; padding: 0; opacity: 0.6; margin-inline-start: 2px;' } });
+      doc.appendChild(renameBtn);
+
       const sep = el('span', 'tok-doc-title-sep', { 'aria-hidden': 'true' }, '/');
       sep.hidden = !this.pageLabel;
       doc.appendChild(sep);

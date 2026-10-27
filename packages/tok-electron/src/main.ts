@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell, dialog, IpcMainInvokeEvent } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as zlib from 'zlib';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { buildApplicationMenu } from './menu';
@@ -11,23 +12,6 @@ import { pluginManager } from './plugin-manager';
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
 let startupFilePath: string | null = null;
-
-function extractFileFromArgv(argv: string[]): string | null {
-  for (let i = app.isPackaged ? 1 : 2; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg && !arg.startsWith('--') && !arg.startsWith('-')) {
-      try {
-        const resolved = path.isAbsolute(arg) ? arg : path.resolve(arg);
-        if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
-          return resolved;
-        }
-      } catch {}
-    }
-  }
-  return null;
-}
-
-startupFilePath = extractFileFromArgv(process.argv);
 
 const UI_INDEX_PATH = path.join(__dirname, '../../tok-ui/dist/index.html');
 const APP_REPO_URL = 'https://github.com/TypesetOK/typesetok';
@@ -132,6 +116,59 @@ function runCli(args: string[]): Promise<CliResult> {
 function requireString(value: unknown, name: string): string {
   if (typeof value !== 'string' || !value) throw new Error(`Invalid ${name}`);
   return value;
+}
+
+/** Extracts and decompresses raw word/document.xml from DOCX zip buffer */
+function extractDocxXmlFromBuffer(buffer: Buffer): string | null {
+  if (buffer.length < 30) return null;
+  if (buffer[0] !== 0x50 || buffer[1] !== 0x4B || buffer[2] !== 0x03 || buffer[3] !== 0x04) return null;
+  let offset = 0;
+  while (offset + 30 <= buffer.length) {
+    const sig = buffer.readUInt32LE(offset);
+    if (sig !== 0x04034b50) break;
+    const compressionMethod = buffer.readUInt16LE(offset + 8);
+    const compressedSize = buffer.readUInt32LE(offset + 18);
+    const fileNameLen = buffer.readUInt16LE(offset + 26);
+    const extraFieldLen = buffer.readUInt16LE(offset + 28);
+    const fileName = buffer.toString('utf-8', offset + 30, offset + 30 + fileNameLen);
+    const dataStart = offset + 30 + fileNameLen + extraFieldLen;
+    if (fileName === 'word/document.xml') {
+      const entryBytes = buffer.subarray(dataStart, dataStart + compressedSize);
+      if (compressionMethod === 0) {
+        return entryBytes.toString('utf-8');
+      } else if (compressionMethod === 8) {
+        return zlib.inflateRawSync(entryBytes).toString('utf-8');
+      }
+    }
+    offset = dataStart + compressedSize;
+  }
+  return null;
+}
+
+/** Extracts file path from launch arguments or second-instance commandLine */
+function extractFilePathFromArgs(args: string[]): string | null {
+  if (!Array.isArray(args) || args.length === 0) return null;
+  const startIndex = app.isPackaged ? 1 : 1;
+  for (let i = startIndex; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg || arg.startsWith('--') || arg.startsWith('-')) continue;
+    // Skip electron/node binary paths
+    if (arg.endsWith('electron.exe') || arg.endsWith('electron') || arg.endsWith('main.js') || arg.endsWith('main.ts')) {
+      continue;
+    }
+    try {
+      if (fs.existsSync(arg) && fs.statSync(arg).isFile()) {
+        return path.resolve(arg);
+      }
+    } catch {}
+    if (/\.(tok|docx|md|txt|json)$/i.test(arg)) {
+      try {
+        const resolved = path.resolve(arg);
+        if (fs.existsSync(resolved)) return resolved;
+      } catch {}
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -375,6 +412,9 @@ function createWindow(): void {
     closeSplash();
     logger.info('[MAIN] Main window ready to show (maximized).');
     scheduleDeferredStartupWork();
+    if (startupFilePath) {
+      win.webContents.send('tok:event', { action: 'open-file-at-path', data: startupFilePath });
+    }
   });
 
   // If the UI cannot load at all, don't leave the user staring at the splash.
@@ -435,26 +475,18 @@ function createWindow(): void {
 
       if (choice.response === 0) {
         // Save before exit
-        const saveResult = await win.webContents.executeJavaScript(
-          'Promise.resolve((window as any).appInstance?.handleSystemAction?.("save-document"))'
+        await win.webContents.executeJavaScript(
+          'Boolean((window as any).appInstance?.handleSystemAction?.("save-document"))'
         ).catch(() => false);
-
-        if (saveResult === false) {
-          logger.info('[MAIN] Save before exit was cancelled or failed; keeping window open');
-          isClosingPromptActive = false;
-          return;
-        }
 
         // Allow save I/O to flush
         setTimeout(() => {
           isForceClosing = true;
-          isClosingPromptActive = false;
           if (!win.isDestroyed()) win.close();
         }, 300);
       } else if (choice.response === 1) {
         // Discard without saving
         isForceClosing = true;
-        isClosingPromptActive = false;
         win.close();
       } else {
         // Cancel: keep window open
@@ -463,7 +495,6 @@ function createWindow(): void {
       }
     } catch (err: any) {
       logger.warn('[MAIN] Exception in window close guard; closing safely', { error: err?.message });
-      isClosingPromptActive = false;
       isForceClosing = true;
       if (!win.isDestroyed()) win.close();
     }
@@ -730,7 +761,6 @@ handle('tok:get-plugin-system-status', () => pluginManager.getSystemStatus());
 handle('tok:set-plugin-safe-mode', (_, enabled: boolean) => pluginManager.setSafeMode(enabled));
 
 // System Handlers
-handle('tok:get-startup-file', () => startupFilePath);
 handle('tok:open-external', (_, url: string) => openExternalSafely(url));
 handle('tok:get-app-info', () => ({
   version: getAppVersion(),
@@ -775,43 +805,7 @@ handle('tok:show-import-dialog', async (_, options?: { filters?: { name: string;
   return res.filePaths[0];
 });
 
-function extractDocxXmlFromBuffer(buffer: Buffer): string | null {
-  try {
-    if (buffer.length < 30) return null;
-    if (buffer[0] !== 0x50 || buffer[1] !== 0x4B || buffer[2] !== 0x03 || buffer[3] !== 0x04) return null;
-    let offset = 0;
-    while (offset + 30 <= buffer.length) {
-      const sig = buffer.readUInt32LE(offset);
-      if (sig !== 0x04034b50) break;
-      const compressionMethod = buffer.readUInt16LE(offset + 8);
-      const compressedSize = buffer.readUInt32LE(offset + 18);
-      const fileNameLen = buffer.readUInt16LE(offset + 26);
-      const extraFieldLen = buffer.readUInt16LE(offset + 28);
-      const entryName = buffer.toString('utf-8', offset + 30, offset + 30 + fileNameLen);
-      const dataStart = offset + 30 + fileNameLen + extraFieldLen;
-      if (entryName === 'word/document.xml') {
-        const entryBytes = buffer.subarray(dataStart, dataStart + compressedSize);
-        if (compressionMethod === 0) {
-          return entryBytes.toString('utf-8');
-        } else if (compressionMethod === 8) {
-          const zlib = require('zlib');
-          return zlib.inflateRawSync(entryBytes).toString('utf-8');
-        }
-      }
-      offset = dataStart + compressedSize;
-    }
-  } catch (err: any) {
-    logger.warn('[MAIN] Failed to extract docx XML in main process', { error: err?.message });
-  }
-  return null;
-}
-
-handle('tok:decompress-raw', async (_, dataBase64: string) => {
-  const buf = Buffer.from(requireString(dataBase64, 'dataBase64'), 'base64');
-  const zlib = await import('zlib');
-  const decompressed = zlib.inflateRawSync(buf);
-  return decompressed.toString('base64');
-});
+handle('tok:get-startup-file', () => startupFilePath);
 
 handle('tok:read-import-file', async (_, filePath: string) => {
   const sourcePath = requireString(filePath, 'filePath');
@@ -823,19 +817,33 @@ handle('tok:read-import-file', async (_, filePath: string) => {
   const buffer = await fs.promises.readFile(resolvedPath);
   const ext = path.extname(resolvedPath).toLowerCase();
   const isBinary = ext === '.docx';
-  const docxXml = isBinary ? extractDocxXmlFromBuffer(buffer) : undefined;
+  let docxXml: string | undefined;
+  if (ext === '.docx') {
+    try {
+      const xml = extractDocxXmlFromBuffer(buffer);
+      if (xml) docxXml = xml;
+    } catch (err: any) {
+      logger.warn(`[IPC] Failed to pre-extract docx XML: ${err?.message}`);
+    }
+  }
   logger.info(`[IPC] Import file read successfully: ${resolvedPath} (${stat.size} bytes)`);
   return {
     fileName: path.basename(resolvedPath),
     filePath: resolvedPath,
     size: stat.size,
     isBinary,
+    docxXml,
     dataBase64: buffer.toString('base64'),
-    text: isBinary ? undefined : buffer.toString('utf-8'),
-    docxXml: docxXml || undefined
+    text: docxXml || (isBinary ? undefined : buffer.toString('utf-8'))
   };
 });
 
+handle('tok:decompress-raw', async (_, dataBase64: string) => {
+  const buf = Buffer.from(requireString(dataBase64, 'dataBase64'), 'base64');
+  const zlib = await import('node:zlib');
+  const decompressed = zlib.inflateRawSync(buf);
+  return decompressed.toString('utf-8');
+});
 
 // Window and Application Lifecycle Handlers
 handle('tok:close-window', () => {
@@ -890,25 +898,28 @@ if (process.platform === 'win32') {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  // Capture startup file argument if launched with a file path from OS file association or CLI
+  startupFilePath = extractFilePathFromArgs(process.argv);
+
   app.on('second-instance', (_event, commandLine) => {
     const win = mainWindow;
     if (win && !win.isDestroyed()) {
       if (win.isMinimized()) win.restore();
       if (!win.isVisible()) win.show();
       win.focus();
-      const targetFile = extractFileFromArgv(commandLine);
-      if (targetFile) {
-        win.webContents.send('tok:open-file', targetFile);
+      const filePath = extractFilePathFromArgs(commandLine);
+      if (filePath) {
+        win.webContents.send('tok:event', { action: 'open-file-at-path', data: filePath });
       }
     }
   });
 
   app.on('open-file', (event, filePath) => {
     event.preventDefault();
-    startupFilePath = filePath;
-    const win = mainWindow;
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('tok:open-file', filePath);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('tok:event', { action: 'open-file-at-path', data: filePath });
+    } else {
+      startupFilePath = filePath;
     }
   });
 
