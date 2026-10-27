@@ -424,14 +424,47 @@ export class WelcomeModal {
         });
         actions.addEventListener('click', (e: MouseEvent) => e.stopPropagation());
 
+        const startInlineRename = () => {
+          const currentClean = rec.name.replace(/\.tok$/i, '');
+          const input = el('input', 'tok-rename-input', {
+            type: 'text',
+            value: currentClean,
+            style: 'background:var(--tok-bg-surface-2, #1E293B);color:var(--tok-text-primary);border:1px solid var(--tok-accent-primary, #3B82F6);border-radius:4px;padding:2px 6px;font-size:13px;outline:none;font-family:inherit;width:100%;box-sizing:border-box;'
+          }) as HTMLInputElement;
+
+          let done = false;
+          const finish = (save: boolean) => {
+            if (done) return;
+            done = true;
+            if (save) {
+              const trimmed = input.value.trim();
+              if (trimmed && trimmed !== currentClean) {
+                renameRecentProject(rec.name, `${trimmed}.tok`);
+              }
+            }
+            this.render();
+          };
+
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              finish(true);
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              finish(false);
+            }
+          });
+          input.addEventListener('blur', () => finish(true));
+          input.addEventListener('click', (e) => e.stopPropagation());
+
+          nameSpan.replaceWith(input);
+          input.focus();
+          input.select();
+        };
+
         // Rename button
         const renameBtn = iconButton('typography', isEn ? 'Rename' : 'שינוי שם', () => {
-          const currentClean = rec.name.replace(/\.tok$/i, '');
-          const newName = window.prompt(isEn ? 'Enter new project name:' : 'הזן שם חדש לפרויקט:', currentClean);
-          if (newName && newName.trim() && newName.trim() !== currentClean) {
-            renameRecentProject(rec.name, `${newName.trim()}.tok`);
-            this.render();
-          }
+          startInlineRename();
         }, { size: 13, attrs: { style: 'width:24px;height:24px;padding:0;border-radius:4px;opacity:0.75;' } });
         actions.appendChild(renameBtn);
 
