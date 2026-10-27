@@ -173,6 +173,8 @@ export class ActionHud {
       this.currentFont = value;
       this.callbacks.onFontChange(value);
     }, { title: t('hudFont') });
+    fontSelect.style.minWidth = '115px';
+    fontSelect.style.flexShrink = '0';
     this.element.appendChild(fontSelect);
 
     this.element.appendChild(this.createDivider());

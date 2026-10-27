@@ -1134,7 +1134,7 @@ export class TypesetOkApp {
     this.storyFontFamilySelect = el('select', 'tok-select tok-select-xs', {
       title: 'גופן מקטע / פיסקה',
       'aria-label': 'גופן מקטע / פיסקה',
-      style: 'height:24px;font-size:11px;padding:0 6px;max-width:140px;background:var(--tok-bg-surface-2, #1E293B);color:var(--tok-text-primary, #F8FAFC);border:1px solid var(--tok-border-strong, #334155);border-radius:4px;outline:none;'
+      style: 'height:24px;font-size:11px;padding:0 6px;min-width:130px;max-width:160px;flex-shrink:0;background:var(--tok-bg-surface-2, #1E293B);color:var(--tok-text-primary, #F8FAFC);border:1px solid var(--tok-border-strong, #334155);border-radius:4px;outline:none;'
     }) as HTMLSelectElement;
     for (const font of getAvailableFonts()) {
       const opt = el('option', undefined, { value: font.family }, font.family) as HTMLOptionElement;
