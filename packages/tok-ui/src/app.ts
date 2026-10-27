@@ -228,6 +228,7 @@ export class TypesetOkApp {
       onOpenCommandPalette: () => this.commandPalette.show(),
       onViewModeChange: (mode) => this.setViewMode(mode),
       onExportPdf: () => this.handleSystemAction('export-pdf'),
+      onRenameDocument: (newTitle) => this.renameDocument(newTitle),
       onOpenProjects: () => this.welcomeModal.show(),
       onOpenSettings: () => this.settingsModal.show(),
       onOpenAbout: () => this.aboutModal.show(),
@@ -1997,6 +1998,22 @@ export class TypesetOkApp {
     } else {
       this.showToast(tf('toastProjectCreated', { name }));
     }
+  }
+
+  public renameDocument(newTitle: string): void {
+    const clean = newTitle.trim().replace(/\.tok$/i, '');
+    if (!clean) return;
+    this.documentTitle = clean;
+    this.documentState.title = clean;
+    this.topBar.setDocumentTitle(clean, true);
+    this.setDirty(true);
+    addRecentProject({
+      name: clean + '.tok',
+      path: this.currentFilePath || undefined,
+      pages: this.pages.length || 1,
+      lastSavedAt: new Date().toISOString()
+    });
+    this.showToast(i18n.getLanguage() === 'en' ? `Document renamed to "${clean}"` : `שם המסמך שונה ל-"${clean}"`);
   }
 
   private async saveDocumentToFile(filePath: string): Promise<boolean> {

@@ -7,6 +7,7 @@ export interface TopSystemBarCallbacks {
   onOpenCommandPalette: () => void;
   onViewModeChange: (mode: ViewMode) => void;
   onExportPdf: () => void;
+  onRenameDocument?: (newTitle: string) => void;
   onOpenProjects?: () => void;
   onToggleLanguage?: () => void;
   onOpenSettings?: () => void;
@@ -159,7 +160,68 @@ export class TopSystemBar {
     if (this.documentTitle) {
       const doc = el('div', 'tok-doc-title', { title: this.documentTitle });
       const cleanTitle = this.documentTitle.replace(/\.tok$/i, '');
-      doc.appendChild(el('span', 'tok-doc-title-name', undefined, this.isDirty ? `• ${cleanTitle}` : cleanTitle));
+      const titleName = el('span', 'tok-doc-title-name', {
+        role: 'button',
+        tabindex: '0',
+        title: i18n.getLanguage() === 'en' ? 'Click to rename document' : 'לחץ לשינוי שם המסמך',
+        style: 'cursor: pointer; border-radius: 4px; padding: 1px 4px; transition: background 0.15s ease;'
+      }, this.isDirty ? `• ${cleanTitle}` : cleanTitle);
+
+      titleName.addEventListener('mouseenter', () => {
+        titleName.style.background = 'var(--tok-bg-surface-2, rgba(255,255,255,0.08))';
+      });
+      titleName.addEventListener('mouseleave', () => {
+        titleName.style.background = 'transparent';
+      });
+
+      const startEditing = () => {
+        const input = el('input', 'tok-doc-title-input', {
+          type: 'text',
+          value: cleanTitle,
+          style: 'background: var(--tok-bg-surface-2, #1E293B); color: var(--tok-text-primary); border: 1px solid var(--tok-accent-primary, #3B82F6); border-radius: 4px; padding: 1px 6px; font-size: 13px; font-weight: 600; font-family: inherit; outline: none; width: ' + Math.max(120, cleanTitle.length * 9) + 'px;'
+        }) as HTMLInputElement;
+
+        let committed = false;
+        const commit = () => {
+          if (committed) return;
+          committed = true;
+          const trimmed = input.value.trim();
+          if (trimmed && trimmed !== cleanTitle) {
+            this.callbacks.onRenameDocument?.(trimmed);
+          } else {
+            this.render();
+          }
+        };
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            committed = true;
+            this.render();
+          }
+        });
+        input.addEventListener('blur', () => commit());
+
+        titleName.replaceWith(input);
+        input.focus();
+        input.select();
+      };
+
+      titleName.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startEditing();
+      });
+      titleName.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          startEditing();
+        }
+      });
+
+      doc.appendChild(titleName);
       const sep = el('span', 'tok-doc-title-sep', { 'aria-hidden': 'true' }, '/');
       sep.hidden = !this.pageLabel;
       doc.appendChild(sep);
