@@ -10,6 +10,24 @@ import { pluginManager } from './plugin-manager';
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
+let startupFilePath: string | null = null;
+
+function extractFileFromArgv(argv: string[]): string | null {
+  for (let i = app.isPackaged ? 1 : 2; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg && !arg.startsWith('--') && !arg.startsWith('-')) {
+      try {
+        const resolved = path.isAbsolute(arg) ? arg : path.resolve(arg);
+        if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
+          return resolved;
+        }
+      } catch {}
+    }
+  }
+  return null;
+}
+
+startupFilePath = extractFileFromArgv(process.argv);
 
 const UI_INDEX_PATH = path.join(__dirname, '../../tok-ui/dist/index.html');
 const APP_REPO_URL = 'https://github.com/TypesetOK/typesetok';
@@ -703,6 +721,7 @@ handle('tok:get-plugin-system-status', () => pluginManager.getSystemStatus());
 handle('tok:set-plugin-safe-mode', (_, enabled: boolean) => pluginManager.setSafeMode(enabled));
 
 // System Handlers
+handle('tok:get-startup-file', () => startupFilePath);
 handle('tok:open-external', (_, url: string) => openExternalSafely(url));
 handle('tok:get-app-info', () => ({
   version: getAppVersion(),
@@ -822,12 +841,25 @@ if (process.platform === 'win32') {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, commandLine) => {
     const win = mainWindow;
     if (win && !win.isDestroyed()) {
       if (win.isMinimized()) win.restore();
       if (!win.isVisible()) win.show();
       win.focus();
+      const targetFile = extractFileFromArgv(commandLine);
+      if (targetFile) {
+        win.webContents.send('tok:open-file', targetFile);
+      }
+    }
+  });
+
+  app.on('open-file', (event, filePath) => {
+    event.preventDefault();
+    startupFilePath = filePath;
+    const win = mainWindow;
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('tok:open-file', filePath);
     }
   });
 

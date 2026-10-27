@@ -466,9 +466,30 @@ export class TypesetOkApp {
     this.storyEditor.loadStory(this.documentState.flows.gemara);
     this.repaginateAndSync(true);
 
-    // 9. Main startup: Open project picker unconditionally as the primary screen
-    this.welcomeModal.setHasOpenDocument(false);
-    this.welcomeModal.show();
+    // 9. Startup file inspection: if opened with a file argument, load it directly
+    const win = window as any;
+    if (win?.tokIpc?.onOpenFile) {
+      win.tokIpc.onOpenFile((file: string) => {
+        if (file) this.openProjectFile(file);
+      });
+    }
+
+    if (win?.tokIpc?.getStartupFile) {
+      win.tokIpc.getStartupFile().then((startupFile: string | null) => {
+        if (startupFile) {
+          this.openProjectFile(startupFile);
+        } else {
+          this.welcomeModal.setHasOpenDocument(false);
+          this.welcomeModal.show();
+        }
+      }).catch(() => {
+        this.welcomeModal.setHasOpenDocument(false);
+        this.welcomeModal.show();
+      });
+    } else {
+      this.welcomeModal.setHasOpenDocument(false);
+      this.welcomeModal.show();
+    }
   }
 
   /** Standard keyboard shortcuts supporting both English and Hebrew layouts. */

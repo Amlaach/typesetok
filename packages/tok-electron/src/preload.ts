@@ -45,6 +45,8 @@ export interface TokIpcBridge {
   }>;
   closeWindow: () => Promise<void>;
   quitApp: () => Promise<void>;
+  getStartupFile: () => Promise<string | null>;
+  onOpenFile: (callback: (filePath: string) => void) => () => void;
 }
 
 const tokIpc: TokIpcBridge = {
@@ -158,6 +160,14 @@ const tokIpc: TokIpcBridge = {
   },
   quitApp: async () => {
     return await ipcRenderer.invoke('tok:quit-app');
+  },
+  getStartupFile: async () => {
+    return await ipcRenderer.invoke('tok:get-startup-file');
+  },
+  onOpenFile: (callback: (filePath: string) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, filePath: string) => callback(filePath);
+    ipcRenderer.on('tok:open-file', handler);
+    return () => ipcRenderer.removeListener('tok:open-file', handler);
   }
 };
 
