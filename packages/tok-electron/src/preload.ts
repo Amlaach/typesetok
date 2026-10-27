@@ -42,7 +42,9 @@ export interface TokIpcBridge {
     isBinary: boolean;
     dataBase64: string;
     text?: string;
+    docxXml?: string;
   }>;
+  decompressRaw: (dataBase64: string) => Promise<string>;
   closeWindow: () => Promise<void>;
   quitApp: () => Promise<void>;
   getStartupFile: () => Promise<string | null>;
@@ -154,6 +156,9 @@ const tokIpc: TokIpcBridge = {
   },
   readImportFile: async (filePath: string) => {
     return await ipcRenderer.invoke('tok:read-import-file', filePath);
+  },
+  decompressRaw: async (dataBase64: string) => {
+    return await ipcRenderer.invoke('tok:decompress-raw', dataBase64);
   },
   closeWindow: async () => {
     return await ipcRenderer.invoke('tok:close-window');

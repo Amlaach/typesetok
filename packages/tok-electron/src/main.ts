@@ -775,6 +775,44 @@ handle('tok:show-import-dialog', async (_, options?: { filters?: { name: string;
   return res.filePaths[0];
 });
 
+function extractDocxXmlFromBuffer(buffer: Buffer): string | null {
+  try {
+    if (buffer.length < 30) return null;
+    if (buffer[0] !== 0x50 || buffer[1] !== 0x4B || buffer[2] !== 0x03 || buffer[3] !== 0x04) return null;
+    let offset = 0;
+    while (offset + 30 <= buffer.length) {
+      const sig = buffer.readUInt32LE(offset);
+      if (sig !== 0x04034b50) break;
+      const compressionMethod = buffer.readUInt16LE(offset + 8);
+      const compressedSize = buffer.readUInt32LE(offset + 18);
+      const fileNameLen = buffer.readUInt16LE(offset + 26);
+      const extraFieldLen = buffer.readUInt16LE(offset + 28);
+      const entryName = buffer.toString('utf-8', offset + 30, offset + 30 + fileNameLen);
+      const dataStart = offset + 30 + fileNameLen + extraFieldLen;
+      if (entryName === 'word/document.xml') {
+        const entryBytes = buffer.subarray(dataStart, dataStart + compressedSize);
+        if (compressionMethod === 0) {
+          return entryBytes.toString('utf-8');
+        } else if (compressionMethod === 8) {
+          const zlib = require('zlib');
+          return zlib.inflateRawSync(entryBytes).toString('utf-8');
+        }
+      }
+      offset = dataStart + compressedSize;
+    }
+  } catch (err: any) {
+    logger.warn('[MAIN] Failed to extract docx XML in main process', { error: err?.message });
+  }
+  return null;
+}
+
+handle('tok:decompress-raw', async (_, dataBase64: string) => {
+  const buf = Buffer.from(requireString(dataBase64, 'dataBase64'), 'base64');
+  const zlib = await import('zlib');
+  const decompressed = zlib.inflateRawSync(buf);
+  return decompressed.toString('base64');
+});
+
 handle('tok:read-import-file', async (_, filePath: string) => {
   const sourcePath = requireString(filePath, 'filePath');
   const resolvedPath = path.isAbsolute(sourcePath) ? sourcePath : path.resolve(sourcePath);
@@ -785,6 +823,7 @@ handle('tok:read-import-file', async (_, filePath: string) => {
   const buffer = await fs.promises.readFile(resolvedPath);
   const ext = path.extname(resolvedPath).toLowerCase();
   const isBinary = ext === '.docx';
+  const docxXml = isBinary ? extractDocxXmlFromBuffer(buffer) : undefined;
   logger.info(`[IPC] Import file read successfully: ${resolvedPath} (${stat.size} bytes)`);
   return {
     fileName: path.basename(resolvedPath),
@@ -792,7 +831,8 @@ handle('tok:read-import-file', async (_, filePath: string) => {
     size: stat.size,
     isBinary,
     dataBase64: buffer.toString('base64'),
-    text: isBinary ? undefined : buffer.toString('utf-8')
+    text: isBinary ? undefined : buffer.toString('utf-8'),
+    docxXml: docxXml || undefined
   };
 });
 
