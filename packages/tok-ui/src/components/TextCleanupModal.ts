@@ -86,7 +86,7 @@ export class TextCleanupModal {
 
     // 1. Scope selection
     const scopeBox = el('div', 'tok-cleanup-section', {
-      style: 'background:var(--tok-surface-2);border:1px solid var(--tok-border-subtle);border-radius:6px;padding:10px 14px;display:flex;flex-direction:column;gap:8px;'
+      style: 'background:var(--tok-bg-surface-2, #1E293B);border:1px solid var(--tok-border-subtle);border-radius:6px;padding:10px 14px;display:flex;flex-direction:column;gap:8px;'
     });
     scopeBox.appendChild(el('span', undefined, { style: 'font-weight:600;font-size:12px;color:var(--tok-text-primary);' }, t('textCleanupScope')));
 
@@ -156,7 +156,7 @@ export class TextCleanupModal {
 
     // 3. Dibur HaMatchil section
     const diburBox = el('div', 'tok-cleanup-section', {
-      style: 'background:var(--tok-surface-2);border:1px solid var(--tok-border-subtle);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;'
+      style: 'background:var(--tok-bg-surface-2, #1E293B);border:1px solid var(--tok-border-subtle);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;'
     });
 
     diburBox.appendChild(

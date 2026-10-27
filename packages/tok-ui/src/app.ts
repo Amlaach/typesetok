@@ -1134,7 +1134,7 @@ export class TypesetOkApp {
     this.storyFontFamilySelect = el('select', 'tok-select tok-select-xs', {
       title: 'גופן מקטע / פיסקה',
       'aria-label': 'גופן מקטע / פיסקה',
-      style: 'height:24px;font-size:11px;padding:0 4px;max-width:130px;background:var(--tok-surface-2);color:var(--tok-text);border:1px solid var(--tok-border-subtle);border-radius:3px;'
+      style: 'height:24px;font-size:11px;padding:0 6px;max-width:140px;background:var(--tok-bg-surface-2, #1E293B);color:var(--tok-text-primary, #F8FAFC);border:1px solid var(--tok-border-strong, #334155);border-radius:4px;outline:none;'
     }) as HTMLSelectElement;
     for (const font of getAvailableFonts()) {
       const opt = el('option', undefined, { value: font.family }, font.family) as HTMLOptionElement;
@@ -1264,7 +1264,7 @@ export class TypesetOkApp {
 
   private buildFindReplaceBar(): HTMLElement {
     this.findBar = el('div', 'tok-story-find-bar', {
-      style: 'display:none;padding:6px 10px;background:var(--tok-surface-2);border-bottom:1px solid var(--tok-border-subtle);flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;'
+      style: 'display:none;padding:6px 10px;background:var(--tok-bg-surface-2, #1E293B);border-bottom:1px solid var(--tok-border-subtle);flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;'
     });
 
     this.findInput = el('input', 'tok-input', {

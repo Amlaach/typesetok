@@ -436,6 +436,8 @@ export class ThemeManager {
       set('--tok-seg-active', '#333333');
       set('--tok-kbd-bg', '#222222');
       set('--tok-switch-off', '#8A8A8A');
+      set('--tok-surface-2', '#000000');
+      set('--tok-text', '#FFFFFF');
       root.dataset.theme = 'dark';
       root.style.colorScheme = 'dark';
     } else {
@@ -458,6 +460,8 @@ export class ThemeManager {
       set('--tok-border-focus', shades.text);
       set('--tok-seg-bg', palette.segBg);
       set('--tok-seg-active', palette.segActive);
+      set('--tok-surface-2', palette.surface2);
+      set('--tok-text', palette.textPrimary);
       set('--tok-kbd-bg', palette.kbdBg);
       set('--tok-switch-off', palette.switchOff);
       root.dataset.theme = isDark ? 'dark' : 'light';
