@@ -112,6 +112,15 @@ export class StructureBar {
     if (this.activeTab === 'flows') this.renderPanel();
   }
 
+  public setFlows(flows: MultiFlowItem[]): void {
+    this.flows = flows.map((f) => ({ ...f }));
+    if (!this.flows.some((f) => f.id === this.activeFlowId)) {
+      this.activeFlowId = this.flows[0]?.id || 'gemara';
+    }
+    this.flows.forEach((f) => (f.isActive = f.id === this.activeFlowId));
+    if (this.activeTab === 'flows') this.renderPanel();
+  }
+
   public getFlows(): MultiFlowItem[] {
     return this.flows.map((f) => ({ ...f }));
   }

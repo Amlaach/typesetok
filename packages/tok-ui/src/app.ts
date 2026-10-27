@@ -754,6 +754,8 @@ export class TypesetOkApp {
   }
 
   private flowDisplayName(flowId: string): string {
+    const fromStructure = this.structureBar?.getFlows().find((f) => f.id === flowId);
+    if (fromStructure?.name) return fromStructure.name;
     const key = FLOW_NAME_KEYS[flowId];
     return key ? t(key) : flowId;
   }
@@ -1975,9 +1977,11 @@ export class TypesetOkApp {
     this.documentState.templateType = tType;
     this.currentFilePath = '';
     this.documentState.flows = getDefaultFlowsForTemplate(tType);
+    this.structureBar.setFlows(getFlowsForTemplate(tType));
 
     this.activeFlowId = 'gemara';
     this.storyEditor.loadStory(this.documentState.flows.gemara || []);
+
     this.activePageIndex = 0;
     this.structureBar.setActivePage(0);
     this.repaginateAndSync(true);
@@ -2109,6 +2113,9 @@ export class TypesetOkApp {
     this.activeFlowId = activeKey;
     const activeStory = newState.flows[activeKey] || [];
     this.storyEditor.loadStory(activeStory);
+
+    const tType = (docRoot.metadata?.template || newState.templateType || 'gemara') as TemplateType;
+    this.structureBar.setFlows(getFlowsForTemplate(tType));
 
     this.activePageIndex = 0;
     this.structureBar.setActivePage(0);
@@ -2279,6 +2286,8 @@ export class TypesetOkApp {
     this.documentState = importResultToDocumentState(result, templateType);
     this.activeFlowId = 'gemara';
     this.storyEditor.loadStory(this.documentState.flows.gemara);
+    this.structureBar.setFlows(getFlowsForTemplate(templateType));
+
     this.activePageIndex = 0;
     this.structureBar.setActivePage(0);
     this.repaginateAndSync(true);
