@@ -56,8 +56,8 @@ export class ImportTemplateModal {
 
   constructor(callbacks: ImportTemplateModalCallbacks) {
     this.callbacks = callbacks;
-    this.element = el('div', 'tok-modal-overlay tok-import-template-overlay');
-    this.modal = new ModalController(this.element, () => this.cancel());
+    this.element = el('div', 'tok-overlay tok-import-template-overlay');
+    this.modal = new ModalController(this.element, () => this.cancel(), { closeOnBackdrop: true });
 
     i18n.onChange(() => {
       this.element.dir = i18n.getDirection();
@@ -91,7 +91,7 @@ export class ImportTemplateModal {
     const res = this.currentResult;
     if (!res) return;
 
-    const dialog = el('div', 'tok-modal-card', {
+    const dialog = el('div', 'tok-dialog tok-modal-card', {
       role: 'dialog',
       'aria-labelledby': 'tok-import-tmpl-h',
       style: 'max-width:580px;width:90%;margin:auto;'

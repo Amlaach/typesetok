@@ -847,9 +847,9 @@ export class TypesetOkApp {
           }
         },
         onCancel: () => {
-          if (this.pendingImportResult) {
-            this.applyImportedDocument(this.pendingImportResult.result, this.pendingImportResult.filePath, 'prose');
-            this.pendingImportResult = null;
+          this.pendingImportResult = null;
+          if (!this.hasOpenDocument) {
+            this.welcomeModal.show();
           }
         }
       });
