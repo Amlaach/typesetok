@@ -1,6 +1,6 @@
 {
   "name": "tok-story-editor",
-  "version": "0.3.30",
+  "version": "0.30.4",
   "type": "module",
   "main": "dist/index.js",
 

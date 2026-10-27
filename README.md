@@ -6,7 +6,7 @@
 ### תוכנת עימוד שולחנית לספרים, טקסטים עבריים וספרי קודש
 **A Modern Desktop Publishing (DTP) System for Hebrew Books & Sacred Texts**
 
-[![Version](https://img.shields.io/badge/Version-0.3.30-2563eb.svg)](package.json)
+[![Version](https://img.shields.io/badge/Version-0.30.4-2563eb.svg)](package.json)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078d4.svg?logo=windows&logoColor=white)]()
 [![Engine](https://img.shields.io/badge/Engine-Rust%201.85%2B-dea584.svg?logo=rust&logoColor=white)](crates/tok-typeset)
 [![Desktop](https://img.shields.io/badge/Desktop-Electron%20%7C%20TypeScript-3178c6.svg?logo=typescript&logoColor=white)](packages/tok-ui)
@@ -111,7 +111,7 @@
 - **אילו גופנים כלולים בתוכנה?**  
   התוכנה כוללת גופנים עבריים איכותיים ברישיון חופשי (כגון Frank Ruhl Libre, Noto Rashi, David Libre ועוד), ומאפשרת שימוש בגופנים המותקנים במחשבכם.
 - **באיזה שלב נמצא הפרויקט?**  
-  התוכנה נמצאת בפיתוח פעיל (גרסה 0.3.30). נשמח מאוד לשמוע הערות, דיווחי תקלות ובקשות בדף ה-[Issues](https://github.com/TypesetOK/typesetok/issues).
+  התוכנה נמצאת בפיתוח פעיל (גרסה 0.30.4). נשמח מאוד לשמוע הערות, דיווחי תקלות ובקשות בדף ה-[Issues](https://github.com/TypesetOK/typesetok/issues).
 
 ---
 
@@ -250,7 +250,7 @@ Instead of relying on legacy monolithic software or overly complex design suites
 - **Which Hebrew fonts are included?**  
   The application includes high-quality open-source Hebrew typefaces (such as Frank Ruhl Libre, Noto Rashi Hebrew, David Libre, and Noto Serif Hebrew) licensed under the SIL Open Font License, and also supports local fonts installed on your operating system.
 - **What is the current project status?**  
-  TypesetOK is under active development (current release **v0.3.30**). Community feedback, bug reports, and typographical suggestions are welcomed on the GitHub [Issues](https://github.com/TypesetOK/typesetok/issues) page.
+  TypesetOK is under active development (current release **v0.30.4**). Community feedback, bug reports, and typographical suggestions are welcomed on the GitHub [Issues](https://github.com/TypesetOK/typesetok/issues) page.
 
 ---
 
