@@ -42,6 +42,8 @@ export interface LineBox {
   text: string;
   is_rtl: boolean;
   fonts?: string[];
+  is_drop_cap?: boolean;
+  x_offset?: number;
 }
 
 export interface TextFrameBox {
@@ -94,6 +96,25 @@ export function formatEngineFont(family?: string, isPrimary = true): { fontFamil
   };
 }
 
+export function renderLineText(text: string, isDropCap = false): string {
+  if (/<(b|strong|em|i|span)\b[^>]*>/i.test(text)) {
+    return text.replace(/<(\/?)(\w+)([^>]*)>/g, (match, close, tag, attrs) => {
+      const lower = tag.toLowerCase();
+      if (['b', 'strong', 'em', 'i', 'span', 'mark'].includes(lower)) {
+        const safeAttrs = attrs.replace(/on\w+="[^"]*"/gi, '');
+        return `<${close}${lower}${safeAttrs}>`;
+      }
+      return '';
+    });
+  }
+
+  let escaped = escapeHtml(text);
+  if (isDropCap) {
+    escaped = escaped.replace(/^([^\s]+)/, '<strong class="tok-opening-word" style="font-weight: 800; font-size: 1.12em;">$1</strong>');
+  }
+  return escaped;
+}
+
 /**
  * Converts Rust PageLayoutBox array to tok-viewer PageDescriptor array.
  * Uses exact text positions, line heights, baselines, paragraph IDs,
@@ -139,10 +160,12 @@ export function layoutToPageDescriptors(pages: PageLayoutBox[]): PageDescriptor[
         const lineHPt = Math.max(1, line.height);
 
         const engineFont = formatEngineFont(line.fonts?.[0], isPrimary);
-        const fontStyle = `font-family: ${engineFont.fontFamily};` + (engineFont.fontWeight ? ` font-weight: ${engineFont.fontWeight};` : '');
+        const isBoldLine = line.is_drop_cap || engineFont.fontWeight === 700;
+        const fontStyle = `font-family: ${engineFont.fontFamily};` + (isBoldLine ? ` font-weight: 700;` : '');
         const paraAttr = line.paragraph_id ? ` data-para-id="${escapeHtml(String(line.paragraph_id))}"` : '';
+        const contentHtml = renderLineText(line.text, line.is_drop_cap);
 
-        return `<div class="tok-line-box tok-line" data-line-index="${line.line_index}"${paraAttr} data-baseline-y="${line.baseline_y}" data-line-height="${line.height}" data-line-width="${line.width}" style="position: absolute; top: ${topOffsetPt.toFixed(2)}pt; left: 0; right: 0; height: ${lineHPt.toFixed(2)}pt; line-height: ${lineHPt.toFixed(2)}pt; ${fontStyle} direction: ${line.is_rtl ? 'rtl' : 'ltr'}; font-feature-settings: 'kern' 1, 'mark' 1, 'mkmk' 1; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; white-space: nowrap !important; overflow: visible; contain: layout style;">${escapeHtml(line.text)}</div>`;
+        return `<div class="tok-line-box tok-line" data-line-index="${line.line_index}"${paraAttr} data-baseline-y="${line.baseline_y}" data-line-height="${line.height}" data-line-width="${line.width}" style="position: absolute; top: ${topOffsetPt.toFixed(2)}pt; left: 0; right: 0; height: ${lineHPt.toFixed(2)}pt; line-height: ${lineHPt.toFixed(2)}pt; ${fontStyle} direction: ${line.is_rtl ? 'rtl' : 'ltr'}; font-feature-settings: 'kern' 1, 'mark' 1, 'mkmk' 1; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; white-space: nowrap !important; overflow: visible; contain: layout style;">${contentHtml}</div>`;
       }).join('\n');
 
       const emptyNotice = (!frame.lines || frame.lines.length === 0)
