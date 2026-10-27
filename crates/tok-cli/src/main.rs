@@ -232,12 +232,43 @@ fn load_document_input(
     }
 }
 
+fn engine_config_from_root(root: &DocumentRoot) -> TypesettingEngineConfig {
+    let mut config = TypesettingEngineConfig::default();
+    if let Some(settings) = &root.metadata.document_settings {
+        let mm_to_pt = |val: Option<f64>| val.map(|v| (v * 72.0 / 25.4) as f32);
+
+        if let Some(w) = mm_to_pt(settings.get("pageWidthMm").and_then(|v| v.as_f64())) {
+            if w > 10.0 {
+                config.page_width_pt = w;
+            }
+        }
+        if let Some(h) = mm_to_pt(settings.get("pageHeightMm").and_then(|v| v.as_f64())) {
+            if h > 10.0 {
+                config.page_height_pt = h;
+            }
+        }
+        if let Some(mt) = mm_to_pt(settings.get("marginTopMm").and_then(|v| v.as_f64())) {
+            config.margin_top_pt = mt;
+        }
+        if let Some(mb) = mm_to_pt(settings.get("marginBottomMm").and_then(|v| v.as_f64())) {
+            config.margin_bottom_pt = mb;
+        }
+        if let Some(mi) = mm_to_pt(settings.get("marginInsideMm").and_then(|v| v.as_f64())) {
+            config.margin_inner_pt = mi;
+        }
+        if let Some(mo) = mm_to_pt(settings.get("marginOutsideMm").and_then(|v| v.as_f64())) {
+            config.margin_outer_pt = mo;
+        }
+    }
+    config
+}
+
 fn handle_render_pdf(input: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("[TOK-CLI] Rendering document to Pre-Press PDF: {}", output);
     let (doc, manifest) = load_document_input(input, 30)?;
 
     let start_typeset = Instant::now();
-    let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
+    let engine = TypesettingEngine::new(engine_config_from_root(doc.root()));
     let pages = engine.typeset_document(doc.root());
     let typeset_dur = start_typeset.elapsed();
     println!("  - Typeset {} pages in {:.2?}", pages.len(), typeset_dur);
@@ -283,7 +314,7 @@ fn handle_render_html(input: &str, output: &str) -> Result<(), Box<dyn std::erro
     );
     let (doc, _) = load_document_input(input, 20)?;
 
-    let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
+    let engine = TypesettingEngine::new(engine_config_from_root(doc.root()));
     let pages = engine.typeset_document(doc.root());
     println!("  - Typeset {} pages", pages.len());
 
@@ -612,7 +643,7 @@ fn handle_typeset_document(input: &str, output: &str) -> Result<(), Box<dyn std:
     println!("[TOK-CLI] Typesetting document layout to JSON: {}", output);
     let (doc, _) = load_document_input(input, 1)?;
 
-    let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
+    let engine = TypesettingEngine::new(engine_config_from_root(doc.root()));
     let pages = engine.typeset_document(doc.root());
     println!("  - Typeset {} pages with native Rust engine", pages.len());
 
