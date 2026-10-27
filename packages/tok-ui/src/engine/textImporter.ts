@@ -57,6 +57,7 @@ export interface ImportOptions {
   defaultStyleId?: string;
   headingStylePrefix?: string;
   targetFlowId?: string;
+  docxXml?: string;
 }
 
 export interface ImportResult {
@@ -428,10 +429,35 @@ function decodeXmlEntities(str: string): string {
     .replace(/&#([0-9]+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
 }
 
+export async function decompressDeflateRawAsync(bytes: Uint8Array): Promise<Uint8Array> {
+  if (typeof DecompressionStream !== 'undefined') {
+    const ds = new DecompressionStream('deflate-raw');
+    const writer = ds.writable.getWriter();
+    writer.write(bytes as any);
+    writer.close();
+    const buf = await new Response(ds.readable).arrayBuffer();
+    return new Uint8Array(buf);
+  }
+  let zlib: any = null;
+  if (typeof (globalThis as any).require === 'function') {
+    try { zlib = (globalThis as any).require('zlib'); } catch {}
+  }
+  if (!zlib && typeof process !== 'undefined' && typeof (process as any).getBuiltinModule === 'function') {
+    try { zlib = (process as any).getBuiltinModule('node:zlib') || (process as any).getBuiltinModule('zlib'); } catch {}
+  }
+  if (zlib && typeof zlib.inflateRawSync === 'function') {
+    return zlib.inflateRawSync(bytes);
+  }
+  throw new Error('DecompressionStream or zlib is not available in current environment');
+}
+
 /**
  * Extracts raw uncompressed word/document.xml from a DOCX zip archive buffer.
  */
-export function extractDocxXml(raw: Uint8Array | ArrayBuffer): string {
+export function extractDocxXml(raw: Uint8Array | ArrayBuffer, options?: ImportOptions): string {
+  if (options?.docxXml) {
+    return options.docxXml;
+  }
   const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
   if (bytes.length < 30) {
     throw new DocumentImportError(
@@ -629,7 +655,7 @@ export function importDocx(
   content: Uint8Array | ArrayBuffer,
   options?: ImportOptions
 ): ImportResult {
-  const xml = extractDocxXml(content);
+  const xml = extractDocxXml(content, options);
   return parseDocxXml(xml, options);
 }
 

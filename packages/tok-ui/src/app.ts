@@ -2192,7 +2192,7 @@ export class TypesetOkApp {
         } else {
           content = fileInfo.text || '';
         }
-        result = importDocument(content, { fileName: fileInfo.fileName });
+        result = importDocument(content, { fileName: fileInfo.fileName, docxXml: fileInfo.docxXml });
       } else {
         throw new Error('IPC reader not available');
       }
