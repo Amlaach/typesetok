@@ -35,19 +35,19 @@ export interface TokIpcBridge {
   showSaveDialog: (options?: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
   showOpenDialog: (options?: { filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
   showImportDialog: (options?: { filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>;
+  getStartupFile: () => Promise<string | null>;
   readImportFile: (filePath: string) => Promise<{
     fileName: string;
     filePath: string;
     size: number;
     isBinary: boolean;
+    docxXml?: string;
     dataBase64: string;
     text?: string;
-    docxXml?: string;
   }>;
   decompressRaw: (dataBase64: string) => Promise<string>;
   closeWindow: () => Promise<void>;
   quitApp: () => Promise<void>;
-  getStartupFile: () => Promise<string | null>;
   onOpenFile: (callback: (filePath: string) => void) => () => void;
 }
 
@@ -154,6 +154,9 @@ const tokIpc: TokIpcBridge = {
   showImportDialog: async (options?: { filters?: { name: string; extensions: string[] }[] }) => {
     return await ipcRenderer.invoke('tok:show-import-dialog', options);
   },
+  getStartupFile: async () => {
+    return await ipcRenderer.invoke('tok:get-startup-file');
+  },
   readImportFile: async (filePath: string) => {
     return await ipcRenderer.invoke('tok:read-import-file', filePath);
   },
@@ -165,9 +168,6 @@ const tokIpc: TokIpcBridge = {
   },
   quitApp: async () => {
     return await ipcRenderer.invoke('tok:quit-app');
-  },
-  getStartupFile: async () => {
-    return await ipcRenderer.invoke('tok:get-startup-file');
   },
   onOpenFile: (callback: (filePath: string) => void) => {
     const handler = (_: Electron.IpcRendererEvent, filePath: string) => callback(filePath);

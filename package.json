@@ -9,6 +9,7 @@
   "scripts": {
     "build:ts": "tsc --build",
     "bundle:ui": "node scripts/bundle-ui.mjs",
+    "lint": "tsc --build",
     "build": "npm run build:ts && npm run bundle:ui",
     "package:desktop": "node scripts/build-desktop-bundle.mjs",
     "package:installer": "node scripts/build-installer.mjs",

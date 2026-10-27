@@ -26,7 +26,6 @@ import {
   MultiFlowDocumentState,
   DEFAULT_TALMUD_FLOWS,
   DEFAULT_PROSE_FLOWS,
-  getDefaultFlowsForTemplate,
   getFlowsForTemplate,
   TemplateType,
   FlowPaginator
@@ -36,7 +35,7 @@ import {
   documentRootToDocumentState,
   importResultToDocumentState
 } from './engine/documentBridge';
-import { importDocument, ImportResult } from './engine/textImporter';
+import { importDocument, parseDocxXml, ImportResult } from './engine/textImporter';
 import { layoutToPageDescriptors } from './engine/typesetBridge';
 
 import { toHebrewGematria } from './gematria';
@@ -230,12 +229,12 @@ export class TypesetOkApp {
       onOpenCommandPalette: () => this.commandPalette.show(),
       onViewModeChange: (mode) => this.setViewMode(mode),
       onExportPdf: () => this.handleSystemAction('export-pdf'),
-      onRenameDocument: (newTitle) => this.renameDocument(newTitle),
       onOpenProjects: () => this.welcomeModal.show(),
       onOpenSettings: () => this.settingsModal.show(),
       onOpenAbout: () => this.aboutModal.show(),
       onUndo: () => this.runEditCommand('undo'),
-      onRedo: () => this.runEditCommand('redo')
+      onRedo: () => this.runEditCommand('redo'),
+      onRenameDocument: (newTitle) => this.renameDocument(newTitle)
     });
     this.root.appendChild(this.topBar.element);
 
@@ -539,6 +538,13 @@ export class TypesetOkApp {
             editorEl?.focus();
           }
         }
+        return;
+      }
+
+      // F2: Rename Document
+      if (e.key === 'F2') {
+        e.preventDefault();
+        this.topBar?.startRenaming();
         return;
       }
 
@@ -1134,7 +1140,7 @@ export class TypesetOkApp {
     this.storyFontFamilySelect = el('select', 'tok-select tok-select-xs', {
       title: 'גופן מקטע / פיסקה',
       'aria-label': 'גופן מקטע / פיסקה',
-      style: 'height:24px;font-size:11px;padding:0 6px;min-width:130px;max-width:160px;flex-shrink:0;background:var(--tok-bg-surface-2, #1E293B);color:var(--tok-text-primary, #F8FAFC);border:1px solid var(--tok-border-strong, #334155);border-radius:4px;outline:none;'
+      style: 'height:24px;font-size:11px;padding:0 6px;min-width:90px;max-width:140px;background:var(--tok-bg-surface-2);color:var(--tok-text-primary);border:1px solid var(--tok-border-strong);border-radius:4px;'
     }) as HTMLSelectElement;
     for (const font of getAvailableFonts()) {
       const opt = el('option', undefined, { value: font.family }, font.family) as HTMLOptionElement;
@@ -1264,7 +1270,7 @@ export class TypesetOkApp {
 
   private buildFindReplaceBar(): HTMLElement {
     this.findBar = el('div', 'tok-story-find-bar', {
-      style: 'display:none;padding:6px 10px;background:var(--tok-bg-surface-2, #1E293B);border-bottom:1px solid var(--tok-border-subtle);flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;'
+      style: 'display:none;padding:6px 10px;background:var(--tok-surface-2);border-bottom:1px solid var(--tok-border-subtle);flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;'
     });
 
     this.findInput = el('input', 'tok-input', {
@@ -1456,9 +1462,9 @@ export class TypesetOkApp {
     const isItalic = Boolean(fmt.italic);
     const isUnderline = Boolean(fmt.underline);
 
-    this.storyBoldBtn.style.background = isBold ? 'var(--tok-surface-hover)' : '';
-    this.storyItalicBtn.style.background = isItalic ? 'var(--tok-surface-hover)' : '';
-    this.storyUnderlineBtn.style.background = isUnderline ? 'var(--tok-surface-hover)' : '';
+    this.storyBoldBtn.style.background = isBold ? 'var(--tok-bg-surface-hover)' : '';
+    this.storyItalicBtn.style.background = isItalic ? 'var(--tok-bg-surface-hover)' : '';
+    this.storyUnderlineBtn.style.background = isUnderline ? 'var(--tok-bg-surface-hover)' : '';
     this.storyBoldBtn.setAttribute('aria-pressed', String(isBold));
     this.storyItalicBtn.setAttribute('aria-pressed', String(isItalic));
     this.storyUnderlineBtn.setAttribute('aria-pressed', String(isUnderline));
@@ -1859,9 +1865,6 @@ export class TypesetOkApp {
     this.activeTypesetAbortController = abortCtrl;
 
     const requestId = ++this.latestTypesetRequestId;
-    if (this.storyEditor && this.activeFlowId) {
-      this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
-    }
     this.statusBar?.setBusy(true, 'מעמד מחדש...');
     const win = window as any;
     let newPages: PageDescriptor[] = [];
@@ -1982,15 +1985,19 @@ export class TypesetOkApp {
     const name = TEMPLATE_TITLES[templateId] || BLANK_TEMPLATE_TITLE;
     this.documentTitle = name;
     this.documentState.title = name;
-    const tType = (templateId in TEMPLATE_TITLES ? templateId : (templateId === 'blank' ? 'blank' : 'gemara')) as TemplateType;
-    this.documentState.templateType = tType;
+    this.documentState.templateType = (templateId in TEMPLATE_TITLES ? templateId : 'gemara') as TemplateType;
     this.currentFilePath = '';
-    this.documentState.flows = getDefaultFlowsForTemplate(tType);
-    this.structureBar.setFlows(getFlowsForTemplate(tType));
+
+    if (isBlank) {
+      this.documentState.flows = { gemara: [], rashi: [], tosafot: [], notes: [] };
+    } else if (templateId === 'prose') {
+      this.documentState.flows = JSON.parse(JSON.stringify(DEFAULT_PROSE_FLOWS));
+    } else {
+      this.documentState.flows = JSON.parse(JSON.stringify(DEFAULT_TALMUD_FLOWS));
+    }
 
     this.activeFlowId = 'gemara';
-    this.storyEditor.loadStory(this.documentState.flows.gemara || []);
-
+    this.storyEditor.loadStory(this.documentState.flows.gemara);
     this.activePageIndex = 0;
     this.structureBar.setActivePage(0);
     this.repaginateAndSync(true);
@@ -2007,22 +2014,6 @@ export class TypesetOkApp {
     } else {
       this.showToast(tf('toastProjectCreated', { name }));
     }
-  }
-
-  public renameDocument(newTitle: string): void {
-    const clean = newTitle.trim().replace(/\.tok$/i, '');
-    if (!clean) return;
-    this.documentTitle = clean;
-    this.documentState.title = clean;
-    this.topBar.setDocumentTitle(clean, true);
-    this.setDirty(true);
-    addRecentProject({
-      name: clean + '.tok',
-      path: this.currentFilePath || undefined,
-      pages: this.pages.length || 1,
-      lastSavedAt: new Date().toISOString()
-    });
-    this.showToast(i18n.getLanguage() === 'en' ? `Document renamed to "${clean}"` : `שם המסמך שונה ל-"${clean}"`);
   }
 
   private async saveDocumentToFile(filePath: string): Promise<boolean> {
@@ -2123,9 +2114,6 @@ export class TypesetOkApp {
     const activeStory = newState.flows[activeKey] || [];
     this.storyEditor.loadStory(activeStory);
 
-    const tType = (docRoot.metadata?.template || newState.templateType || 'gemara') as TemplateType;
-    this.structureBar.setFlows(getFlowsForTemplate(tType));
-
     this.activePageIndex = 0;
     this.structureBar.setActivePage(0);
 
@@ -2146,13 +2134,23 @@ export class TypesetOkApp {
     });
   }
 
+  public openAnyFile(filePath: string): void {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    this.welcomeModal.setHasOpenDocument(true);
+    this.welcomeModal.hide();
+    if (ext === 'docx' || ext === 'md' || ext === 'txt' || ext === 'markdown') {
+      this.promptAndImportDocument(filePath);
+    } else {
+      this.openProjectFile(filePath);
+    }
+  }
+
   private openProjectFile(filePath: string): void {
     const isImportFormat = /\.(docx|txt|md|markdown|rtf)$/i.test(filePath);
     if (isImportFormat) {
       this.promptAndImportDocument(filePath);
       return;
     }
-
     const win = window as any;
     const baseName = filePath.split(/[\\/]/).pop() || filePath;
 
@@ -2163,7 +2161,12 @@ export class TypesetOkApp {
         })
         .catch((err: any) => {
           console.error('[TOK] Failed to open document:', err);
-          this.showToast(tf('toastOpenError', { error: err?.message ?? String(err) }), true);
+          const rawMsg = err?.message ?? String(err);
+          const isZipError = rawMsg.includes('Zip error') || rawMsg.includes('EOCD');
+          const errorMsg = isZipError
+            ? 'הקובץ אינו חבילת פרויקט (.tok) תקינה. אם זהו מסמך Word או Markdown, השתמש ב"ייבוא מסמך".'
+            : (err?.userMessage || rawMsg);
+          this.showToast(tf('toastOpenError', { error: errorMsg }), true);
         });
       return;
     }
@@ -2220,19 +2223,19 @@ export class TypesetOkApp {
       let result: ImportResult;
       if (win.tokIpc?.readImportFile) {
         const fileInfo = await win.tokIpc.readImportFile(targetPath);
-        let content: string | Uint8Array;
-        if (fileInfo.isBinary) {
+        if (fileInfo.docxXml) {
+          result = parseDocxXml(fileInfo.docxXml, { fileName: fileInfo.fileName });
+        } else if (fileInfo.isBinary) {
           const binStr = atob(fileInfo.dataBase64);
           const len = binStr.length;
           const bytes = new Uint8Array(len);
           for (let i = 0; i < len; i++) {
             bytes[i] = binStr.charCodeAt(i);
           }
-          content = bytes;
+          result = importDocument(bytes, { fileName: fileInfo.fileName });
         } else {
-          content = fileInfo.text || '';
+          result = importDocument(fileInfo.text || '', { fileName: fileInfo.fileName });
         }
-        result = importDocument(content, { fileName: fileInfo.fileName, docxXml: fileInfo.docxXml });
       } else {
         throw new Error('IPC reader not available');
       }
@@ -2296,25 +2299,16 @@ export class TypesetOkApp {
     this.activeFlowId = 'gemara';
     this.storyEditor.loadStory(this.documentState.flows.gemara);
     this.structureBar.setFlows(getFlowsForTemplate(templateType));
-
     this.activePageIndex = 0;
     this.structureBar.setActivePage(0);
     this.repaginateAndSync(true);
 
-    if (filePath && filePath.toLowerCase().endsWith('.tok')) {
-      addRecentProject({
-        name: (this.documentTitle || 'imported') + '.tok',
-        path: filePath,
-        pages: this.pages.length || 1,
-        lastSavedAt: new Date().toISOString()
-      });
-    } else {
-      addRecentProject({
-        name: (this.documentTitle || 'imported') + '.tok',
-        pages: this.pages.length || 1,
-        lastSavedAt: new Date().toISOString()
-      });
-    }
+    addRecentProject({
+      name: (this.documentTitle || 'imported') + '.tok',
+      path: filePath,
+      pages: this.pages.length || 1,
+      lastSavedAt: new Date().toISOString()
+    });
 
     this.showToast(tf('toastImportSuccess', { title: result.title, count: result.paragraphs.length }));
   }
@@ -2416,11 +2410,17 @@ export class TypesetOkApp {
       case 'open-about':
         this.aboutModal.show();
         break;
+      case 'open-file-at-path':
+        if (typeof data === 'string' && data) {
+          if (!this.confirmDiscardUnsaved()) return;
+          this.openAnyFile(data);
+        }
+        break;
       case 'open-document': {
         if (!this.confirmDiscardUnsaved()) return;
         const win = window as any;
         if (typeof data === 'string' && data) {
-          this.openProjectFile(data);
+          this.openAnyFile(data);
         } else if (win.tokIpc?.showOpenDialog) {
           win.tokIpc.showOpenDialog({ filters: [{ name: 'TypesetOK Document', extensions: ['tok', 'json'] }] })
             .then((filePath: string | null) => {
@@ -2489,6 +2489,9 @@ export class TypesetOkApp {
       }
       case 'export-pdf':
         this.openExportDialog();
+        break;
+      case 'rename-document':
+        this.topBar?.startRenaming();
         break;
       case 'open-text-cleanup':
       case 'text-cleanup':
@@ -2598,6 +2601,16 @@ export class TypesetOkApp {
       toast.style.opacity = '0';
       setTimeout(() => toast.remove(), 250);
     }, 3200);
+  }
+
+  public renameDocument(newTitle: string): void {
+    const trimmed = newTitle.trim();
+    if (!trimmed || trimmed === this.documentTitle) return;
+    this.documentTitle = trimmed;
+    this.documentState.title = trimmed;
+    this.topBar.setDocumentTitle(trimmed, true);
+    this.setDirty(true);
+    this.showToast(tf('toastTitleRenamed', { title: trimmed }));
   }
 
   public setDirty(dirty: boolean): void {

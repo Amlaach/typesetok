@@ -442,8 +442,9 @@ export async function decompressDeflateRawAsync(bytes: Uint8Array): Promise<Uint
   if (typeof (globalThis as any).require === 'function') {
     try { zlib = (globalThis as any).require('zlib'); } catch {}
   }
-  if (!zlib && typeof process !== 'undefined' && typeof (process as any).getBuiltinModule === 'function') {
-    try { zlib = (process as any).getBuiltinModule('node:zlib') || (process as any).getBuiltinModule('zlib'); } catch {}
+  const proc = (globalThis as any).process;
+  if (!zlib && typeof proc !== 'undefined' && typeof proc.getBuiltinModule === 'function') {
+    try { zlib = proc.getBuiltinModule('node:zlib') || proc.getBuiltinModule('zlib'); } catch {}
   }
   if (zlib && typeof zlib.inflateRawSync === 'function') {
     return zlib.inflateRawSync(bytes);
@@ -508,8 +509,9 @@ export function extractDocxXml(raw: Uint8Array | ArrayBuffer, options?: ImportOp
           if (typeof (globalThis as any).require === 'function') {
             try { zlib = (globalThis as any).require('zlib'); } catch {}
           }
-          if (!zlib && typeof process !== 'undefined' && typeof (process as any).getBuiltinModule === 'function') {
-            try { zlib = (process as any).getBuiltinModule('node:zlib') || (process as any).getBuiltinModule('zlib'); } catch {}
+          const proc = (globalThis as any).process;
+          if (!zlib && proc && typeof proc.getBuiltinModule === 'function') {
+            try { zlib = proc.getBuiltinModule('node:zlib') || proc.getBuiltinModule('zlib'); } catch {}
           }
 
           if (zlib && typeof zlib.inflateRawSync === 'function') {
@@ -672,6 +674,9 @@ export function importDocument(
   // 1. Explicit format or filename match
   if (options?.format === 'docx' || ext === 'docx') {
     if (typeof content === 'string') {
+      if (content.includes('<w:document') || content.includes('<w:body')) {
+        return parseDocxXml(content, options);
+      }
       throw new DocumentImportError(
         'INVALID_STRUCTURE',
         'DOCX format requires binary buffer input',

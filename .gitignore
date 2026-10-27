@@ -78,3 +78,8 @@ $RECYCLE.BIN/
 .agents/
 .agent/
 skills/
+
+# --- Local Dev Server & Sandbox (Excluded from PR) ---
+server.mjs
+metadata.json
+bun.lock

@@ -27,6 +27,12 @@ window.addEventListener('DOMContentLoaded', () => {
     tokIpc.onEvent?.((payload: any) => {
       if (payload && typeof payload === 'object') runAction(payload.action, payload.data);
     });
+    // Check if launched with a file from OS file association or CLI
+    tokIpc.getStartupFile?.().then((file: string | null) => {
+      if (file) {
+        app.openAnyFile(file);
+      }
+    }).catch(() => {});
   } else {
     console.log('[TOK] Running in standalone web preview mode');
   }

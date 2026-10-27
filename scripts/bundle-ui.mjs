@@ -19,6 +19,11 @@ try {
     bundle: true,
     platform: 'browser',
     target: 'es2022',
+    alias: {
+      'tok-story-editor': path.join(rootDir, 'packages/tok-story-editor/src/index.ts'),
+      'tok-viewer': path.join(rootDir, 'packages/tok-viewer/src/index.ts'),
+      'tok-canvas': path.join(rootDir, 'packages/tok-canvas/src/index.ts'),
+    },
     // The UI is mostly Hebrew strings; emitting them as UTF-8 instead of \uXXXX
     // escapes makes the bundle ~25% smaller. index.html declares <meta charset="utf-8">.
     charset: 'utf8',

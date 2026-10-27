@@ -146,7 +146,11 @@ export class ImportTemplateModal {
 
       card.addEventListener('click', () => {
         this.hide();
-        this.callbacks.onSelect(opt.id);
+        try {
+          this.callbacks.onSelect(opt.id);
+        } catch (err) {
+          console.error('[TOK] Error applying template:', err);
+        }
       });
 
       body.appendChild(card);

@@ -76,6 +76,8 @@ struct RawMultiFlowState {
     template_type: Option<String>,
     #[serde(default)]
     flows: HashMap<String, Vec<RawStoryPara>>,
+    #[serde(default)]
+    settings: Option<serde_json::Value>,
 }
 
 #[derive(serde::Deserialize)]
@@ -90,6 +92,9 @@ struct RawStoryPara {
 fn convert_multi_flow_state_to_root(raw: RawMultiFlowState) -> DocumentRoot {
     let title = raw.title.unwrap_or_else(|| "מסמך ללא שם".to_string());
     let mut root = DocumentRoot::new(&title);
+    if let Some(settings) = raw.settings {
+        root.metadata.document_settings = Some(settings);
+    }
     root.sections.clear();
 
     let is_prose = raw.template_type.as_deref() == Some("prose");
@@ -143,6 +148,90 @@ fn convert_multi_flow_state_to_root(raw: RawMultiFlowState) -> DocumentRoot {
 
     root.sections.push(section);
     root
+}
+
+/// Builds typesetting configuration from document_settings (page size, margins in mm/pt),
+/// falling back to standard A4 layout.
+fn engine_config_from_root(root: &DocumentRoot) -> TypesettingEngineConfig {
+    let mut config = TypesettingEngineConfig::default();
+    let mm_to_pt = |mm: f64| (mm * 72.0 / 25.4) as f32;
+
+    if let Some(ref settings) = root.metadata.document_settings {
+        let get_val = |keys: &[&str]| -> Option<f64> {
+            for key in keys {
+                if let Some(v) = settings.get(*key).and_then(|v| v.as_f64()) {
+                    return Some(v);
+                }
+            }
+            None
+        };
+
+        if let Some(w_mm) = get_val(&["pageWidthMm", "page_width_mm"]) {
+            if w_mm > 10.0 {
+                config.page_width_pt = mm_to_pt(w_mm);
+            }
+        } else if let Some(w_pt) = get_val(&["pageWidthPt", "page_width_pt"]) {
+            if w_pt > 30.0 {
+                config.page_width_pt = w_pt as f32;
+            }
+        }
+
+        if let Some(h_mm) = get_val(&["pageHeightMm", "page_height_mm"]) {
+            if h_mm > 10.0 {
+                config.page_height_pt = mm_to_pt(h_mm);
+            }
+        } else if let Some(h_pt) = get_val(&["pageHeightPt", "page_height_pt"]) {
+            if h_pt > 30.0 {
+                config.page_height_pt = h_pt as f32;
+            }
+        }
+
+        if let Some(top_mm) = get_val(&["marginTopMm", "margin_top_mm"]) {
+            config.margin_top_pt = mm_to_pt(top_mm);
+        } else if let Some(top_pt) = get_val(&["marginTopPt", "margin_top_pt"]) {
+            config.margin_top_pt = top_pt as f32;
+        }
+
+        if let Some(bot_mm) = get_val(&["marginBottomMm", "margin_bottom_mm"]) {
+            config.margin_bottom_pt = mm_to_pt(bot_mm);
+        } else if let Some(bot_pt) = get_val(&["marginBottomPt", "margin_bottom_pt"]) {
+            config.margin_bottom_pt = bot_pt as f32;
+        }
+
+        if let Some(in_mm) = get_val(&[
+            "marginInsideMm",
+            "margin_inside_mm",
+            "marginInnerMm",
+            "margin_inner_mm",
+        ]) {
+            config.margin_inner_pt = mm_to_pt(in_mm);
+        } else if let Some(in_pt) = get_val(&[
+            "marginInsidePt",
+            "margin_inside_pt",
+            "marginInnerPt",
+            "margin_inner_pt",
+        ]) {
+            config.margin_inner_pt = in_pt as f32;
+        }
+
+        if let Some(out_mm) = get_val(&[
+            "marginOutsideMm",
+            "margin_outside_mm",
+            "marginOuterMm",
+            "margin_outer_mm",
+        ]) {
+            config.margin_outer_pt = mm_to_pt(out_mm);
+        } else if let Some(out_pt) = get_val(&[
+            "marginOutsidePt",
+            "margin_outside_pt",
+            "marginOuterPt",
+            "margin_outer_pt",
+        ]) {
+            config.margin_outer_pt = out_pt as f32;
+        }
+    }
+
+    config
 }
 
 /// Builds the package manifest (title, author, document id) for a parsed document.
@@ -232,43 +321,13 @@ fn load_document_input(
     }
 }
 
-fn engine_config_from_root(root: &DocumentRoot) -> TypesettingEngineConfig {
-    let mut config = TypesettingEngineConfig::default();
-    if let Some(settings) = &root.metadata.document_settings {
-        let mm_to_pt = |val: Option<f64>| val.map(|v| (v * 72.0 / 25.4) as f32);
-
-        if let Some(w) = mm_to_pt(settings.get("pageWidthMm").and_then(|v| v.as_f64())) {
-            if w > 10.0 {
-                config.page_width_pt = w;
-            }
-        }
-        if let Some(h) = mm_to_pt(settings.get("pageHeightMm").and_then(|v| v.as_f64())) {
-            if h > 10.0 {
-                config.page_height_pt = h;
-            }
-        }
-        if let Some(mt) = mm_to_pt(settings.get("marginTopMm").and_then(|v| v.as_f64())) {
-            config.margin_top_pt = mt;
-        }
-        if let Some(mb) = mm_to_pt(settings.get("marginBottomMm").and_then(|v| v.as_f64())) {
-            config.margin_bottom_pt = mb;
-        }
-        if let Some(mi) = mm_to_pt(settings.get("marginInsideMm").and_then(|v| v.as_f64())) {
-            config.margin_inner_pt = mi;
-        }
-        if let Some(mo) = mm_to_pt(settings.get("marginOutsideMm").and_then(|v| v.as_f64())) {
-            config.margin_outer_pt = mo;
-        }
-    }
-    config
-}
-
 fn handle_render_pdf(input: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("[TOK-CLI] Rendering document to Pre-Press PDF: {}", output);
     let (doc, manifest) = load_document_input(input, 30)?;
 
     let start_typeset = Instant::now();
-    let engine = TypesettingEngine::new(engine_config_from_root(doc.root()));
+    let config = engine_config_from_root(doc.root());
+    let engine = TypesettingEngine::new(config);
     let pages = engine.typeset_document(doc.root());
     let typeset_dur = start_typeset.elapsed();
     println!("  - Typeset {} pages in {:.2?}", pages.len(), typeset_dur);
@@ -314,7 +373,8 @@ fn handle_render_html(input: &str, output: &str) -> Result<(), Box<dyn std::erro
     );
     let (doc, _) = load_document_input(input, 20)?;
 
-    let engine = TypesettingEngine::new(engine_config_from_root(doc.root()));
+    let config = engine_config_from_root(doc.root());
+    let engine = TypesettingEngine::new(config);
     let pages = engine.typeset_document(doc.root());
     println!("  - Typeset {} pages", pages.len());
 
@@ -651,7 +711,8 @@ fn handle_typeset_document(input: &str, output: &str) -> Result<(), Box<dyn std:
     println!("[TOK-CLI] Typesetting document layout to JSON: {}", output);
     let (doc, _) = load_document_input(input, 1)?;
 
-    let engine = TypesettingEngine::new(engine_config_from_root(doc.root()));
+    let config = engine_config_from_root(doc.root());
+    let engine = TypesettingEngine::new(config);
     let pages = engine.typeset_document(doc.root());
     println!("  - Typeset {} pages with native Rust engine", pages.len());
 
@@ -676,7 +737,8 @@ fn handle_incremental_typeset(
     let (model, _manifest) = load_document_input(input, 60)?;
     let doc = model.root();
 
-    let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
+    let config = engine_config_from_root(doc);
+    let engine = TypesettingEngine::new(config);
     let initial_start = Instant::now();
     let initial_pages = engine.typeset_document(doc);
     let initial_dur = initial_start.elapsed();
@@ -730,7 +792,8 @@ fn handle_diagnose_recompute(input: &str) -> Result<(), Box<dyn std::error::Erro
     let (model, _manifest) = load_document_input(input, 80)?;
     let mut doc = model.root().clone();
 
-    let engine = TypesettingEngine::new(TypesettingEngineConfig::default());
+    let config = engine_config_from_root(&doc);
+    let engine = TypesettingEngine::new(config);
     let pages1 = engine.typeset_document(&doc);
     println!("  - Baseline document: {} pages", pages1.len());
 
