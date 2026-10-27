@@ -26,6 +26,8 @@ import {
   MultiFlowDocumentState,
   DEFAULT_TALMUD_FLOWS,
   DEFAULT_PROSE_FLOWS,
+  getDefaultFlowsForTemplate,
+  getFlowsForTemplate,
   TemplateType,
   FlowPaginator
 } from './engine/FlowPaginator';
@@ -1969,19 +1971,13 @@ export class TypesetOkApp {
     const name = TEMPLATE_TITLES[templateId] || BLANK_TEMPLATE_TITLE;
     this.documentTitle = name;
     this.documentState.title = name;
-    this.documentState.templateType = (templateId in TEMPLATE_TITLES ? templateId : 'gemara') as TemplateType;
+    const tType = (templateId in TEMPLATE_TITLES ? templateId : (templateId === 'blank' ? 'blank' : 'gemara')) as TemplateType;
+    this.documentState.templateType = tType;
     this.currentFilePath = '';
-
-    if (isBlank) {
-      this.documentState.flows = { gemara: [], rashi: [], tosafot: [], notes: [] };
-    } else if (templateId === 'prose') {
-      this.documentState.flows = JSON.parse(JSON.stringify(DEFAULT_PROSE_FLOWS));
-    } else {
-      this.documentState.flows = JSON.parse(JSON.stringify(DEFAULT_TALMUD_FLOWS));
-    }
+    this.documentState.flows = getDefaultFlowsForTemplate(tType);
 
     this.activeFlowId = 'gemara';
-    this.storyEditor.loadStory(this.documentState.flows.gemara);
+    this.storyEditor.loadStory(this.documentState.flows.gemara || []);
     this.activePageIndex = 0;
     this.structureBar.setActivePage(0);
     this.repaginateAndSync(true);
