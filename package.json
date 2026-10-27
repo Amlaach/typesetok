@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "electron packages/tok-electron/dist/main.js",
+    "dev": "node server.mjs",
     "build:ts": "tsc --build",
     "bundle:ui": "node scripts/bundle-ui.mjs",
     "lint": "tsc --build",

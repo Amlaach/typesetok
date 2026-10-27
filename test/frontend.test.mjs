@@ -2970,6 +2970,8 @@ describe('Stage 11: End-to-End Story Editor, Document Model & .tok Storage Round
     try {
       fs.writeFileSync(tempInJson, JSON.stringify(docRoot, null, 2), 'utf-8');
 
+      assert.ok(tokCliPath, tokCliMissingMessage());
+
       // 1. Save .tok package via tok-cli
       const saveCode = await new Promise((resolve, reject) => {
         const proc = spawn(tokCliPath, ['save-package', tempInJson, tempTokFile], { windowsHide: true });
