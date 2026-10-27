@@ -594,7 +594,7 @@ fn handle_save_package(input: &str, output: &str) -> Result<(), Box<dyn std::err
 
 fn handle_open_package(input: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("[TOK-CLI] Opening .tok package from: {}", input);
-    let (doc, _pkg) = TokPackage::open(input)?;
+    let (doc, _pkg) = load_document_input(input, 1)?;
 
     if let Some(parent) = Path::new(output).parent() {
         if !parent.as_os_str().is_empty() {

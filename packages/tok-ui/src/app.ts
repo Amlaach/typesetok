@@ -2118,6 +2118,12 @@ export class TypesetOkApp {
   }
 
   private openProjectFile(filePath: string): void {
+    const isImportFormat = /\.(docx|txt|md|markdown|rtf)$/i.test(filePath);
+    if (isImportFormat) {
+      this.promptAndImportDocument(filePath);
+      return;
+    }
+
     const win = window as any;
     const baseName = filePath.split(/[\\/]/).pop() || filePath;
 
@@ -2264,12 +2270,20 @@ export class TypesetOkApp {
     this.structureBar.setActivePage(0);
     this.repaginateAndSync(true);
 
-    addRecentProject({
-      name: (this.documentTitle || 'imported') + '.tok',
-      path: filePath,
-      pages: this.pages.length || 1,
-      lastSavedAt: new Date().toISOString()
-    });
+    if (filePath && filePath.toLowerCase().endsWith('.tok')) {
+      addRecentProject({
+        name: (this.documentTitle || 'imported') + '.tok',
+        path: filePath,
+        pages: this.pages.length || 1,
+        lastSavedAt: new Date().toISOString()
+      });
+    } else {
+      addRecentProject({
+        name: (this.documentTitle || 'imported') + '.tok',
+        pages: this.pages.length || 1,
+        lastSavedAt: new Date().toISOString()
+      });
+    }
 
     this.showToast(tf('toastImportSuccess', { title: result.title, count: result.paragraphs.length }));
   }
