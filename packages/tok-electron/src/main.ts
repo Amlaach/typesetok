@@ -475,9 +475,15 @@ function createWindow(): void {
 
       if (choice.response === 0) {
         // Save before exit
-        await win.webContents.executeJavaScript(
-          'Boolean((window as any).appInstance?.handleSystemAction?.("save-document"))'
+        const saveResult = await win.webContents.executeJavaScript(
+          'Promise.resolve((window as any).appInstance?.handleSystemAction?.("save-document"))'
         ).catch(() => false);
+
+        if (saveResult === false) {
+          logger.info('[MAIN] Save before exit was cancelled or failed; keeping window open');
+          isClosingPromptActive = false;
+          return;
+        }
 
         // Allow save I/O to flush
         setTimeout(() => {
@@ -842,7 +848,7 @@ handle('tok:decompress-raw', async (_, dataBase64: string) => {
   const buf = Buffer.from(requireString(dataBase64, 'dataBase64'), 'base64');
   const zlib = await import('node:zlib');
   const decompressed = zlib.inflateRawSync(buf);
-  return decompressed.toString('utf-8');
+  return decompressed.toString('base64');
 });
 
 // Window and Application Lifecycle Handlers

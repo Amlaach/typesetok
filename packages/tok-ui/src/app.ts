@@ -26,6 +26,7 @@ import {
   MultiFlowDocumentState,
   DEFAULT_TALMUD_FLOWS,
   DEFAULT_PROSE_FLOWS,
+  getFlowsForTemplate,
   TemplateType,
   FlowPaginator
 } from './engine/FlowPaginator';
@@ -374,6 +375,9 @@ export class TypesetOkApp {
           }
           this.updateFormattingToolbarState();
         }
+        if (this.activeFlowId) {
+          this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+        }
         this.setDirty(true);
         this.scheduleRepaginate();
       },
@@ -382,6 +386,9 @@ export class TypesetOkApp {
         if (sel) {
           this.storyEditor.setParagraphPatch(sel.paraId, {});
           this.updateFormattingToolbarState();
+          if (this.activeFlowId) {
+            this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+          }
           this.setDirty(true);
           this.scheduleRepaginate();
         }
@@ -467,9 +474,30 @@ export class TypesetOkApp {
     this.storyEditor.loadStory(this.documentState.flows.gemara);
     this.repaginateAndSync(true);
 
-    // 9. Main startup: Open project picker unconditionally as the primary screen
-    this.welcomeModal.setHasOpenDocument(false);
-    this.welcomeModal.show();
+    // 9. Startup file inspection: if opened with a file argument, load it directly
+    const win = window as any;
+    if (win?.tokIpc?.onOpenFile) {
+      win.tokIpc.onOpenFile((file: string) => {
+        if (file) this.openProjectFile(file);
+      });
+    }
+
+    if (win?.tokIpc?.getStartupFile) {
+      win.tokIpc.getStartupFile().then((startupFile: string | null) => {
+        if (startupFile) {
+          this.openProjectFile(startupFile);
+        } else {
+          this.welcomeModal.setHasOpenDocument(false);
+          this.welcomeModal.show();
+        }
+      }).catch(() => {
+        this.welcomeModal.setHasOpenDocument(false);
+        this.welcomeModal.show();
+      });
+    } else {
+      this.welcomeModal.setHasOpenDocument(false);
+      this.welcomeModal.show();
+    }
   }
 
   /** Standard keyboard shortcuts supporting both English and Hebrew layouts. */
@@ -738,6 +766,8 @@ export class TypesetOkApp {
   }
 
   private flowDisplayName(flowId: string): string {
+    const fromStructure = this.structureBar?.getFlows().find((f) => f.id === flowId);
+    if (fromStructure?.name) return fromStructure.name;
     const key = FLOW_NAME_KEYS[flowId];
     return key ? t(key) : flowId;
   }
@@ -834,9 +864,9 @@ export class TypesetOkApp {
           }
         },
         onCancel: () => {
-          if (this.pendingImportResult) {
-            this.applyImportedDocument(this.pendingImportResult.result, this.pendingImportResult.filePath, 'prose');
-            this.pendingImportResult = null;
+          this.pendingImportResult = null;
+          if (!this.hasOpenDocument) {
+            this.welcomeModal.show();
           }
         }
       });
@@ -2159,6 +2189,7 @@ export class TypesetOkApp {
     this.hasOpenDocument = true;
     addRecentProject({ name: baseName, path: filePath, pages: this.pages.length || 1, lastSavedAt: new Date().toISOString() });
     this.welcomeModal.setHasOpenDocument(true);
+    this.welcomeModal.hide();
     this.showToast(tf('toastOpenFile', { path: baseName }));
   }
 
@@ -2267,6 +2298,7 @@ export class TypesetOkApp {
     this.documentState = importResultToDocumentState(result, templateType);
     this.activeFlowId = 'gemara';
     this.storyEditor.loadStory(this.documentState.flows.gemara);
+    this.structureBar.setFlows(getFlowsForTemplate(templateType));
     this.activePageIndex = 0;
     this.structureBar.setActivePage(0);
     this.repaginateAndSync(true);

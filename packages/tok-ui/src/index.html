@@ -220,13 +220,13 @@
 
     /* Label above a field, unit shown inside the field */
     .tok-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1; }
-    .tok-field-label { font-size: 12px; color: var(--tok-text-secondary); user-select: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tok-field-label { font-size: 12px; color: var(--tok-text-secondary); user-select: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; max-width: 100%; }
     .tok-field-label.tok-scrub { cursor: ew-resize; }
     .tok-field-label.tok-scrub:hover { color: var(--tok-accent-text); }
-    .tok-field-box { position: relative; }
-    .tok-field-box .tok-input { padding-inline-end: 38px; }
+    .tok-field-box { position: relative; min-width: 0; }
+    .tok-field-box .tok-input { padding-inline-end: 38px; width: 100%; box-sizing: border-box; }
     .tok-field-unit { position: absolute; inset-inline-end: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--tok-text-muted); pointer-events: none; }
-    .tok-field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .tok-field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
 
     /* Segmented control */
     .tok-seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--tok-seg-bg); border: 1px solid var(--tok-border-subtle); border-radius: 9px; }
@@ -501,13 +501,15 @@
     .tok-story-toolbar {
       height: 46px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px;
       border-bottom: 1px solid var(--tok-border-subtle); background: var(--tok-bg-surface-1);
-      overflow-x: auto; overflow-y: hidden; scrollbar-width: none; min-width: 0;
+      overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none;
     }
+    .tok-story-toolbar::-webkit-scrollbar { display: none; }
     .tok-story-toolbar > * { flex-shrink: 0; }
     .tok-story-toolbar .tok-grow { flex: 1; }
     .tok-chip-select {
       height: 30px; display: inline-flex; align-items: center; gap: 8px; padding: 0 10px;
       border: 1px solid var(--tok-border-subtle); border-radius: 7px; background: var(--tok-bg-surface-2); font-size: 13px; font-weight: 500;
+      white-space: nowrap; flex-shrink: 0; min-width: 0;
     }
     .tok-story-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 48px; }
     .tok-story-editor-content {
@@ -589,9 +591,10 @@
       animation: tokPop 0.12s ease-out;
       white-space: nowrap; max-width: calc(100vw - 32px);
     }
-    .tok-action-hud .tok-select, .tok-action-hud .tok-input { height: 28px; width: auto; font-size: 12px; }
-    .tok-hud-divider { width: 1px; height: 18px; background: var(--tok-border-subtle); margin: 0 2px; }
-    .tok-hud-btn { min-width: 28px; height: 28px; padding: 0 6px; border: none; border-radius: 6px; background: transparent; color: var(--tok-text-secondary); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+    .tok-action-hud > * { flex-shrink: 0; }
+    .tok-action-hud .tok-select, .tok-action-hud .tok-input { height: 28px; width: auto; font-size: 12px; flex-shrink: 0; }
+    .tok-hud-divider { width: 1px; height: 18px; background: var(--tok-border-subtle); margin: 0 2px; flex-shrink: 0; }
+    .tok-hud-btn { min-width: 28px; height: 28px; padding: 0 6px; border: none; border-radius: 6px; background: transparent; color: var(--tok-text-secondary); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; flex-shrink: 0; }
     .tok-hud-btn:hover { background: var(--tok-bg-surface-hover); color: var(--tok-text-primary); }
     .tok-hud-btn[aria-pressed="true"] { background: var(--tok-accent-soft); color: var(--tok-accent-text); }
 
