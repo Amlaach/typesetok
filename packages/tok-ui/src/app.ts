@@ -376,6 +376,9 @@ export class TypesetOkApp {
           }
           this.updateFormattingToolbarState();
         }
+        if (this.activeFlowId) {
+          this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+        }
         this.setDirty(true);
         this.scheduleRepaginate();
       },
@@ -384,6 +387,9 @@ export class TypesetOkApp {
         if (sel) {
           this.storyEditor.setParagraphPatch(sel.paraId, {});
           this.updateFormattingToolbarState();
+          if (this.activeFlowId) {
+            this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+          }
           this.setDirty(true);
           this.scheduleRepaginate();
         }
@@ -1853,6 +1859,9 @@ export class TypesetOkApp {
     this.activeTypesetAbortController = abortCtrl;
 
     const requestId = ++this.latestTypesetRequestId;
+    if (this.storyEditor && this.activeFlowId) {
+      this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+    }
     this.statusBar?.setBusy(true, 'מעמד מחדש...');
     const win = window as any;
     let newPages: PageDescriptor[] = [];
