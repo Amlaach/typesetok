@@ -36,6 +36,7 @@ const SPACE_STRETCH: f32 = 0.30;
 const SPACE_SHRINK: f32 = 0.20;
 const LINE_BREAK_TOLERANCE: f32 = 2.0;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TypesettingEngineConfig {
     pub page_width_pt: f32,
     pub page_height_pt: f32,
@@ -609,8 +610,47 @@ impl TypesettingEngine {
         }
     }
 
-    /// Typesets an entire DocumentRoot into multi-page layout boxes.
+    /// Typesets an entire DocumentRoot into multi-page layout boxes,
+    /// respecting custom page dimensions and margins if present in document settings.
     pub fn typeset_document(&self, doc: &DocumentRoot) -> Vec<PageLayoutBox> {
+        let mut active_config = self.config;
+        if let Some(settings) = &doc.metadata.document_settings {
+            let mm_to_pt = |val: Option<f64>| val.map(|v| (v * 72.0 / 25.4) as f32);
+
+            if let Some(w) = mm_to_pt(settings.get("pageWidthMm").and_then(|v| v.as_f64())) {
+                if w > 10.0 {
+                    active_config.page_width_pt = w;
+                }
+            }
+            if let Some(h) = mm_to_pt(settings.get("pageHeightMm").and_then(|v| v.as_f64())) {
+                if h > 10.0 {
+                    active_config.page_height_pt = h;
+                }
+            }
+            if let Some(mt) = mm_to_pt(settings.get("marginTopMm").and_then(|v| v.as_f64())) {
+                active_config.margin_top_pt = mt;
+            }
+            if let Some(mb) = mm_to_pt(settings.get("marginBottomMm").and_then(|v| v.as_f64())) {
+                active_config.margin_bottom_pt = mb;
+            }
+            if let Some(mi) = mm_to_pt(settings.get("marginInsideMm").and_then(|v| v.as_f64())) {
+                active_config.margin_inner_pt = mi;
+            }
+            if let Some(mo) = mm_to_pt(settings.get("marginOutsideMm").and_then(|v| v.as_f64())) {
+                active_config.margin_outer_pt = mo;
+            }
+        }
+
+        if active_config != self.config {
+            let engine = TypesettingEngine::new(active_config);
+            return engine.typeset_document_internal(doc);
+        }
+
+        self.typeset_document_internal(doc)
+    }
+
+    /// Internal implementation of document typesetting.
+    pub fn typeset_document_internal(&self, doc: &DocumentRoot) -> Vec<PageLayoutBox> {
         let has_multi_flow = doc.sections.iter().any(|s| s.flows.len() > 1);
         if has_multi_flow {
             return self.typeset_document_multi_flow(doc);
