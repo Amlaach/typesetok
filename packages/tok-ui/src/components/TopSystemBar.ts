@@ -178,7 +178,7 @@ export class TopSystemBar {
         const input = el('input', 'tok-doc-title-input', {
           type: 'text',
           value: cleanTitle,
-          style: 'background: var(--tok-bg-surface-2, #1E293B); color: var(--tok-text-primary); border: 1px solid var(--tok-accent-primary, #3B82F6); border-radius: 4px; padding: 1px 6px; font-size: 13px; font-weight: 600; font-family: inherit; outline: none; width: ' + Math.max(120, cleanTitle.length * 9) + 'px;'
+          style: 'background: var(--tok-bg-surface-2); color: var(--tok-text-primary); border: 1px solid var(--tok-accent-primary); border-radius: 4px; padding: 1px 6px; font-size: 13px; font-weight: 600; font-family: inherit; outline: none; width: ' + Math.max(120, cleanTitle.length * 9) + 'px;'
         }) as HTMLInputElement;
 
         let committed = false;

@@ -429,7 +429,7 @@ export class WelcomeModal {
           const input = el('input', 'tok-rename-input', {
             type: 'text',
             value: currentClean,
-            style: 'background:var(--tok-bg-surface-2, #1E293B);color:var(--tok-text-primary);border:1px solid var(--tok-accent-primary, #3B82F6);border-radius:4px;padding:2px 6px;font-size:13px;outline:none;font-family:inherit;width:100%;box-sizing:border-box;'
+            style: 'background:var(--tok-bg-surface-2);color:var(--tok-text-primary);border:1px solid var(--tok-accent-primary);border-radius:4px;padding:2px 6px;font-size:13px;outline:none;font-family:inherit;width:100%;box-sizing:border-box;'
           }) as HTMLInputElement;
 
           let done = false;
