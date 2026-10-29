@@ -91,7 +91,9 @@ struct RawStoryPara {
 }
 
 fn convert_multi_flow_state_to_root(raw: RawMultiFlowState) -> DocumentRoot {
-    let title = raw.title.unwrap_or_else(|| "׳׳¡׳׳ ׳׳׳ ׳©׳".to_string());
+    let title = raw
+        .title
+        .unwrap_or_else(|| "׳׳¡׳׳ ׳׳׳ ׳©׳".to_string());
     let mut root = DocumentRoot::new(&title);
     if let Some(settings) = raw.settings {
         root.metadata.document_settings = Some(settings);
@@ -479,7 +481,9 @@ fn handle_benchmark(pages_target: usize) -> Result<(), Box<dyn std::error::Error
         .ok_or("benchmark corpus has no paragraphs")?
         .clone();
     let cascade_start = Instant::now();
-    target_para.text.push_str(" ׳”ײ¶׳¡ײ°׳‘ײµײ¼׳¨ ׳ ׳•ײ¹׳¡ײ¸׳£ ׳ײ°׳₪ײµ׳¨׳•ײ¼׳©׳ ׳¨ײ·׳©ײ´׳\"׳™ ׳”ײ·׳§ײ¸ײ¼׳“׳•ײ¹׳©׳.");
+    target_para.text.push_str(
+        " ׳”ײ¶׳¡ײ°׳‘ײµײ¼׳¨ ׳ ׳•ײ¹׳¡ײ¸׳£ ׳ײ°׳₪ײµ׳¨׳•ײ¼׳©׳ ׳¨ײ·׳©ײ´׳\"׳™ ׳”ײ·׳§ײ¸ײ¼׳“׳•ײ¹׳©׳.",
+    );
 
     // Typeset modified single paragraph
     let _rebroken = engine.typeset_paragraph(&target_para, 453.55, 11.0, 14.5);
@@ -733,7 +737,10 @@ fn handle_run_plugins(input: &str, output: &str) -> Result<(), Box<dyn std::erro
 
     let json_bytes = serde_json::to_vec_pretty(&root)?;
     fs::write(output, json_bytes)?;
-    println!("  [SUCCESS] Written plugin-processed DocumentRoot JSON to: {}", output);
+    println!(
+        "  [SUCCESS] Written plugin-processed DocumentRoot JSON to: {}",
+        output
+    );
     Ok(())
 }
 
@@ -835,8 +842,9 @@ fn handle_diagnose_recompute(input: &str) -> Result<(), Box<dyn std::error::Erro
         .map(|p| p.id);
     if let Some(id) = p0_id {
         if let Some(p) = doc.find_paragraph_mut(id) {
-            p.text
-                .push_str(" ׳×׳•׳¡׳₪׳× ׳׳׳ ׳‘׳×׳—׳™׳׳× ׳”׳¡׳₪׳¨ ׳׳‘׳“׳™׳§׳× ׳’׳׳™׳©׳× ׳¢׳׳•׳“׳™׳.");
+            p.text.push_str(
+                " ׳×׳•׳¡׳₪׳× ׳׳׳ ׳‘׳×׳—׳™׳׳× ׳”׳¡׳₪׳¨ ׳׳‘׳“׳™׳§׳× ׳’׳׳™׳©׳× ׳¢׳׳•׳“׳™׳.",
+            );
         }
         let (_p, diag1) = engine.typeset_document_incremental(&doc, &pages1, Some(id));
         let r1 = tok_typeset::diagnostics::RecomputeReport::from_diagnostics(&diag1, pages1.len());
@@ -955,7 +963,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         "run-plugins" => {
             if args.len() < 4 {
-                eprintln!("Usage: tok-cli run-plugins <INPUT.json | INPUT.tok | --demo> <OUTPUT.json>");
+                eprintln!(
+                    "Usage: tok-cli run-plugins <INPUT.json | INPUT.tok | --demo> <OUTPUT.json>"
+                );
                 std::process::exit(1);
             }
             handle_run_plugins(&args[2], &args[3])?;
