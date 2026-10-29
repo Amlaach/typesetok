@@ -100,7 +100,7 @@ export class AboutModal {
     tagsRow.appendChild(makeTag('Rust Core'));
     tagsRow.appendChild(makeTag('Knuth-Plass'));
     tagsRow.appendChild(makeTag('PDF/X-1a & X-4'));
-    tagsRow.appendChild(makeTag('תקן ת"י 6100'));
+    tagsRow.appendChild(makeTag('נרמול יוניקוד קנוני'));
     tagsRow.appendChild(makeTag('Windows x64 Native'));
     heroDetails.appendChild(tagsRow);
 
@@ -148,7 +148,7 @@ export class AboutModal {
       },
       {
         title: 'דיוק טיפוגרפי וקדושת הטקסט',
-        desc: 'נרמול סדר הניקוד והטעמים לפי תקן ישראלי ת"י 6100, מגן שמות קדושים (No-Break איסור שבירה בשמות הויה ואדנות), וסנכרון מספור עמודים עברי בגימטריה כולל כללי טו/טז וגרשיים.'
+        desc: 'נרמול סדר הניקוד והטעמים (יוניקוד קנוני), מגן שמות קדושים (No-Break איסור שבירה בשמות הויה ואדנות), וסנכרון מספור עמודים עברי בגימטריה כולל כללי טו/טז וגרשיים.'
       }
     ]));
 
