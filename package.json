@@ -2,6 +2,7 @@
   "name": "typesetok-monorepo",
   "version": "0.30.4",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
   "description": "TypesetOK (TOK) - Professional Hebrew Desktop Publishing System",
   "workspaces": [
     "packages/*"
@@ -18,7 +19,7 @@
     "perf:startup": "node scripts/measure-startup.mjs"
   },
   "devDependencies": {
-    "electron": "^29.1.0",
+    "electron": "^29.4.6",
     "esbuild": "^0.28.2",
     "rcedit": "^5.0.2",
     "typescript": "^5.4.0"
