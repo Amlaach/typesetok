@@ -2,7 +2,7 @@
  * TypesetOK (TOK) - Pure Hebrew Typography Utilities for Plugins
  *
  * Implements standard Hebrew string utilities, gematria, niqqud stripping,
- * holy divine name detection, and SI 6100 mark normalization.
+ * holy divine name detection, and Canonical Unicode Hebrew mark normalization.
  * Zero external dependencies, O(n) runtime, microsecond latency.
  */
 
@@ -131,12 +131,40 @@ export function normalizeQuotes(text: string): string {
 }
 
 /**
- * Normalizes Hebrew text combining mark ordering according to Israeli Standard SI 6100.
+ * Returns the canonical Hebrew combining mark priority class:
+ * 1. Shin/Sin dots (U+05C1, U+05C2)
+ * 2. Dagesh/Mapiq (U+05BC) and Rafe (U+05BF)
+ * 3. Vowel points / Niqqud (U+05B0..U+05BB, U+05C7, U+05BD, U+05C4, U+05C5)
+ * 4. Cantillation marks / Taamim (U+0591..U+05AF)
+ */
+function hebrewMarkPriority(code: number): number {
+  if (code === 0x05c1 || code === 0x05c2) return 10;
+  if (code === 0x05bc || code === 0x05bf) return 20;
+  if ((code >= 0x05b0 && code <= 0x05bb) || code === 0x05c7) return 30;
+  if (code === 0x05bd || code === 0x05c4 || code === 0x05c5) return 35;
+  if (code >= 0x0591 && code <= 0x05af) return 40;
+  return 50;
+}
+
+const HEBREW_MARK_SEQUENCE_REGEX = /[\u0591-\u05BD\u05BF-\u05C2\u05C4\u05C5\u05C7]{2,}/g;
+
+/**
+ * Normalizes Hebrew text combining mark ordering according to Canonical Unicode Hebrew Normalization:
+ * 1. Shin/Sin dots (U+05C1, U+05C2)
+ * 2. Dagesh/Mapiq (U+05BC) and Rafe (U+05BF)
+ * 3. Vowel points / Niqqud (U+05B0..U+05BB, U+05BD, U+05C7)
+ * 4. Cantillation marks / Taamim (U+0591..U+05AF)
  */
 export function normalizeHebrew(text: string): string {
   if (!text) return '';
-  // Unicode NFC normalization followed by decomposition of legacy presentation forms
-  return text.normalize('NFC');
+  // Unicode NFC normalization decomposes singleton Hebrew presentation forms (U+FB1D..U+FB4F),
+  // followed by canonical Hebrew combining mark ordering.
+  const nfc = text.normalize('NFC');
+  return nfc.replace(HEBREW_MARK_SEQUENCE_REGEX, (seq) =>
+    Array.from(seq)
+      .sort((a, b) => hebrewMarkPriority(a.charCodeAt(0)) - hebrewMarkPriority(b.charCodeAt(0)))
+      .join('')
+  );
 }
 
 /**
