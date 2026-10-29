@@ -137,11 +137,13 @@ export function layoutToPageDescriptors(pages: PageLayoutBox[]): PageDescriptor[
       const widthPt = frame.rect.width;
       const heightPt = frame.rect.height;
 
-      const flowId = frame.flow_id || 'gemara';
+      const rawFlowId = frame.flow_id || 'gemara';
+      const flowId = (rawFlowId === 'main' || rawFlowId === 'primary') ? 'gemara' : rawFlowId;
       const frameId = frame.frame_id || `frame_${pageIndex}_${flowId}`;
 
       const isExpansion = flowId.endsWith('_expansion');
-      const baseFlowId = isExpansion ? flowId.replace(/_expansion$/, '') : flowId;
+      const rawBaseFlowId = isExpansion ? flowId.replace(/_expansion$/, '') : flowId;
+      const baseFlowId = (rawBaseFlowId === 'main' || rawBaseFlowId === 'primary') ? 'gemara' : rawBaseFlowId;
 
       let flowClass = 'tok-frame-comm';
       if (baseFlowId === 'gemara' || baseFlowId === 'main' || baseFlowId === 'primary') {
