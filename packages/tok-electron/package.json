@@ -1,6 +1,7 @@
 {
   "name": "tok-electron",
   "version": "0.30.4",
+  "license": "SEE LICENSE IN LICENSE.md",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc"
@@ -11,7 +12,7 @@
     "tok-canvas": "*"
   },
   "devDependencies": {
-    "electron": "^29.1.0",
+    "electron": "^29.4.6",
     "typescript": "^5.4.0"
   }
 }
