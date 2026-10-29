@@ -499,13 +499,87 @@ export class PluginEngine {
 
     // Network sandbox guard
     const allowNetwork = this.hasPermission(p, 'network:fetch') && !this.isSaferActive;
+    const rawGlobal = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? (globalThis as any) : {});
     const sandboxedFetch = allowNetwork
-      ? window.fetch.bind(window)
+      ? (typeof window !== 'undefined' && window.fetch
+          ? window.fetch.bind(window)
+          : (typeof globalThis !== 'undefined' && (globalThis as any).fetch
+              ? (globalThis as any).fetch.bind(globalThis)
+              : () => { throw new Error('[TOK-SECURITY] Fetch is not available in current environment.'); }))
       : () => {
           throw new Error(
             `[TOK-SECURITY] Network access blocked for plugin '${p.name}'. Network is disabled in offline/Safer mode.`
           );
         };
+
+    const blockedKeys = new Set([
+      'tokIpc',
+      'document',
+      'localStorage',
+      'sessionStorage',
+      'indexedDB',
+      'openDatabase',
+      'cookieStore',
+      'XMLHttpRequest',
+      'WebSocket'
+    ]);
+
+    const sandboxedFunction = function(..._args: any[]) {
+      throw new Error('[TOK-SECURITY] Dynamic code execution via Function constructor is blocked in plugin sandbox.');
+    };
+
+    const sandboxedGlobal: any = new Proxy(rawGlobal, {
+      get(target, prop) {
+        if (prop === 'tokIpc' || prop === 'document') {
+          return undefined;
+        }
+        if (prop === 'window' || prop === 'globalThis' || prop === 'self' || prop === 'top' || prop === 'parent') {
+          return sandboxedGlobal;
+        }
+        if (prop === 'fetch') {
+          return sandboxedFetch;
+        }
+        if (prop === 'Function') {
+          return sandboxedFunction;
+        }
+        if (blockedKeys.has(prop as string)) {
+          return undefined;
+        }
+        const val = Reflect.get(target, prop);
+        if (typeof val === 'function') {
+          return val.bind(target);
+        }
+        return val;
+      },
+      has(target, prop) {
+        if (blockedKeys.has(prop as string)) {
+          return false;
+        }
+        return Reflect.has(target, prop);
+      },
+      set(target, prop, value) {
+        if (blockedKeys.has(prop as string)) {
+          return false;
+        }
+        return Reflect.set(target, prop, value);
+      },
+      ownKeys(target) {
+        return Reflect.ownKeys(target).filter((k) => !blockedKeys.has(k as string));
+      },
+      getOwnPropertyDescriptor(target, prop) {
+        if (blockedKeys.has(prop as string)) {
+          return undefined;
+        }
+        return Reflect.getOwnPropertyDescriptor(target, prop);
+      }
+    });
+
+    const originalTokIpc = (rawGlobal as any).tokIpc;
+    let maskedTokIpc = false;
+    try {
+      delete (rawGlobal as any).tokIpc;
+      maskedTokIpc = true;
+    } catch {}
 
     try {
       // Evaluate within a hardened closure where dangerous globals are shadowed
@@ -514,11 +588,18 @@ export class PluginEngine {
         'module',
         'exports',
         'tokIpc',
+        'window',
+        'globalThis',
+        'self',
+        'top',
+        'parent',
+        'document',
         'fetch',
         'XMLHttpRequest',
         'WebSocket',
         'localStorage',
         'sessionStorage',
+        'Function',
         `
         "use strict";
         ${p.compiledCode}
@@ -536,11 +617,18 @@ export class PluginEngine {
         fakeModule,
         fakeModule.exports,
         undefined, // tokIpc shadowed
+        sandboxedGlobal, // window hardened
+        sandboxedGlobal, // globalThis hardened
+        sandboxedGlobal, // self hardened
+        sandboxedGlobal, // top hardened
+        sandboxedGlobal, // parent hardened
+        undefined, // document shadowed
         sandboxedFetch, // fetch guarded
         undefined, // XMLHttpRequest shadowed
         undefined, // WebSocket shadowed
         undefined, // localStorage shadowed
-        undefined  // sessionStorage shadowed
+        undefined, // sessionStorage shadowed
+        sandboxedFunction // Function shadowed
       );
 
       // If the plugin exported a deactivate function, track it
@@ -555,6 +643,10 @@ export class PluginEngine {
       p.error = err?.message ?? String(err);
       this.deactivatePlugin(p.id);
       return false;
+    } finally {
+      if (maskedTokIpc && originalTokIpc !== undefined && (rawGlobal as any).tokIpc === undefined) {
+        (rawGlobal as any).tokIpc = originalTokIpc;
+      }
     }
   }
 
