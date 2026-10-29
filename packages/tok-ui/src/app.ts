@@ -54,6 +54,8 @@ function runWhenIdle(fn: () => void): void {
 /** i18n keys for the display names of the multi-flow ids used by the structure bar. */
 const FLOW_NAME_KEYS: Record<string, string> = {
   gemara: 'inspFlowGemara',
+  main: 'inspFlowGemara',
+  primary: 'inspFlowGemara',
   rashi: 'inspFlowRashi',
   tosafot: 'inspFlowTosafot',
   notes: 'inspFlowNotes'
@@ -131,7 +133,8 @@ export class TypesetOkApp {
     if (this.documentTitle) {
       updateProjectClosedTime(this.documentTitle);
     }
-    if (this.documentState?.isDirty) {
+    const isElectron = typeof window !== 'undefined' && Boolean((window as any).tokIpc);
+    if (!isElectron && this.documentState?.isDirty) {
       e.preventDefault();
       e.returnValue = '';
     }
@@ -180,7 +183,7 @@ export class TypesetOkApp {
       (id) => this.commandPalette?.unregisterItem(id)
     );
     this.pluginEngine.setDelegate({
-      getStory: () => (this.storyEditor ? this.storyEditor.getStory() : []),
+      getStory: () => (this.storyEditor ? this.storyEditor.getStory(true) : []),
       loadStory: (paragraphs) => {
         if (this.storyEditor) {
           this.storyEditor.loadStory(paragraphs);
@@ -202,7 +205,7 @@ export class TypesetOkApp {
       },
       getDocumentTitle: () => this.documentTitle,
       getStats: () => {
-        const story = this.storyEditor ? this.storyEditor.getStory() : [];
+        const story = this.storyEditor ? this.storyEditor.getStory(true) : [];
         const text = story.map((s) => s.text).join(' ');
         const wordCount = (text.match(/\S+/g) || []).length;
         return { wordCount, charCount: text.length, paragraphCount: story.length };
@@ -271,7 +274,11 @@ export class TypesetOkApp {
         this.showToast(tf('toastStyleApplied', { name: styleId }));
       },
       onToggleLayer: (layerId, visible) => {
+        this.canvas?.setLayerVisibility(layerId, visible);
         this.showToast(tf('toastLayerToggled', { name: layerId, state: t(visible ? 'appLayerShown' : 'appLayerHidden') }));
+      },
+      onLockLayer: (layerId, locked) => {
+        this.canvas?.setLayerLocked(layerId, locked);
       },
       onOpenSettings: () => this.settingsModal.show(),
       onOpenAbout: () => this.aboutModal.show(),
@@ -295,7 +302,14 @@ export class TypesetOkApp {
         this.updatePageStats(idx);
       },
       onZoomChange: (z) => this.statusBar?.updateStats({ zoom: z }),
-      onSelectFrameFlow: (flowId, paraId) => this.handleCanvasFrameSelect(flowId, paraId)
+      onSelectFrameFlow: (flowId, paraId) => this.handleCanvasFrameSelect(flowId, paraId),
+      onFrameDoubleClick: (flowId, paraId) => {
+        this.handleCanvasFrameSelect(flowId, paraId);
+        if (this.currentViewMode === 'canvas') {
+          this.setViewMode('split');
+          this.topBar?.setViewMode('split');
+        }
+      }
     });
 
     // 3c. Continuous story editor (hidden in page view). In RTL the editor sits on the
@@ -348,8 +362,11 @@ export class TypesetOkApp {
         this.scheduleRepaginate();
       },
       onFrameChange: (geometry) => {
+        this.canvas?.applyFrameGeometry(geometry);
         this.setDirty(true);
-        this.scheduleRepaginate();
+        if (geometry.flowId || geometry.widthMm || geometry.heightMm) {
+          this.scheduleRepaginate();
+        }
       },
       onTypographyChange: (typo) => {
         const sel = this.storyEditor?.getStorySelection();
@@ -401,6 +418,20 @@ export class TypesetOkApp {
         this.openTextCleanupWizard();
       },
       onAlignFrames: (alignType) => {
+        if (this.canvas) {
+          const { before, after } = this.canvas.alignSelectedFrames(alignType);
+          if (this.storyEditor && before.length > 0) {
+            this.storyEditor.executeTransaction(
+              `Align frames (${alignType})`,
+              () => {},
+              {
+                onUndo: () => this.canvas?.applyFrameRects(before),
+                onRedo: () => this.canvas?.applyFrameRects(after)
+              }
+            );
+          }
+        }
+        this.setDirty(true);
         this.showToast(tf('toastAlignApplied', { type: alignType }));
       }
     });
@@ -413,7 +444,8 @@ export class TypesetOkApp {
         this.inspector.setMode('zero');
         this.showToast(t('toastPreflightOk'));
       },
-      onWordCountClick: () => this.openTextStatsDialog()
+      onWordCountClick: () => this.openTextStatsDialog(),
+      onExportPdf: () => this.handleSystemAction('export-pdf')
     });
     this.root.appendChild(this.statusBar.element);
     // The structure bar starts on the Gemara flow; show its localized name.
@@ -766,10 +798,11 @@ export class TypesetOkApp {
   }
 
   private flowDisplayName(flowId: string): string {
-    const fromStructure = this.structureBar?.getFlows().find((f) => f.id === flowId);
+    const canonical = (flowId === 'main' || flowId === 'primary') ? 'gemara' : flowId;
+    const fromStructure = this.structureBar?.getFlows().find((f) => f.id === canonical || f.id === flowId);
     if (fromStructure?.name) return fromStructure.name;
-    const key = FLOW_NAME_KEYS[flowId];
-    return key ? t(key) : flowId;
+    const key = FLOW_NAME_KEYS[canonical] || FLOW_NAME_KEYS[flowId];
+    return key ? t(key) : canonical;
   }
 
   private get welcomeModal(): WelcomeModal {
@@ -892,12 +925,12 @@ export class TypesetOkApp {
       activeFlowDisplayName: this.flowDisplayName(activeKey),
       getParagraphs: (scope) => {
         if (scope === 'activeFlow') {
-          return this.storyEditor ? this.storyEditor.getStory() : (this.documentState.flows[activeKey] || []);
+          return this.storyEditor ? this.storyEditor.getStory(true) : (this.documentState.flows[activeKey] || []);
         } else {
           const all: StoryParagraph[] = [];
           for (const [k, paras] of Object.entries(this.documentState.flows)) {
             if (k === this.activeFlowId && this.storyEditor) {
-              all.push(...this.storyEditor.getStory());
+              all.push(...this.storyEditor.getStory(true));
             } else {
               all.push(...paras);
             }
@@ -913,7 +946,7 @@ export class TypesetOkApp {
     let totalChanges = 0;
 
     if (options.scope === 'activeFlow') {
-      const curParas = this.storyEditor ? this.storyEditor.getStory() : (this.documentState.flows[activeKey] || []);
+      const curParas = this.storyEditor ? this.storyEditor.getStory(true) : (this.documentState.flows[activeKey] || []);
       const { paragraphs: cleaned, stats } = cleanupParagraphs(curParas, options);
       totalChanges = stats.totalModifications;
 
@@ -927,7 +960,7 @@ export class TypesetOkApp {
     } else {
       // All flows
       for (const [flowId, paras] of Object.entries(this.documentState.flows)) {
-        const cur = (flowId === this.activeFlowId && this.storyEditor) ? this.storyEditor.getStory() : paras;
+        const cur = (flowId === this.activeFlowId && this.storyEditor) ? this.storyEditor.getStory(true) : paras;
         const { paragraphs: cleaned, stats } = cleanupParagraphs(cur, options);
         totalChanges += stats.totalModifications;
 
@@ -948,7 +981,7 @@ export class TypesetOkApp {
   }
 
   private openTextStatsDialog(): void {
-    const story = this.storyEditor ? this.storyEditor.getStory() : [];
+    const story = this.storyEditor ? this.storyEditor.getStory(true) : [];
     const fullText = story.map((s) => s.text).join('\n');
     const totalWords = (fullText.match(/\S+/g) || []).length;
     const charsWithSpaces = fullText.length;
@@ -1005,7 +1038,7 @@ export class TypesetOkApp {
       this.showToast(t('toastExporting'));
       // Sync active story editor changes to documentState
       if (this.storyEditor && this.activeFlowId) {
-        this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+        this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory(true);
       }
       this.documentState.title = this.documentTitle || this.documentState.title;
 
@@ -1754,7 +1787,7 @@ export class TypesetOkApp {
 
   public getDocumentState(): MultiFlowDocumentState {
     if (this.storyEditor && this.activeFlowId) {
-      this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+      this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory(true);
     }
     return this.documentState;
   }
@@ -1777,20 +1810,29 @@ export class TypesetOkApp {
 
   /** Switches active flow, syncing the story editor and structure bar. */
   public switchActiveFlow(flowId: string, scrollToParaId?: string): void {
+    const canonicalFlowId = (flowId === 'main' || flowId === 'primary') ? 'gemara' : flowId;
     if (this.storyEditor && this.activeFlowId) {
       this.storyEditor.flush();
-      this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+      this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory(true);
     }
-    this.activeFlowId = flowId;
-    if (!this.documentState.flows[flowId]) {
-      this.documentState.flows[flowId] = [];
+    this.activeFlowId = canonicalFlowId;
+
+    if (canonicalFlowId === 'gemara') {
+      const rawFlows = this.documentState.flows as Record<string, StoryParagraph[] | undefined>;
+      if ((!rawFlows.gemara || rawFlows.gemara.length === 0) && rawFlows.main && rawFlows.main.length > 0) {
+        rawFlows.gemara = rawFlows.main;
+      }
     }
-    const targetFlowParas = this.documentState.flows[flowId];
+
+    if (!this.documentState.flows[canonicalFlowId]) {
+      this.documentState.flows[canonicalFlowId] = [];
+    }
+    const targetFlowParas = this.documentState.flows[canonicalFlowId];
     this.storyEditor.loadStory(targetFlowParas);
 
-    const name = this.flowDisplayName(flowId);
+    const name = this.flowDisplayName(canonicalFlowId);
     this.statusBar.updateStats({ activeFlow: name });
-    this.structureBar.setActiveFlow(flowId);
+    this.structureBar.setActiveFlow(canonicalFlowId);
     this.updateStoryToolbar();
 
     if (scrollToParaId) {
@@ -1807,9 +1849,10 @@ export class TypesetOkApp {
   }
 
   private handleCanvasFrameSelect(flowId: string, paraId?: string): void {
-    if (flowId !== this.activeFlowId) {
-      this.switchActiveFlow(flowId, paraId);
-      const name = this.flowDisplayName(flowId);
+    const canonicalFlowId = (flowId === 'main' || flowId === 'primary') ? 'gemara' : flowId;
+    if (canonicalFlowId !== this.activeFlowId) {
+      this.switchActiveFlow(canonicalFlowId, paraId);
+      const name = this.flowDisplayName(canonicalFlowId);
       this.showToast(tf('toastFlowSelected', { name }));
     } else if (paraId) {
       const editorEl = this.storyEditor.getElement();
@@ -1858,6 +1901,9 @@ export class TypesetOkApp {
   }
 
   public async repaginateAndSync(forceReset = false): Promise<void> {
+    if (this.storyEditor && this.activeFlowId) {
+      this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory(true);
+    }
     if (this.activeTypesetAbortController) {
       this.activeTypesetAbortController.abort();
     }
@@ -2021,7 +2067,7 @@ export class TypesetOkApp {
     try {
       const win = window as any;
       if (this.storyEditor && this.activeFlowId) {
-        this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory();
+        this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory(true);
       }
       let targetPath = filePath;
       if (!targetPath.toLowerCase().endsWith('.tok')) {
@@ -2499,6 +2545,9 @@ export class TypesetOkApp {
         break;
       case 'normalize-hebrew': {
         const activeKey = this.activeFlowId || 'gemara';
+        if (this.storyEditor && this.activeFlowId) {
+          this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory(true);
+        }
         const flowParas = this.documentState.flows[activeKey] || [];
         let modified = false;
         for (const p of flowParas) {
@@ -2521,6 +2570,9 @@ export class TypesetOkApp {
       }
       case 'shield-divine-names': {
         const activeKey = this.activeFlowId || 'gemara';
+        if (this.storyEditor && this.activeFlowId) {
+          this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory(true);
+        }
         const flowParas = this.documentState.flows[activeKey] || [];
         let modified = false;
         for (const p of flowParas) {
@@ -2569,6 +2621,9 @@ export class TypesetOkApp {
       }
       case 'apply-justification': {
         const activeKey = this.activeFlowId || 'gemara';
+        if (this.storyEditor && this.activeFlowId) {
+          this.documentState.flows[this.activeFlowId] = this.storyEditor.getStory(true);
+        }
         const flowParas = this.documentState.flows[activeKey] || [];
         for (const p of flowParas) {
           p.patch = { ...(p.patch || {}), alignment: 'Justified' };
