@@ -6,7 +6,7 @@ export interface TopSystemBarCallbacks {
   onMenuAction: (action: string, data?: unknown) => void;
   onOpenCommandPalette: () => void;
   onViewModeChange: (mode: ViewMode) => void;
-  onExportPdf: () => void;
+  onExportPdf?: () => void;
   onOpenProjects?: () => void;
   onToggleLanguage?: () => void;
   onOpenSettings?: () => void;
@@ -302,13 +302,6 @@ export class TopSystemBar {
     }
     end.appendChild(undo);
     end.appendChild(redo);
-
-    end.appendChild(button(t('topBarExportPdf'), {
-      className: 'tok-btn tok-btn-primary',
-      icon: 'export',
-      attrs: { 'aria-keyshortcuts': 'Control+E' },
-      onClick: () => this.callbacks.onExportPdf()
-    }));
 
     this.element.appendChild(end);
   }
