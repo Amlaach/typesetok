@@ -159,7 +159,7 @@ export interface TokHebrewAPI {
   /** Strips all Hebrew combining marks (both Niqqud and Te'amim) */
   stripAllMarks(text: string): string;
 
-  /** Normalizes Hebrew combining mark order according to Israeli Standard SI 6100 (ת"י 6100) */
+  /** Normalizes Hebrew combining mark order according to Canonical Unicode Hebrew Normalization */
   normalizeHebrew(text: string): string;
 
   /** Detects all occurrences of holy divine names (יהוה, אלהים, אהיה, שדי, צבאות, אדני) */
