@@ -45,156 +45,360 @@ function tokCliMissingMessage() {
   );
 }
 
-describe('Hebrew Typography & Gematria Engine', () => {
-  function toHebrewGematria(num) {
-    if (num <= 0) return '';
-    const letters = [
-      [400, 'ת'], [300, 'ש'], [200, 'ר'], [100, 'ק'],
-      [90, 'צ'], [80, 'פ'], [70, 'ע'], [60, 'ס'],
-      [50, 'נ'], [40, 'מ'], [30, 'ל'], [20, 'כ'],
-      [10, 'י'], [9, 'ט'], [8, 'ח'], [7, 'ז'],
-      [6, 'ו'], [5, 'ה'], [4, 'ד'], [3, 'ג'],
-      [2, 'ב'], [1, 'א']
-    ];
-    let n = num;
-    let res = '';
-    if (n === 15) return 'ט״ו';
-    if (n === 16) return 'ט״ז';
+// ---------------------------------------------------------------------------
+// Regression & unit tests that execute the real TypeScript sources.
+// Each module is bundled on the fly with esbuild (already a devDependency) into
+// the OS temp dir and imported; a minimal fake DOM stands in for the browser.
+// ---------------------------------------------------------------------------
 
-    for (const [val, char] of letters) {
-      while (n >= val) {
-        res += char;
-        n -= val;
+class FakeClassList {
+  constructor() { this.set = new Set(); }
+  add(...c) { c.forEach((x) => this.set.add(x)); }
+  remove(...c) { c.forEach((x) => this.set.delete(x)); }
+  contains(c) { return this.set.has(c); }
+}
+
+class FakeStyle {
+  setProperty(k, v) { this[k] = String(v); }
+  removeProperty(k) { delete this[k]; }
+  getPropertyValue(k) { return this[k] ?? ''; }
+}
+
+class FakeElement {
+  constructor(tag = 'div') {
+    this.tagName = tag.toUpperCase();
+    this.children = [];
+    this.style = new FakeStyle();
+    this.dataset = {};
+    this.classList = new FakeClassList();
+    this.listeners = {};
+    this._html = '';
+    this.offsetTop = 0;
+    this.offsetHeight = 0;
+    this.offsetWidth = 0;
+    this.scrollTop = 0;
+    this.clientHeight = 0;
+    this.clientWidth = 0;
+    this.width = 800;
+    this.height = 600;
+    this.tabIndex = -1;
+    this.attributes = {};
+    this.parentElement = null;
+  }
+  set className(v) {
+    this._className = v;
+    this.classList = new FakeClassList();
+    if (v) v.split(/\s+/).forEach((c) => this.classList.add(c));
+  }
+  get className() { return this._className || ''; }
+  set innerHTML(v) { this._html = v; this.children = []; }
+  get innerHTML() { return this._html; }
+  appendChild(c) { this.children.push(c); c.parentElement = this; return c; }
+  remove() {
+    if (this.parentElement) {
+      this.parentElement.children = this.parentElement.children.filter((c) => c !== this);
+      this.parentElement = null;
+    }
+  }
+  focus() {
+    if (globalThis.document) globalThis.document.activeElement = this;
+  }
+  getBoundingClientRect() {
+    return { left: 0, top: 0, right: this.width || 800, bottom: this.height || 600, width: this.width || 800, height: this.height || 600, x: 0, y: 0 };
+  }
+  getContext(type) {
+    if (type === '2d') {
+      return (this._ctx2d ||= {
+        fillStyle: '',
+        drawnRects: [],
+        scale() {},
+        clearRect() { this.drawnRects = []; },
+        fillRect(x, y, w, h) { this.drawnRects.push({ x, y, w, h, fillStyle: this.fillStyle }); },
+      });
+    }
+    return null;
+  }
+  setAttribute(k, v) { this.attributes[k] = String(v); }
+  getAttribute(k) { return this.attributes[k]; }
+  click() { (this.listeners['click'] || []).forEach((fn) => fn({})); }
+  dispatchEvent(type, ev = {}) {
+    (this.listeners[type] || []).forEach((fn) => fn({ preventDefault() {}, stopPropagation() {}, ...ev }));
+  }
+  replaceChildren(...kids) { this.children = kids.filter(Boolean); }
+  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+  removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn); }
+  scrollIntoView() {}
+  querySelector(sel) {
+    for (const c of this.children) {
+      if (c && typeof c === 'object') {
+        const matchesClass = !sel.includes('.tok-hud-btn') || c.className?.includes('tok-hud-btn') || c.classList?.contains('tok-hud-btn');
+        const matchesPressed = !sel.includes('aria-pressed') || (c.attributes && 'aria-pressed' in c.attributes);
+        if (matchesClass && matchesPressed) return c;
+        const found = c.querySelector?.(sel);
+        if (found) return found;
       }
     }
-    if (res.length === 1) {
-      return res + '׳';
-    } else if (res.length > 1) {
-      return res.slice(0, -1) + '״' + res.slice(-1);
-    }
-    return res;
+    return null;
   }
+  querySelectorAll(sel) {
+    const list = [];
+    for (const c of this.children) {
+      if (c && typeof c === 'object' && c.querySelectorAll) {
+        list.push(...c.querySelectorAll(sel));
+      }
+    }
+    return list;
+  }
+}
 
-  test('Single-letter gematria (1-9)', () => {
+function installFakeDom() {
+  const storage = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (storage.has(k) ? storage.get(k) : null),
+    setItem: (k, v) => storage.set(k, String(v)),
+    removeItem: (k) => storage.delete(k),
+    clear: () => storage.clear(),
+  };
+  const documentElement = new FakeElement('html');
+  globalThis.document = {
+    documentElement,
+    body: new FakeElement('body'),
+    activeElement: null,
+    createElement: (tag) => new FakeElement(tag),
+    createElementNS: (_ns, tag) => new FakeElement(tag),
+  };
+  globalThis.getComputedStyle = () => ({ position: 'static', direction: 'rtl' });
+  globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
+  globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
+  if (!globalThis.window) globalThis.window = globalThis;
+  globalThis.window.devicePixelRatio ||= 1;
+  globalThis.window.setInterval ||= setInterval;
+  globalThis.window.clearInterval ||= clearInterval;
+  globalThis.window.setTimeout ||= setTimeout;
+  globalThis.window.clearTimeout ||= clearTimeout;
+  globalThis.window.addEventListener ||= (type, fn) => {};
+  globalThis.window.removeEventListener ||= (type, fn) => {};
+  return { storage, documentElement };
+}
+
+const fakeDom = installFakeDom();
+
+let esbuildMod = null;
+async function loadTs(relPath) {
+  esbuildMod ||= await import('esbuild');
+  const os = await import('node:os');
+  const { pathToFileURL } = await import('node:url');
+  const outfile = path.join(
+    os.tmpdir(),
+    `tok-test-${process.pid}-${relPath.replace(/[^a-zA-Z0-9]+/g, '_')}-${Date.now()}.mjs`
+  );
+  esbuildMod.buildSync({
+    entryPoints: [path.join(rootDir, relPath)],
+    bundle: true,
+    format: 'esm',
+    platform: 'neutral',
+    alias: {
+      'tok-viewer': path.join(rootDir, 'packages/tok-viewer/src/index.ts'),
+      'tok-canvas': path.join(rootDir, 'packages/tok-canvas/src/index.ts'),
+      'tok-story-editor': path.join(rootDir, 'packages/tok-story-editor/src/index.ts'),
+    },
+    outfile,
+    logLevel: 'silent',
+  });
+  try {
+    return await import(pathToFileURL(outfile).href);
+  } finally {
+    fs.rmSync(outfile, { force: true });
+  }
+}
+
+describe('Hebrew Typography & Gematria Engine', () => {
+  test('Single-letter gematria (1-9) via real gematria module', async () => {
+    const { toHebrewGematria } = await loadTs('packages/tok-ui/src/gematria.ts');
     assert.equal(toHebrewGematria(1), 'א׳');
     assert.equal(toHebrewGematria(2), 'ב׳');
     assert.equal(toHebrewGematria(5), 'ה׳');
     assert.equal(toHebrewGematria(9), 'ט׳');
   });
 
-  test('Talmudic exceptions for 15 and 16 (Tet-Vav, Tet-Zayin)', () => {
+  test('Talmudic exceptions for 15 and 16 (Tet-Vav, Tet-Zayin) and compound numbers', async () => {
+    const { toHebrewGematria } = await loadTs('packages/tok-ui/src/gematria.ts');
     assert.equal(toHebrewGematria(15), 'ט״ו');
     assert.equal(toHebrewGematria(16), 'ט״ז');
+    assert.equal(toHebrewGematria(115), 'קט״ו');
+    assert.equal(toHebrewGematria(216), 'רט״ז');
   });
 
-  test('Tens and hundreds with gershayim', () => {
+  test('Tens, hundreds, and taboo substitutions with standard Hebrew gershayim', async () => {
+    const { toHebrewGematria } = await loadTs('packages/tok-ui/src/gematria.ts');
+    const { isRectoPage } = await loadTs('packages/tok-ui/src/components/SpreadCanvas.ts');
     assert.equal(toHebrewGematria(20), 'כ׳');
     assert.equal(toHebrewGematria(21), 'כ״א');
     assert.equal(toHebrewGematria(100), 'ק׳');
     assert.equal(toHebrewGematria(354), 'שנ״ד');
+    assert.equal(toHebrewGematria(270), 'ע״ר');
+    assert.equal(toHebrewGematria(304), 'ד״ש');
+
+    // Verify Talmudic daf/amud label formatting using real recto/verso & gematria helpers
+    const formatDaf = (pageIndex) => `דף ${toHebrewGematria(Math.floor(pageIndex / 2) + 2)} ${isRectoPage(pageIndex) ? 'ע״א' : 'ע״ב'}`;
+    assert.equal(formatDaf(0), 'דף ב׳ ע״א');
+    assert.equal(formatDaf(1), 'דף ב׳ ע״ב');
   });
 });
 
 describe('Page DOM Virtualizer (Section 10.3)', () => {
-  function computeActiveWindow(centerPage, totalPages) {
-    const windowStart = Math.max(0, centerPage - 1);
-    const windowEnd = Math.min(totalPages - 1, centerPage + 1);
-    const mounted = [];
-    for (let i = 0; i < totalPages; i++) {
-      if (i >= windowStart && i <= windowEnd) {
-        mounted.push(i);
-      }
-    }
-    return { windowStart, windowEnd, mounted };
-  }
+  const buildPages = (total) =>
+    Array.from({ length: total }, (_, i) => ({
+      pageIndex: i,
+      gematriaNumber: '',
+      widthPt: 480,
+      heightPt: 678,
+      htmlContent: `<div class="tok-page-layout-rust" data-page="${i}">Page ${i}</div>`,
+    }));
 
-  test('Active window at start of book (page 0)', () => {
-    const { mounted } = computeActiveWindow(0, 1000);
+  const getMountedIndices = (container) =>
+    container.children
+      .map((ph, idx) => (ph.classList.contains('tok-page-mounted') && ph.innerHTML !== '' ? idx : -1))
+      .filter((idx) => idx >= 0);
+
+  test('Active window at start of book (page 0) mounts [0, 1] in real PageDomVirtualizer', async () => {
+    const { PageDomVirtualizer, computeActiveWindow } = await loadTs('packages/tok-viewer/src/virtualizer.ts');
+    assert.deepEqual(computeActiveWindow(0, 1000), { start: 0, end: 1 });
+
+    const container = new FakeElement('div');
+    const virtualizer = new PageDomVirtualizer(container);
+    virtualizer.setPages(buildPages(1000));
+    const mounted = getMountedIndices(container);
     assert.deepEqual(mounted, [0, 1]);
     assert.equal(mounted.length <= 3, true);
+    assert.equal(container.children[2].innerHTML, '');
+    virtualizer.destroy();
   });
 
-  test('Active window in middle of book enforces strictly 3 pages [K-1, K, K+1]', () => {
-    const { mounted } = computeActiveWindow(500, 1000);
+  test('Active window in middle of book enforces strictly 3 mounted pages [K-1, K, K+1]', async () => {
+    const { PageDomVirtualizer, computeActiveWindow } = await loadTs('packages/tok-viewer/src/virtualizer.ts');
+    assert.deepEqual(computeActiveWindow(500, 1000), { start: 499, end: 501 });
+
+    const container = new FakeElement('div');
+    const virtualizer = new PageDomVirtualizer(container);
+    virtualizer.setPages(buildPages(1000));
+    virtualizer.updateActiveWindow(500);
+    const mounted = getMountedIndices(container);
     assert.deepEqual(mounted, [499, 500, 501]);
     assert.equal(mounted.length, 3);
+    assert.equal(container.children[0].innerHTML, '');
+    assert.ok(container.children[500].innerHTML.includes('Page 500'));
+    virtualizer.destroy();
   });
 
-  test('Active window at end of book', () => {
-    const { mounted } = computeActiveWindow(999, 1000);
+  test('Active window at end of book mounts [998, 999]', async () => {
+    const { PageDomVirtualizer, computeActiveWindow } = await loadTs('packages/tok-viewer/src/virtualizer.ts');
+    assert.deepEqual(computeActiveWindow(999, 1000), { start: 998, end: 999 });
+
+    const container = new FakeElement('div');
+    const virtualizer = new PageDomVirtualizer(container);
+    virtualizer.setPages(buildPages(1000));
+    virtualizer.updateActiveWindow(999);
+    const mounted = getMountedIndices(container);
     assert.deepEqual(mounted, [998, 999]);
+    virtualizer.destroy();
   });
 
-  test('Single-page document', () => {
-    const { mounted } = computeActiveWindow(0, 1);
+  test('Single-page document mounts only page [0]', async () => {
+    const { PageDomVirtualizer } = await loadTs('packages/tok-viewer/src/virtualizer.ts');
+    const container = new FakeElement('div');
+    const virtualizer = new PageDomVirtualizer(container);
+    virtualizer.setPages(buildPages(1));
+    const mounted = getMountedIndices(container);
     assert.deepEqual(mounted, [0]);
+    virtualizer.destroy();
   });
 });
 
 describe('Canvas Overlay & Optimistic RTL Advance (Section 9.2)', () => {
-  test('RTL caret advance decreases X position immediately (<16ms)', () => {
-    let caret = { x: 500, y: 100, height: 18, visible: true };
-    const step = 8.5; // average Hebrew glyph width in pt
+  test('RTL caret advance decreases X position immediately (<16ms) via real CanvasInteractionOverlay', async () => {
+    const { CanvasInteractionOverlay } = await loadTs('packages/tok-canvas/src/overlay.ts');
+    const container = new FakeElement('div');
+    const overlay = new CanvasInteractionOverlay(container);
+    try {
+      overlay.setCaretPosition(0, 500, 100, 18);
+      const step = 8.5;
 
-    caret.x -= step;
-    assert.equal(caret.x, 491.5);
+      overlay.advanceCaretOptimisticRtl(step);
+      assert.equal(overlay.getCaretPosition().x, 491.5);
 
-    caret.x -= step;
-    assert.equal(caret.x, 483.0);
-  });
-
-  test('Selection rectangle bounds calculation', () => {
-    const rects = [
-      { pageIndex: 0, x: 100, y: 50, width: 250, height: 16 }
-    ];
-    assert.equal(rects.length, 1);
-    assert.equal(rects[0].width, 250);
-  });
-
-  test('Interactive drag selection computes normalized bounding box', () => {
-    const dragStart = { x: 350, y: 120 };
-    const dragCurrent = { x: 200, y: 150 };
-
-    const minX = Math.min(dragStart.x, dragCurrent.x);
-    const maxX = Math.max(dragStart.x, dragCurrent.x);
-    const minY = Math.min(dragStart.y, dragCurrent.y);
-    const maxY = Math.max(dragStart.y, dragCurrent.y);
-
-    const selection = {
-      pageIndex: 0,
-      x: minX,
-      y: minY,
-      width: maxX - minX,
-      height: maxY - minY
-    };
-
-    assert.equal(selection.x, 200);
-    assert.equal(selection.y, 120);
-    assert.equal(selection.width, 150);
-    assert.equal(selection.height, 30);
-  });
-
-  test('Spatial hit-test snapped coordinate calculation', () => {
-    const lineBoxes = [
-      { baselineY: 50, height: 16, glyphs: [{ x: 100, width: 20 }, { x: 120, width: 25 }] },
-      { baselineY: 80, height: 16, glyphs: [{ x: 100, width: 15 }, { x: 115, width: 30 }] }
-    ];
-
-    function snapToLine(clickY) {
-      let closest = lineBoxes[0];
-      let minDiff = Math.abs(closest.baselineY - clickY);
-      for (const line of lineBoxes) {
-        const diff = Math.abs(line.baselineY - clickY);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closest = line;
-        }
-      }
-      return closest;
+      overlay.advanceCaretOptimisticRtl(step);
+      assert.equal(overlay.getCaretPosition().x, 483.0);
+    } finally {
+      overlay.destroy();
     }
+  });
 
-    const clickedLine = snapToLine(75);
-    assert.equal(clickedLine.baselineY, 80);
+  test('Selection rectangle bounds are stored and rendered by CanvasInteractionOverlay', async () => {
+    const { CanvasInteractionOverlay } = await loadTs('packages/tok-canvas/src/overlay.ts');
+    const container = new FakeElement('div');
+    const overlay = new CanvasInteractionOverlay(container);
+    try {
+      const rects = [{ pageIndex: 0, x: 100, y: 50, width: 250, height: 16 }];
+      overlay.setSelection(rects);
+      const activeSel = overlay.getSelection();
+      assert.equal(activeSel.length, 1);
+      assert.equal(activeSel[0].width, 250);
+    } finally {
+      overlay.destroy();
+    }
+  });
+
+  test('Interactive drag selection computes normalized bounding box in CanvasInteractionOverlay', async () => {
+    const { CanvasInteractionOverlay } = await loadTs('packages/tok-canvas/src/overlay.ts');
+    const container = new FakeElement('div');
+    const overlay = new CanvasInteractionOverlay(container);
+    try {
+      const canvasEl = container.children[0];
+      let reportedRects = [];
+      overlay.onSelectionChanged = (r) => { reportedRects = r; };
+
+      canvasEl.dispatchEvent('mousedown', { clientX: 350, clientY: 120 });
+      canvasEl.dispatchEvent('mousemove', { clientX: 200, clientY: 150 });
+
+      assert.equal(reportedRects.length, 1);
+      assert.equal(reportedRects[0].x, 200);
+      assert.equal(reportedRects[0].y, 120);
+      assert.equal(reportedRects[0].width, 150);
+      assert.equal(reportedRects[0].height, 30);
+    } finally {
+      overlay.destroy();
+    }
+  });
+
+  test('Spatial hit-test provider snaps mousedown coordinate to line box in CanvasInteractionOverlay', async () => {
+    const { CanvasInteractionOverlay } = await loadTs('packages/tok-canvas/src/overlay.ts');
+    const container = new FakeElement('div');
+    const overlay = new CanvasInteractionOverlay(container);
+    try {
+      const lineBoxes = [
+        { baselineY: 50, height: 16, x: 120 },
+        { baselineY: 80, height: 16, x: 115 }
+      ];
+      overlay.hitTestProvider = (_clickX, clickY) => {
+        let closest = lineBoxes[0];
+        for (const line of lineBoxes) {
+          if (Math.abs(line.baselineY - clickY) < Math.abs(closest.baselineY - clickY)) {
+            closest = line;
+          }
+        }
+        return { pageIndex: 0, x: closest.x, y: closest.baselineY, height: closest.height, visible: true };
+      };
+
+      const canvasEl = container.children[0];
+      canvasEl.dispatchEvent('mousedown', { clientX: 118, clientY: 75 });
+
+      const caret = overlay.getCaretPosition();
+      assert.equal(caret.y, 80);
+      assert.equal(caret.x, 115);
+    } finally {
+      overlay.destroy();
+    }
   });
 });
 
@@ -297,149 +501,169 @@ describe('Interaction Triad Architecture (Section 8 & 17)', () => {
   });
 });
 
-describe('3-Tier Hebrew Justification Model (Section 15)', () => {
-  test('Tier 1 (Word spacing range 80%-130%) calculation', () => {
-    const minSpacing = 85;
-    const maxSpacing = 125;
-    assert.equal(minSpacing >= 80, true);
-    assert.equal(maxSpacing <= 130, true);
+describe('3-Tier Hebrew Justification Model & Typeset Bridge (Section 15)', () => {
+  test('Rust 3-Tier Hebrew Justification engine defines canonical ratios and Ahalterm set in crates/tok-typeset/src/hebrew_justify.rs', () => {
+    const justifyRs = fs.readFileSync(path.join(rootDir, 'crates/tok-typeset/src/hebrew_justify.rs'), 'utf-8');
+    assert.ok(justifyRs.includes('MIN_SPACE_RATIO: f32 = 0.80;'), 'Tier 1 min space ratio (80%) must be defined in engine');
+    assert.ok(justifyRs.includes('MAX_SPACE_RATIO: f32 = 1.30;'), 'Tier 1 max space ratio (130%) must be defined in engine');
+    assert.ok(justifyRs.includes("AHALTERM_LETTERS: &[char] = &['א', 'ה', 'ל', 'ת', 'ר', 'ם', 'ד', 'ך'];"), 'Tier 2 Ahalterm letter set must be defined in engine');
+    assert.ok(justifyRs.includes('MAX_TRACKING_EM: f32 = 0.02;'), 'Tier 3 micro-tracking limit (±2% em) must be defined in engine');
   });
 
-  test('Tier 2 (Oheltarem letter expansion) set contains authentic sacred letters', () => {
-    const oheltaremLetters = ['א', 'ה', 'ל', 'ת', 'ר', 'ם'];
-    assert.deepEqual(oheltaremLetters, ['א', 'ה', 'ל', 'ת', 'ר', 'ם']);
-    assert.equal(oheltaremLetters.length, 6);
-  });
+  test('tok-cli typeset-document & layoutToPageDescriptors project justified Hebrew lines into SpreadCanvas descriptors', async () => {
+    const tokCli = findTokCli();
+    assert.ok(tokCli, tokCliMissingMessage());
+    const { documentStateToDocumentRoot } = await loadTs('packages/tok-ui/src/engine/documentBridge.ts');
+    const { layoutToPageDescriptors } = await loadTs('packages/tok-ui/src/engine/typesetBridge.ts');
 
-  test('Tier 3 (Micro-tracking range ±2%) within threshold', () => {
-    const maxMicroTracking = 2.0;
-    assert.equal(maxMicroTracking <= 2.5, true);
+    const docRoot = documentStateToDocumentRoot({
+      title: 'בדיקת יישור עברי תלת-שלבי',
+      templateType: 'prose',
+      flows: {
+        gemara: [
+          {
+            id: 'p-just-1',
+            styleId: 'normal',
+            text: 'ספר הטיפוגרפיה העברית והעימוד השולחני המודרני מהווה נדבך יסודי בהתפתחות עולם הדפוס היהודי לדורותיו וכולל אותיות אהלתר״ם מתרחבות ורווחי מילים מבוקרים.'
+          }
+        ],
+        rashi: [],
+        tosafot: [],
+        notes: []
+      }
+    });
+
+    const tempIn = path.join(os.tmpdir(), `tok_justify_in_${Date.now()}.json`);
+    const tempOut = path.join(os.tmpdir(), `tok_justify_out_${Date.now()}.json`);
+    try {
+      fs.writeFileSync(tempIn, JSON.stringify(docRoot, null, 2), 'utf-8');
+      const code = await new Promise((resolve, reject) => {
+        const proc = spawn(tokCli, ['typeset-document', tempIn, tempOut], { windowsHide: true });
+        proc.on('error', reject);
+        proc.on('close', resolve);
+      });
+      assert.equal(code, 0, 'tok-cli typeset-document must succeed');
+      const pageBoxes = JSON.parse(fs.readFileSync(tempOut, 'utf-8'));
+      assert.ok(pageBoxes.length >= 1);
+      assert.ok(pageBoxes[0].frames[0].lines.length >= 2, 'Paragraph must break into multiple justified lines');
+
+      const descriptors = layoutToPageDescriptors(pageBoxes);
+      assert.equal(descriptors.length, pageBoxes.length);
+      assert.ok(descriptors[0].htmlContent.includes('tok-page-layout-rust'));
+      assert.ok(descriptors[0].htmlContent.includes('tok-line-box'));
+      assert.ok(descriptors[0].htmlContent.includes('direction: rtl'));
+    } finally {
+      fs.rmSync(tempIn, { force: true });
+      fs.rmSync(tempOut, { force: true });
+    }
   });
 });
 
-// ---------------------------------------------------------------------------
-// Regression tests that execute the real TypeScript sources.
-// Each module is bundled on the fly with esbuild (already a devDependency) into
-// the OS temp dir and imported; a minimal fake DOM stands in for the browser.
-// ---------------------------------------------------------------------------
+describe('Security Regression: HTML Escaping & Hardened Plugin Sandbox', () => {
+  test('escapeHtml in SpreadCanvas neutralizes XSS payloads (<script>, <img onerror>, quotes, ampersands)', async () => {
+    const { escapeHtml } = await loadTs('packages/tok-ui/src/components/SpreadCanvas.ts');
 
-class FakeClassList {
-  constructor() { this.set = new Set(); }
-  add(...c) { c.forEach((x) => this.set.add(x)); }
-  remove(...c) { c.forEach((x) => this.set.delete(x)); }
-  contains(c) { return this.set.has(c); }
-}
+    const scriptPayload = '<script>alert(1)</script>';
+    const escapedScript = escapeHtml(scriptPayload);
+    assert.equal(escapedScript, '&lt;script&gt;alert(1)&lt;/script&gt;');
+    assert.ok(!escapedScript.includes('<script>'));
 
-class FakeStyle {
-  setProperty(k, v) { this[k] = String(v); }
-  removeProperty(k) { delete this[k]; }
-  getPropertyValue(k) { return this[k] ?? ''; }
-}
+    const imgPayload = '<img src=x onerror=alert(1)>';
+    const escapedImg = escapeHtml(imgPayload);
+    assert.equal(escapedImg, '&lt;img src=x onerror=alert(1)&gt;');
+    assert.ok(!escapedImg.includes('<img'));
 
-class FakeElement {
-  constructor(tag = 'div') {
-    this.tagName = tag.toUpperCase();
-    this.children = [];
-    this.style = new FakeStyle();
-    this.dataset = {};
-    this.classList = new FakeClassList();
-    this.listeners = {};
-    this._html = '';
-    this.offsetTop = 0;
-    this.offsetHeight = 0;
-    this.scrollTop = 0;
-    this.clientHeight = 0;
-    this.attributes = {};
-  }
-  set className(v) {
-    this._className = v;
-    this.classList = new FakeClassList();
-    if (v) v.split(/\s+/).forEach((c) => this.classList.add(c));
-  }
-  get className() { return this._className || ''; }
-  set innerHTML(v) { this._html = v; this.children = []; }
-  get innerHTML() { return this._html; }
-  appendChild(c) { this.children.push(c); c.parentElement = this; return c; }
-  setAttribute(k, v) { this.attributes[k] = String(v); }
-  getAttribute(k) { return this.attributes[k]; }
-  click() { (this.listeners['click'] || []).forEach((fn) => fn({})); }
-  replaceChildren(...kids) { this.children = kids.filter(Boolean); }
-  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
-  removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn); }
-  scrollIntoView() {}
-  querySelector(sel) {
-    for (const c of this.children) {
-      if (c && typeof c === 'object') {
-        const matchesClass = !sel.includes('.tok-hud-btn') || c.className?.includes('tok-hud-btn') || c.classList?.contains('tok-hud-btn');
-        const matchesPressed = !sel.includes('aria-pressed') || (c.attributes && 'aria-pressed' in c.attributes);
-        if (matchesClass && matchesPressed) return c;
-        const found = c.querySelector?.(sel);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-  querySelectorAll(sel) {
-    const list = [];
-    for (const c of this.children) {
-      if (c && typeof c === 'object' && c.querySelectorAll) {
-        list.push(...c.querySelectorAll(sel));
-      }
-    }
-    return list;
-  }
-}
+    const attrPayload = `" onclick="alert('xss') & 'test'`;
+    const escapedAttr = escapeHtml(attrPayload);
+    assert.equal(escapedAttr, '&quot; onclick=&quot;alert(&#039;xss&#039;) &amp; &#039;test&#039;');
+    assert.ok(!escapedAttr.includes('"'));
+    assert.ok(!escapedAttr.includes("'"));
 
-function installFakeDom() {
-  const storage = new Map();
-  globalThis.localStorage = {
-    getItem: (k) => (storage.has(k) ? storage.get(k) : null),
-    setItem: (k, v) => storage.set(k, String(v)),
-    removeItem: (k) => storage.delete(k),
-    clear: () => storage.clear(),
-  };
-  const documentElement = new FakeElement('html');
-  globalThis.document = {
-    documentElement,
-    body: new FakeElement('body'),
-    activeElement: null,
-    createElement: (tag) => new FakeElement(tag),
-    createElementNS: (_ns, tag) => new FakeElement(tag),
-  };
-  globalThis.getComputedStyle = () => ({ position: 'static', direction: 'rtl' });
-  globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
-  globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
-  if (!globalThis.window) globalThis.window = globalThis;
-  globalThis.window.addEventListener ||= (type, fn) => {};
-  globalThis.window.removeEventListener ||= (type, fn) => {};
-  return { storage, documentElement };
-}
-
-const fakeDom = installFakeDom();
-
-let esbuildMod = null;
-async function loadTs(relPath) {
-  esbuildMod ||= await import('esbuild');
-  const os = await import('node:os');
-  const { pathToFileURL } = await import('node:url');
-  const outfile = path.join(
-    os.tmpdir(),
-    `tok-test-${process.pid}-${relPath.replace(/[^a-zA-Z0-9]+/g, '_')}-${Date.now()}.mjs`
-  );
-  esbuildMod.buildSync({
-    entryPoints: [path.join(rootDir, relPath)],
-    bundle: true,
-    format: 'esm',
-    platform: 'neutral',
-    outfile,
-    logLevel: 'silent',
+    assert.equal(escapeHtml(''), '');
   });
-  try {
-    return await import(pathToFileURL(outfile).href);
-  } finally {
-    fs.rmSync(outfile, { force: true });
-  }
-}
+
+  test('PluginEngine hardened sandbox blocks access to window.tokIpc, globalThis.tokIpc, self.tokIpc, document, localStorage, and Function("return this")()', async () => {
+    const { PluginEngine } = await loadTs('packages/tok-ui/src/plugins/PluginEngine.ts');
+
+    let probeResults = null;
+    globalThis.__reportSandboxProbe = (res) => {
+      probeResults = res;
+    };
+
+    const escapeAttemptCode = `
+      function activate(tok) {
+        var functionCtorBlocked = false;
+        var windowFunctionCtorBlocked = false;
+        try {
+          Function("return this")();
+        } catch (e) {
+          functionCtorBlocked = /blocked in plugin sandbox/i.test(String(e && e.message || e));
+        }
+        try {
+          window.Function("return this")();
+        } catch (e) {
+          windowFunctionCtorBlocked = /blocked in plugin sandbox/i.test(String(e && e.message || e));
+        }
+        globalThis.__reportSandboxProbe({
+          directTokIpc: typeof tokIpc,
+          windowTokIpc: typeof window.tokIpc,
+          globalThisTokIpc: typeof globalThis.tokIpc,
+          selfTokIpc: typeof self.tokIpc,
+          topTokIpc: typeof top.tokIpc,
+          parentTokIpc: typeof parent.tokIpc,
+          hasTokIpcInWindow: ('tokIpc' in window),
+          directDocument: typeof document,
+          windowDocument: typeof window.document,
+          globalThisDocument: typeof globalThis.document,
+          directLocalStorage: typeof localStorage,
+          windowLocalStorage: typeof window.localStorage,
+          globalThisLocalStorage: typeof globalThis.localStorage,
+          functionCtorBlocked: functionCtorBlocked,
+          windowFunctionCtorBlocked: windowFunctionCtorBlocked
+        });
+      }
+    `;
+
+    globalThis.tokIpc = {
+      getPluginSystemStatus: async () => ({ isSafeMode: false, isSaferActive: false, userPluginsDir: '' }),
+      getPlugins: async () => [
+        {
+          manifest: { id: 'sandbox-escape-probe', name: 'EscapeProbe', version: '1.0.0', description: '' },
+          sourceType: 'js',
+          enabled: true,
+          compiledCode: escapeAttemptCode
+        }
+      ]
+    };
+
+    try {
+      const engine = new PluginEngine();
+      await engine.loadPlugins();
+
+      assert.ok(probeResults, 'Sandbox probe plugin must have executed');
+      assert.equal(probeResults.directTokIpc, 'undefined');
+      assert.equal(probeResults.windowTokIpc, 'undefined');
+      assert.equal(probeResults.globalThisTokIpc, 'undefined');
+      assert.equal(probeResults.selfTokIpc, 'undefined');
+      assert.equal(probeResults.topTokIpc, 'undefined');
+      assert.equal(probeResults.parentTokIpc, 'undefined');
+      assert.equal(probeResults.hasTokIpcInWindow, false);
+      assert.equal(probeResults.directDocument, 'undefined');
+      assert.equal(probeResults.windowDocument, 'undefined');
+      assert.equal(probeResults.globalThisDocument, 'undefined');
+      assert.equal(probeResults.directLocalStorage, 'undefined');
+      assert.equal(probeResults.windowLocalStorage, 'undefined');
+      assert.equal(probeResults.globalThisLocalStorage, 'undefined');
+      assert.equal(probeResults.functionCtorBlocked, true, 'Function("return this")() must be blocked');
+      assert.equal(probeResults.windowFunctionCtorBlocked, true, 'window.Function("return this")() must be blocked');
+      // Host tokIpc must be intact after plugin activation finishes
+      assert.equal(typeof globalThis.tokIpc.getPlugins, 'function');
+    } finally {
+      delete globalThis.tokIpc;
+      delete globalThis.__reportSandboxProbe;
+    }
+  });
+});
 
 describe('Regression: i18n coverage (every key used in the UI exists in Hebrew and English)', () => {
   test('all translation entries have non-empty he and en strings', async () => {
@@ -3303,3 +3527,76 @@ describe('Core Feature: Hebrew Text Cleanup & Dibur HaMatchil Wizard (Proposals 
     assert.equal(cleaned[0].spans[0].format.italic, true);
   });
 });
+
+describe('Milestone 3 & 4 Regression: Frame Alignment, Canonical Hebrew Combining Marks & Layer/Virtualizer Wiring', () => {
+  test('frameAlignment aligns and distributes multi-selected frame rectangles accurately', async () => {
+    const {
+      alignRight,
+      alignLeft,
+      alignCenter,
+      alignTop,
+      alignMiddle,
+      alignBottom,
+      distributeVertical,
+      distributeHorizontal,
+      alignFrames
+    } = await loadTs('packages/tok-ui/src/utils/frameAlignment.ts');
+
+    const frames = [
+      { id: 'f1', x: 20, y: 10, w: 100, h: 40 },
+      { id: 'f2', x: 80, y: 90, w: 60, h: 40 },
+      { id: 'f3', x: 50, y: 210, w: 150, h: 40 }
+    ];
+
+    // Max right edge is f3: 50 + 150 = 200
+    const rightAligned = alignRight(frames);
+    assert.equal(rightAligned[0].x + rightAligned[0].w, 200);
+    assert.equal(rightAligned[1].x + rightAligned[1].w, 200);
+    assert.equal(rightAligned[2].x + rightAligned[2].w, 200);
+
+    // Min left edge is f1: 20
+    const leftAligned = alignLeft(frames);
+    assert.equal(leftAligned[0].x, 20);
+    assert.equal(leftAligned[1].x, 20);
+    assert.equal(leftAligned[2].x, 20);
+
+    // Selection horizontal bounds: [20, 200] -> center = 110
+    const centerAligned = alignCenter(frames);
+    assert.equal(centerAligned[0].x + centerAligned[0].w / 2, 110);
+    assert.equal(centerAligned[1].x + centerAligned[1].w / 2, 110);
+
+    // Top/Middle/Bottom alignment
+    const topAligned = alignTop(frames);
+    assert.equal(topAligned[1].y, 10);
+    const bottomAligned = alignBottom(frames);
+    assert.equal(bottomAligned[0].y + bottomAligned[0].h, 250);
+    const middleAligned = alignMiddle(frames);
+    assert.equal(middleAligned[0].y + middleAligned[0].h / 2, 130);
+
+    // Vertical distribution: total span [10, 250] = 240, sum of heights = 120, remaining = 120 across 2 gaps = 60 gap
+    // f1: y=10..50, f2: y=110..150, f3: y=210..250
+    const vDist = distributeVertical(frames);
+    assert.equal(vDist[0].y, 10);
+    assert.equal(vDist[1].y, 110);
+    assert.equal(vDist[2].y, 210);
+
+    // Dispatcher compatibility
+    const viaDispatcher = alignFrames(frames, 'align-right');
+    assert.equal(viaDispatcher[0].x, 100);
+    const hDist = distributeHorizontal(frames);
+    assert.equal(hDist.length, 3);
+  });
+
+  test('normalizeHebrew canonically orders Hebrew combining marks (Shin/Sin -> Dagesh -> Vowel -> Taamim) and is idempotent', async () => {
+    const { normalizeHebrew } = await loadTs('packages/tok-ui/src/plugins/hebrew-utils.ts');
+
+    // Shin (U+05E9) + Etnahta Taam (U+0591) + Qamats Vowel (U+05B8) + Dagesh (U+05BC) + Shin Dot (U+05C1)
+    const scrambled = '\u05E9\u0591\u05B8\u05BC\u05C1';
+    const expected = '\u05E9\u05C1\u05BC\u05B8\u0591';
+
+    const normalized = normalizeHebrew(scrambled);
+    assert.equal(normalized, expected, 'Out-of-order Hebrew combining marks must be sorted canonically');
+    assert.equal(normalizeHebrew(normalized), expected, 'normalizeHebrew must be idempotent');
+  });
+});
+
