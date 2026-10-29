@@ -14,8 +14,8 @@
 
 פרויקט TOK מגדיר פרדיגמה חדשה המבוססת על שלושה עמודי תווך ארכיטקטוניים:
 - **מודל מסמך קנוני עצמאי ואי-מוטבילי (TOK Document Model - TDM):** מודל נתונים סמנטי טהור הכתוב בשפת Rust, המנותק לחלוטין מ-HTML, מ-CSS וממנועי תצוגה ספציפיים.
-- **מנוע טיפוגרפיה ועימוד עברי ברמת-על:** שילוב ישיר של מנוע עיצוב האותיות HarfBuzz, אלגוריתם שבירת השורות הגלובלי Knuth-Plass, פותר אילוצים למקראות גדולות, מתיחת אותיות עבריות מסורתית (אהלתר"ם), ומנוע גימטריה דטרמיניסטי.
-- **ארכיטקטורת רינדור היברידית מפוקחת (Governed Hybrid Rendering) עם צינור דואלי:** שימוש במנוע Vivliostyle ובדפדפן Chromium כמנוע תצוגה וירטואלי לתצוגת מסך ואינטראקציה, במקביל לצינור קדם-דפוס נייטיב עצמאי ב-Rust המפיק קובצי PDF/X-1a ו-PDF/X-4 תקניים עם הפרדת צבעי CMYK מלאה וצבעי ספוט ישירות לדפוס.
+- **מנוע טיפוגרפיה ועימוד עברי ברמת-על:** שילוב ישיר של מנוע עיצוב האותיות HarfBuzz (`rustybuzz`), אלגוריתם שבירת השורות הגלובלי Knuth-Plass, פותר אילוצים ליניארי (Cassowary) וסינכרון Co-Pagination למקראות גדולות, מתיחת אותיות עבריות מסורתית (אהלתר"ם), ומנוע גימטריה דטרמיניסטי.
+- **ארכיטקטורת רינדור היברידית מפוקחת (Governed Hybrid Rendering) עם צינור דואלי:** שימוש בהיטל DOM דטרמיניסטי (`SpreadCanvas`) ומנהל וירטואליזציה (`PageDomVirtualizer`) בדפדפן Chromium כמנוע תצוגה וירטואלי לתצוגת מסך ואינטראקציה המונחה ישירות מעץ הקואורדינטות `PageLayoutBox` (ביחידות `pt`), במקביל לצינור קדם-דפוס נייטיב עצמאי ב-Rust המפיק קובצי PDF/X-1a ו-PDF/X-4 תקניים עם הפרדת צבעי CMYK מלאה וצבעי ספוט ישירות לדפוס.
 
 ### מקרא מתודולוגי לסיווג הקביעות הטכנולוגיות
 בהתאם למשמעת המחקר המחמירה של TOK, כל טענה, קביעה והחלטה טכנולוגית בדו"ח זה מסווגת באופן מפורש לאחת מארבע קטגוריות:
@@ -37,8 +37,8 @@
 ├────────────────────────────────────────────────────────────────────────┤
 │ 1. Interaction & Caret Layer: Transparent Canvas/WebGL Overlay (60fps) │
 ├────────────────────────────────────────────────────────────────────────┤
-│ 2. Presentation Sink: Electron / Chromium WebView2 + Vivliostyle Core   │
-│    (Pre-paginated HTML/CSS viewport virtualization)                    │
+│ 2. Presentation Sink: Electron / Chromium + SpreadCanvas & Virtualizer   │
+│    (Deterministic PageLayoutBox DOM projection & 3-page virtualization) │
 ├────────────────────────────────────────────────────────────────────────┤
 │ 3. Zero-Copy Binary IPC Bridge: FlatBuffers over SharedArrayBuffer     │
 ├────────────────────────────────────────────────────────────────────────┤
@@ -58,11 +58,11 @@
 1. **עצמאות מוחלטת של מודל המסמך (Complete Decoupling):** `[המלצה ארכיטקטונית]`
    מודל המסמך הפנימי (TDM) אינו מכיר את ה-DOM של הדפדפן, אינו מכיל תגיות HTML, ואינו תלוי בחוקי CSS. כל מושגי הטיפוגרפיה, הסגנונות, העוגנים והתזרימים מוגדרים במבני נתונים סמנטיים טהורים ב-Rust.
 
-2. **עיקרון ה-Pre-Pagination (מניעת "ניחושי דפדפן"):** `[המלצה ארכיטקטונית]`
-   מנוע הרינדור של Vivliostyle ומנוע הדפדפן (Blink) אינם מורשים להחליט באופן עצמאי היכן נשברים הדפים או כיצד מתחלקים הטורים. ליבת ה-Rust של TOK מבצעת בעצמה את חישוב שבירת השורות (Knuth-Plass) ואת חלוקת הדפים, ומזריקה ל-Vivliostyle קובצי HTML/CSS שכבר עברו חלוקה מראש (Pre-fragmented). במודל זה, Vivliostyle משמש כמנוע תצוגה גרפי נאמן ומהיר, ללא סכנת חוסר-דטרמיניזם.
+2. **עיקרון ה-Pre-Pagination וההיטל הדטרמיניסטי (מניעת "ניחושי דפדפן"):** `[המלצה ארכיטקטונית]`
+   מנוע הדפדפן (Blink) אינו מורשה להחליט באופן עצמאי היכן נשברים הדפים או כיצד מתחלקים הטורים, והמערכת אינה מסתמכת על ספריות CSS Paged Media חיצוניות בזמן ריצה. ליבת ה-Rust של TOK (`tok-typeset` דרך `tok-cli`) מבצעת בעצמה את חישוב שבירת השורות (Knuth-Plass), פתרון האילוצים (Cassowary) וחלוקת הדפים (Co-Pagination), ומייצאת מבני `PageLayoutBox` מדויקים (ביחידות `pt`). שכבת הממשק (`tok-ui` ברכיב `SpreadCanvas`) מקרינה קואורדינטות אלו להיטל DOM דטרמיניסטי המנוהל על ידי `PageDomVirtualizer` (`tok-viewer`), ללא סכנת חוסר-דטרמיניזם.
 
 3. **ארכיטקטורת צינור PDF דואלי (Dual Pipeline Architecture):** `[המלצה ארכיטקטונית]`
-   - **צינור תצוגה ואינטראקציה (Screen & Digital Pipeline):** מבוסס HTML/CSS ו-Vivliostyle עבור תצוגת מסך, עריכה בזמן אמת, וייצוא דיגיטלי ל-EPUB 3 ו-Web.
+   - **צינור תצוגה ואינטראקציה (Screen & Digital Pipeline):** מבוסס היטל DOM דטרמיניסטי (`SpreadCanvas` + `PageDomVirtualizer`) מתוך `PageLayoutBox` עבור תצוגת מסך, עריכה בזמן אמת, וייצוא HTML עצמאי (`render-html`).
    - **צינור קדם-דפוס מקצועי (Professional Pre-press Pipeline):** מנוע נייטיב עצמאי ב-Rust המפיק ישירות קובצי PDF/X-1a ו-PDF/X-4 תקניים עם ניהול צבע מלא ב-DeviceCMYK, צבעי ספוט (Pantone/DeviceN), תיבות גלישה וסימני חיתוך (TrimBox/BleedBox), וחיתוך גופנים (Subsetting) עם טבלאות `/ToUnicode` קפדניות.
 
 4. **שכבת עריכה מופרדת ללא `contenteditable` (Decoupled Edit Layer):** `[המלצה ארכיטקטונית]`
@@ -125,16 +125,16 @@
   - **מאמצת:** `[המלצה ארכיטקטונית]` Prince מוכיחה באופן מוחלט כי מודל המבוסס על שילוב של HTML/CSS ו-CSS Paged Media מסוגל לעמוד בסטנדרטים המחמירים ביותר של טיפוגרפיה ודפוס מקצועי. TOK מאמצת את תחביר ה-CSS Paged Media להגדרת שוליים, כותרות רצות ומספור עמודים.
   - **שוללת:** `[המלצה ארכיטקטונית]` תלות במנוע סגור וקנייני; ומודל פעולה של הידור אצווה בלבד שאינו תומך בעריכה אינטראקטיבית שולחנית.
 
-### 1.3.6 Vivliostyle
+### 1.3.6 חלופות CSS Paged Media בדפדפן (Vivliostyle / Paged.js)
 - **סקירה ארכיטקטונית:** `[יכולת מאומתת]`
-  פרויקט קוד פתוח מוביל המממש מנוע עימוד ותצוגת CSS Paged Media בתוך סביבת דפדפן סטנדרטית (Chromium / WebKit). פועל כשכבת Polyfill המנתחת את קוד ה-HTML/CSS ומחלקת את ה-DOM לקונטיינרים של עמודים וכפולות ישירות על גבי המסך.
+  פרויקטים בקוד פתוח המממשים מנועי עימוד ותצוגת CSS Paged Media בתוך סביבת דפדפן סטנדרטית (Chromium / WebKit) כשכבת Polyfill המנתחת קוד HTML/CSS ומחלקת את ה-DOM לקונטיינרים של עמודים.
 - **כשלי תכנון ומגבלות מובנות:** `[מגבלה חמורה ומאומתת]`
-  1. **חוסר יכולת לייצר קובצי PDF מקצועיים לדפוס:** Vivliostyle מסתמכת על פונקציית ההדפסה של הדפדפן (`Page.printToPDF`), המוגבלת על ידי מנוע Skia למרחב צבע sRGB בלבד, נטולת תמיכה בצבעי ספוט, ונטולת יכולת להגדיר תיבות דפוס (TrimBox/BleedBox) ותקני PDF/X.
-  2. **כשל ה-`contenteditable` המובנה:** ניסיון לערוך טקסט בתוך ה-DOM המקוטע של Vivliostyle גורם לקפיצות סמן בלתי נשלטות והשחתת המסמך.
-  3. **צוואר בקבוק של מניפולציות DOM:** חישוב פריסה של ספרים שלמים בדפדפן גורר תקורת זיכרון כבדה (Layout Thrashing).
+  1. **חוסר יכולת לייצר קובצי PDF מקצועיים לדפוס:** מנועים אלו מסתמכים על פונקציית ההדפסה של הדפדפן (`Page.printToPDF`), המוגבלת על ידי מנוע Skia למרחב צבע sRGB בלבד, נטולת תמיכה בצבעי ספוט, ונטולת יכולת להגדיר תיבות דפוס (TrimBox/BleedBox) ותקני PDF/X.
+  2. **כשל ה-`contenteditable` המובנה:** ניסיון לערוך טקסט בתוך ה-DOM המקוטע של מנועי CSS Fragmentation גורם לקפיצות סמן בלתי נשלטות והשחתת המסמך.
+  3. **צוואר בקבוק של מניפולציות DOM ואי-דטרמיניזם:** חישוב פריסה של ספרים שלמים בדפדפן גורר תקורת זיכרון כבדה (Layout Thrashing) ואינו מסוגל לפתור אילוצים רב-תזרימיים של מקראות גדולות וש"ס.
 - **מה TOK מאמצת ומה היא שוללת:**
-  - **מאמצת:** `[המלצה ארכיטקטונית]` שימוש ב-Vivliostyle Core אך ורק כשכבת תצוגה גרפית מבוקרת (Display Sink) במסגרת הצינור הדיגיטלי לתצוגת מסך וייצוא Web/EPUB.
-  - **שוללת:** `[המלצה ארכיטקטונית]` הסתמכות על Vivliostyle כמנוע הפקת ה-PDF לדפוס; שימוש ב-Vivliostyle כמנהל מודל המסמך; ומתן אפשרות ל-Vivliostyle לקבוע שברי עמודים באופן עצמאי (TOK מיישמת Pre-Pagination ומעבירה דפים שכבר פוצלו מראש).
+  - **מאמצת:** `[המלצה ארכיטקטונית]` אימוץ מוסכמות CSS Paged Media עבור ייצוא HTML סטטי (`tok-cli render-html`), אך החלפת ספריות Polyfill חיצוניות במנוע היטל DOM דטרמיניסטי ייעודי (`SpreadCanvas` ב-`tok-ui` ו-`PageDomVirtualizer` ב-`tok-viewer`) המקבל קואורדינטות `PageLayoutBox` מדויקות (ביחידות `pt`) ישירות מליבת ה-Rust (`tok-typeset` / `tok-cli`).
+  - **שוללת:** `[המלצה ארכיטקטונית]` תלות זמן-ריצה ב-Polyfills חיצוניים של CSS Paged Media; הסתמכות על הדפדפן להפקת PDF לדפוס; ומתן אפשרות לדפדפן לקבוע שברי עמודים או שורות באופן עצמאי.
 
 ### 1.3.7 Paged.js
 - **סקירה ארכיטקטונית:** `[יכולת מאומתת]`
@@ -144,7 +144,7 @@
   2. **לולאות אינסופיות בעימוד הערות שוליים:** מנגנון הפיצול של Paged.js נוטה להיכנס למצבי תקיעה (Oscillation Loops) כאשר הערת שוליים גורמת לדחיקת השורה המפנה לעמוד הבא, מה שיוצר מעגל שוטה של שבירות עמוד.
   3. **תמיכה חלשה בעברית:** התפרקות של תגיות ומרווחים בעת שבירת שורות דו-כיווניות על פני מעברי עמודים.
 - **מה TOK מאמצת ומה היא שוללת:**
-  - נפסלה לחלוטין בפרק 5 (פסילה 5.7). TOK שוללת את השימוש ב-Paged.js עקב נחיתותה הברורה מול Vivliostyle ויציבותה הרעועה.
+  - נפסלה לחלוטין בפרק 5 (פסילה 5.7). TOK שוללת את השימוש ב-Paged.js ובכל Polyfill דפדפני חיצוני לטובת מנוע עימוד נייטיבי ב-Rust (`tok-typeset`) והיטל DOM דטרמיניסטי.
 
 ### 1.3.8 Typst
 - **סקירה ארכיטקטונית:** `[יכולת מאומתת]`
@@ -180,11 +180,11 @@
 | **Scribus** | Frame Trees (Qt / C++) | HarfBuzz Basic Layout | בסיסית-בינונית | ירודה ביותר (קיפאון ב-100+ עמודים) | בינונית (Python API) | טובה מאוד (LittleCMS, PDF/X) | WYSIWYG מגושם, Undo/Redo שביר | **מאמצת רכיבי קוד פתוח, שוללת ארכיטקטורת Qt** |
 | **LibreOffice Writer** | Linear ODF Stream | HarfBuzz CTL Layout | טובה מאוד ומיוצבת | נמוכה במסמכים עתירי מסגרות | טובה (UNO API, Python) | בינונית (חסרה PDF/X מלא וספוט) | מעבד תמלילים משרדי ליניארי | **מאמצת ממירי ODF/DOCX, שוללת זרם ליניארי** |
 | **Prince XML** | Semantic HTML/XML DOM | CSS Paged Media Advanced | טובה מאוד | גבוהה מאוד (Batch Compilation) | טובה (JavaScript Hooks) | מושלמת לדפוס (PDF/X-1a, 4, Spot) | ללא ממשק גרפי (Batch CLI בלבד) | **מאמצת CSS Paged Media, שוללת חוסר אינטראקציה** |
-| **Vivliostyle** | Browser DOM Fragmentation | Browser Blink Engine | טובה (מוגבלת ע"י מנוע הדפדפן) | בינונית (תקורת שינויי DOM) | טובה (Web Extensions, JS) | **ירודה (מוגבלת ע"י Skia sRGB)** | תצוגה בלבד, `contenteditable` כושל | **מאמצת לתצוגת מסך, שוללת ל-PDF דפוס ועריכה ישירה** |
+| **Browser CSS Polyfills** | Browser DOM Fragmentation | Browser Blink Engine | טובה (מוגבלת ע"י מנוע הדפדפן) | בינונית (תקורת שינויי DOM) | טובה (Web Extensions, JS) | **ירודה (מוגבלת ע"י Skia sRGB)** | תצוגה בלבד, `contenteditable` כושל | **הוחלפה בהיטל DOM דטרמיניסטי (`SpreadCanvas` + `PageDomVirtualizer`)** |
 | **Paged.js** | Browser DOM Chunker | Browser Blink Engine | בסיסית ובעייתית | נמוכה ביותר (קריסה ב-50+ עמ') | בינונית (JS Handlers) | **ירודה (מוגבלת ע"י Skia sRGB)** | תצוגה בלבד | **נפסלה לחלוטין (פסילה 5.7 בפרק 5)** |
 | **Typst** | Pure Immutable AST (Rust) | Custom Knuth-Plass + rustybuzz | מתפתחת (דורשת חבילות Bidi) | **פנומנלית (אינקרמנטלית <30ms)** | מעולה (Rust Packages & CLI) | מתפתחת (מנוע `pdf-writer` ישיר) | עורך טקסט קוד (ללא DTP חזותי) | **מאמצת מודל Rust, אי-מוטביליות, ו-pdf-writer** |
 | **TeX / LaTeX** | Box-Glue-Penalty Stream | Knuth-Plass Original Dynamic Prog. | טובה מאוד (XeTeX bidi / culmus) | טובה ויציבה (Batch) | שבירה (Macro expansion) | גבוהה (דרך חבילות ייעודיות) | עורך טקסט קוד (ללא אינטראקטיביות) | **מאמצת אלגוריתם פסקאות, שוללת שפת מאקרו** |
-| **TypesetOK (TOK)** | **Immutable B-Tree AST ב-Rust (TDM)** | **Knuth-Plass + HarfBuzz + אהלתר"ם** | **תמיכת Bidi/RTL מקורית מהיסוד** | **מרבית (וירטואליזציה + מטמון 4 רמות)** | **Wasm Sandbox + QuickJS + CLI** | **דואלי: Rust PDF/X נייטיב + Vivliostyle** | **סמן וירטואלי + Canvas Overlay + Story View** | **הגדרה ארכיטקטונית עצמאית משולבת** |
+| **TypesetOK (TOK)** | **Immutable B-Tree AST ב-Rust (TDM)** | **Knuth-Plass + rustybuzz + אהלתר"ם** | **תמיכת Bidi/RTL מקורית מהיסוד** | **מרבית (וירטואליזציה + מטמון 4 רמות)** | **Wasm Sandbox + QuickJS + CLI** | **דואלי: Rust PDF/X נייטיב + DOM Projection** | **סמן וירטואלי + Canvas Overlay + Story View** | **הגדרה ארכיטקטונית עצמאית משולבת** |
 
 ---
 
@@ -194,26 +194,26 @@
   2. **קומפילציה אינקרמנטלית ומזעור תוצאות (מ-Typst):** שימוש במודל נתונים אי-מוטבילי ב-Rust עם מנגנון Memoization המאפשר עימוד מחדש של עמודים מקומיים בתוך מילי-שניות בודדות.
   3. **אלגוריתם שבירת שורות גלובלי של Knuth-Plass (מ-TeX ו-InDesign):** חישוב שבירת השורות על פני הפסקה כולה למניעת נהרות לבנים וריווחים צורמים.
   4. **תקני CSS Paged Media לקביעת שוליים וכותרות (מ-Prince XML):** שימוש במוסכמות תקניות לתיאור דפים, כפולות, והערות שוליים.
-  5. **שילוב ספריות קוד פתוח מובילות (מ-Scribus):** שימוש ב-HarfBuzz ו-LittleCMS להשגת דיוק טיפוגרפי וניהול צבע מקצועי.
+  5. **שילוב ספריות קוד פתוח מובילות (מ-Scribus):** שימוש ב-HarfBuzz (`rustybuzz`) וניהול צבע מקצועי להשגת דיוק טיפוגרפי.
 
 - **דפוסים ש-TOK מתאימה ומשכללת (Adapted Patterns):** `[המלצה ארכיטקטונית]`
-  1. **מנוע הרינדור של Vivliostyle:** במקום להסתמך עליו כפתרון יחיד מקצה לקצה, TOK מגבירה ומפקחת עליו: TOK מזינה אותו בתוכן שכבר עבר Pre-Pagination ב-Rust, ועוקפת אותו לחלוטין לצורך הפקת PDF/X לדפוס ועריכת טקסט אינטראקטיבית.
+  1. **היטל תצוגה דטרמיניסטי (`SpreadCanvas` + `PageDomVirtualizer`):** במקום להסתמך על מנוע CSS Paged Media חיצוני בדפדפן, TOK מבצעת את כל חישובי העימוד והחלוקה לעמודים בליבת ה-Rust (`tok-typeset`), מעבירה מבני `PageLayoutBox` (ביחידות `pt`) מ-`tok-cli` ל-`tok-ui`, ומקרינה אותם לדפים קשיחים ב-DOM תוך עקיפה מלאה של הדפדפן לצורך הפקת PDF/X לדפוס ועריכת טקסט אינטראקטיבית.
   2. **מתיחת אותיות עבריות (אהלתר"ם):** שכלול מנגנון היישור המסורתי של InDesign על ידי שימוש בצירי מתיחה דינמיים של Variable Fonts במקום כשידה ערבית פסולה, תוך שילוב מדרג יישור תלת-שלבי דטרמיניסטי.
   3. **בקרת איכות דפוס חיה (Live Preflight):** אימוץ הרעיון של Affinity Publisher ויישומו כתהליך עבודה אסינכרוני יעיל בליבת ה-Rust.
 
 - **דפוסים ש-TOK שוללת לחלוטין (Rejected Patterns):** `[המלצה ארכיטקטונית]`
   1. **השתלת RTL בדיעבד (הלקח מ-Affinity ו-InDesign):** שלילת כל ארכיטקטורה שאינה מציבה את ה-RTL והעברית במרכז החל משלב ה-Zero.
-  2. **עריכה באמצעות `contenteditable` בדפדפן (הלקח מ-Vivliostyle ו-Paged.js):** שלילה מוחלטת לטובת סמן וירטואלי ושכבת כיסוי מופרדת (Overlay Canvas).
-  3. **הפקת PDF לדפוס דרך הדפדפן (הלקח מ-Chromium ו-Vivliostyle):** שלילה מוחלטת לטובת מנוע Rust Native PDF/X ייעודי.
-  4. **שפות מאקרו ומודלים מוטביליים לא בטוחים (הלקח מ-TeX ו-Scribus):** שלילת שפות סקריפטינג חסרות בידוד לטובת Wasm Component Sandbox ו-QuickJS עם טרנזקציות אטומיות.
+  2. **עריכה באמצעות `contenteditable` בדפדפן (הלקח מספריות CSS Paged Media בדפדפן):** שלילה מוחלטת לטובת סמן וירטואלי ושכבת כיסוי מופרדת (Overlay Canvas).
+  3. **הפקת PDF לדפוס דרך הדפדפן (`Page.printToPDF` של Chromium):** שלילה מוחלטת לטובת מנוע Rust Native PDF/X ייעודי (`tok-pdf`).
+  4. **שפות מאקרו ומודלים מוטביליים לא בטוחים (הלקח מ-TeX ו-Scribus):** שלילת שפות סקריפטינג חסרות בידוד לטובת Sandbox מבודד עם טרנזקציות אטומיות.
 
 ---
 
 ### 1.3.12 מענה ארכיטקטוני לאתגרי קצה ופגיעויות מערכת (Adversarial Robustness)
 `[המלצה ארכיטקטונית]` לאור ממצאי ביקורות העומק והאתגרים האדברסריים, TOK מגדירה פתרונות מובנים בשלושה מוקדי סיכון קריטיים:
 
-1. **פתרון אתגר C-1 (התנגשות Pre-Pagination מול Vivliostyle):** `[המלצה ארכיטקטונית]`
-   מנועי CSS Paged Media בדפדפן נוטים לשבור קונטיינרים כאשר מתגלה חריגת תת-פיקסל. כדי לנטרל סכנה זו, TOK מגדירה את Vivliostyle במצב **Single-Page / Fragment Display Mode**: כל עמוד המוזרק על ידי TOK מוכל בתוך אלמנט בעל מידות קבועות קשיחות עם `overflow: hidden` וכלל CSS מפורש של `break-inside: avoid; page-break-inside: avoid`. בנוסף, מוזרק תסריט פנימי המשהה את אלגוריתם ה-Layout הטבעי של Vivliostyle על גבי מכולות עמודים אלו, ומנצל את Vivliostyle אך ורק לרינדור סגנונות הדף (Page Margins, Bleed, Master Backgrounds).
+1. **פתרון אתגר C-1 (מניעת פיצול משני בדפדפן בעת הקרנת Pre-Pagination):** `[המלצה ארכיטקטונית]`
+   מנועי דפדפן נוטים לשבור קונטיינרים כאשר מתגלה חריגת תת-פיקסל. כדי לנטרל סכנה זו, רכיב ה-`SpreadCanvas` ב-`tok-ui` מרנדר כל `PageLayoutBox` במצב **Single-Page Atomic Render Mode**: כל עמוד המוזרק על ידי TOK מוכל בתוך אלמנט `.tok-page` בעל מידות קבועות קשיחות (מתורגמות מ-`pt`) עם `overflow: hidden` וכלל CSS מפורש של `break-inside: avoid; page-break-inside: avoid`, כאשר מיקומי המסגרות, השורות והערות השוליים נקבעים בלעדית על ידי קואורדינטות `tok-typeset`.
 
 2. **פתרון אתגר C-2 (פער מטריקות תת-פיקסל בין HarfBuzz ל-Chromium Skia DirectWrite):** `[המלצה ארכיטקטונית]`
    בטקסט עברי מנוקד עם טעמים, צבירת שגיאות עיגול של 0.1px בין HarfBuzz FFI ב-Rust למנוע DirectWrite/Skia ב-Chromium עלולה ליצור סטיית סמן של מספר פיקסלים בסוף שורה. TOK מיישמת שני מנגנוני נעילה:
@@ -247,9 +247,9 @@ graph TB
     end
 
     subgraph Presentation_Sink [שכבת תצוגה מרונדרת - Display Sink]
-        WebViewHost[מכולת WebView2 / Chromium WebContents]
-        VivEngine[מנוע תצוגה Vivliostyle Core Polyfill]
-        VirtualScroll[מנהל וירטואליזציה של עמודים - Page Virtualizer]
+        WebViewHost[מכולת Chromium WebContents]
+        SpreadEngine[מנוע היטל DOM דטרמיניסטי - SpreadCanvas]
+        VirtualScroll[מנהל וירטואליזציה של עמודים - PageDomVirtualizer]
     end
 
     subgraph IPC_Bridge [גשר תקשורת בינארי מהיר]
@@ -325,8 +325,8 @@ graph TB
  ├──► [תהליך תצוגה / UI Renderer Process - Chromium Blink]
  │     ├── תהליכון ראשי של ה-UI (UI Main Thread):
  │     │    ├── פאנלים, סרגלים, אירועי DOM, רינדור שכבת Overlay ב-Canvas
- │     │    └── וירטואליזציה של Viewport (החזקת 3 עמודים פעילים)
- │     ├── מופע מנוע התצוגה Vivliostyle ב-IFrame/ShadowDOM
+ │     │    └── וירטואליזציה של Viewport (`PageDomVirtualizer` - החזקת 3 עמודים פעילים)
+ │     ├── מנוע היטל תצוגה דטרמיניסטי (`SpreadCanvas` המקרין קואורדינטות `PageLayoutBox`)
  │     └── תהליכון קומפוזיטור ו-GPU מואץ חומרה
  │
  └──► [תהליך הליבה / TOK Core Engine Process - Rust Native]
@@ -359,8 +359,8 @@ graph TB
 - **ניהול מאגר טקסט:** ניהול מחרוזות ארוכות באמצעות עץ B-Tree Rope המאפשר הוספה, מחיקה ופיצול בסיבוכיות $O(\log N)$.
 - **מזהים יציבים וסדר שברירי:** הקצאת מזהי ULID לכל צומת מבני וניהול סדר פסקאות באמצעות אינדוקס שברירי (Fractional Indexing).
 - **ניהול טרנזקציות וביטול/שחזור:** `[יכולת מאומתת]` קליטת שינויים כדלתאות הפיכות (Invertible Deltas) וניהול מחסנית Undo/Redo מושלמת ללא נעילות וללא תופעות לוואי.
-- **שער נרמול קלט טיפוגרפי עברי (Hebrew Typographic Normalizer - ת"י 6100):** `[המלצה ארכיטקטונית]`
-  בניגוד לנרמול Unicode NFD סטנדרטי – אשר ממיין דיאקריטים לפי ערכי Canonical Combining Class (CCC) עולים ובכך הופך באופן שגוי את סדר הניקוד, הדגש והשׁין (קמץ CCC=18 מוקדם לדגש CCC=21, ונקודת שׁין CCC=24 נדחקת לסוף) – שער הנרמול של TOK אוכף את הסדר הדקדוקי והטיפוגרפי המוגדר בתקן ישראלי ת"י 6100:
+- **שער נרמול קלט טיפוגרפי עברי קנוני (Canonical Hebrew Typographic Normalizer):** `[המלצה ארכיטקטונית]`
+  בניגוד לנרמול Unicode NFD סטנדרטי – אשר ממיין דיאקריטים לפי ערכי Canonical Combining Class (CCC) עולים ובכך הופך באופן שגוי את סדר הניקוד, הדגש והשׁין (קמץ CCC=18 מוקדם לדגש CCC=21, ונקודת שׁין CCC=24 נדחקת לסוף) – שער הנרמול של TOK אוכף סדר דקדוקי וטיפוגרפי עברי קנוני:
   $$\text{Base Letter [U+05D0-U+05EA]} \longrightarrow \text{Shin/Sin Dot [U+05C1-U+05C2]} \longrightarrow \text{Dagesh/Mapiq [U+05BC]} \longrightarrow \text{Niqqud [U+05B0-U+05BB, U+05C7]} \longrightarrow \text{Meteg [U+05BD]} \longrightarrow \text{Te'amim [U+0591-U+05AF]}$$
   - פירוק אוטומטי של תווים מורכבים (כגון טווח הליגטורות העבריות ההיסטוריות ביוניקוד `U+FB2A..U+FB4E`) לרכיביהם הבסיסיים לפי סדר זה.
   - הבטחת תאימות מלאה לחוקי ההקשר של טבלאות OpenType GPOS (`ccmp`, `mark`, `mkmk`) במנוע HarfBuzz, ומניעת שיבושי מיקום של נקודות שׁין/שׂין ודגשים.
@@ -384,9 +384,9 @@ graph TB
   - בטקסט תורני צפוף ורציף (תלמוד, שו"ת, מקראות גדולות ללא שבירות פרק) התכנסות ב-1–3 עמודים מתרחשת ב-**5.7% בלבד**, וקסקדות גלישה מתפשטות על פני ממוצע של 43 עמודים ובמקרים מסוימים 50 עד 100 עמודים.
   - הודות למהירות העימוד הטהורה של ליבת ה-Rust (כ-0.1–0.2ms לעמוד בודד), קסקדה מסיבית של 50 עמודים מעומדת במלואה בפחות מ-**10 מילי-שניות** ($50 \times 0.2\text{ms} = 10\text{ms}$), עמוק בתוך תקציב הפריים של 16.67ms (60 FPS), כאשר תהליכוני `rayon` ברקע ווירטואליזציית DOM (3 עמודים פעילים) שומרים על אפס השהיית UI.
 
-## 3.5 מנוע התצוגה הוויזואלי (Presentation Sink - Vivliostyle / Chromium)
-- **רינדור גופנים ואלמנטים:** `[יכולת מאומתת]` ציור הדפים המעומדים באמצעות מנוע Blink/Skia של דפדפן Chromium.
-- **תצוגת כפולות עמודים:** פריסת עמודי ימין ושמאל במרחב ה-Viewport.
+## 3.5 מנוע התצוגה הוויזואלי (Presentation Sink - SpreadCanvas & PageDomVirtualizer / Chromium)
+- **היטל גיאומטרי דטרמיניסטי (`SpreadCanvas`):** `[יכולת מאומתת]` הקרנה ישירה של מבני `PageLayoutBox` (ביחידות `pt`) מ-`tok-cli` לאלמנטי DOM ממוקמים במדויק ורינדורם באמצעות מנוע Blink/Skia של דפדפן Chromium.
+- **תצוגת כפולות עמודים ווירטואליזציה (`PageDomVirtualizer`):** פריסת עמודי ימין ושמאל במרחב ה-Viewport תוך שמירת חלון פעיל של 3 עמודים `[K-1, K, K+1]` בלבד ב-DOM.
 - **זום גרפי חומרתי:** הפעלת טרנספורמציות CSS Scale על קונטיינר התצוגה ללא הפעלת מנגנון Layout מחדש של הדפדפן.
 
 ## 3.6 צינור קדם-דפוס נייטיב (Native Pre-Press Engine - Rust)
@@ -414,11 +414,11 @@ graph TB
 | :--- | :--- | :--- | :--- |
 | **שפת הליבה (Core Engine)** | **Rust** (מהדורת 2024–2026) | בטיחות זיכרון מוחלטת ללא Garbage Collector, ביצועי על המקבילים ל-C++, ניצול מקבילי קל ובטוח (Rayon), תמיכה מצוינת ב-SIMD. | `[המלצה ארכיטקטונית]` |
 | **שפת הממשק (UI & Chrome)** | **TypeScript** מעל סביבת Web | קצב פיתוח ואיטרציה מהיר, עושר ספריות ממשק, גמישות עיצובית באמצעות CSS מודרני ו-SVG. | `[המלצה ארכיטקטונית]` |
-| **מעטפת שולחן עבודה (Desktop Shell)** | **Hardened Lean Electron** (נבחר לאחר בחינת חלופות מול **Tauri 2.0** ו-**Qt 6 / C++**) | מבטיח מנוע Chromium ו-Blink זהה לחלוטין ב-100% בכל הפלטפורמות (Windows, macOS, Linux), מונע סטיות חלוקת עמודים ב-Vivliostyle, ומאפשר חיבור ישיר של ליבת ה-Rust ב-Node-API (napi-rs) באפס-העתקה. מעטפת Qt 6 נפסלה בשל סיכוני בטיחות זיכרון ב-C++, ארכיטקטורת עריכה מסורבלת מול הווב, תקורת רישוי מסחרי/LGPLv3, ועיכוב בגרסאות ה-Chromium המוטמעות ב-QtWebEngine. | `[המלצה ארכיטקטונית]` |
-| **עיצוב גופנים (Text Shaping)** | **`harfbuzz-sys`** (FFI ל-HarfBuzz) עם גיבוי **`rustybuzz`** | תקן התעשייה העולמי הבלתי מעורער לטיפול בטבלאות OpenType מורכבות בעברית (`mark`, `mkmk`), תאימות מלאה לרינדור הדפדפן. | `[המלצה ארכיטקטונית]` |
+| **מעטפת שולחן עבודה (Desktop Shell)** | **Hardened Lean Electron** (נבחר לאחר בחינת חלופות מול **Tauri 2.0** ו-**Qt 6 / C++**) | מבטיח מנוע Chromium ו-Blink זהה לחלוטין ב-100% בכל הפלטפורמות (Windows, macOS, Linux), מונע סטיות תצוגה בין מערכות הפעלה, ומאפשר חיבור ישיר של ליבת ה-Rust. מעטפת Qt 6 נפסלה בשל סיכוני בטיחות זיכרון ב-C++, ארכיטקטורת עריכה מסורבלת מול הווב, תקורת רישוי מסחרי/LGPLv3, ועיכוב בגרסאות ה-Chromium המוטמעות ב-QtWebEngine. | `[המלצה ארכיטקטונית]` |
+| **עיצוב גופנים (Text Shaping)** | **`rustybuzz`** (מימוש HarfBuzz ב-Rust טהור) | תקן התעשייה לטיפול בטבלאות OpenType מורכבות בעברית (`mark`, `mkmk`, `kern`, `liga`), בבטיחות זיכרון של 100% ב-Rust. | `[יכולת מאומתת]` |
 | **עיבוד דו-כיווניות (Bidi Engine)** | **`unicode-bidi`** (Rust) | מימוש מלא ומאומת של תקן Unicode Standard Annex #9 (UAX #9) לפירוק פסקאות להרצות כיווניות. | `[יכולת מאומתת]` |
-| **פרוטוקול תקשורת IPC** | **FlatBuffers** מעל N-API ו-SharedArrayBuffer | סריאליזציה בינארית באפס-העתקה (Zero-Copy Deserialization), מונעת לחלוטין את צוואר הבקבוק ותקורת ה-CPU של JSON.stringify/parse. | `[המלצה ארכיטקטונית]` |
-| **שכבת תצוגה מעומדת** | **Vivliostyle Core** (מופעל ב-Chromium WebContents) | מימוש מוביל של תקני CSS Paged Media ו-CSS Fragmentation, תצוגת כפולות עמודים מהירה על המסך. | `[יכולת מאומתת]` |
+| **פרוטוקול תקשורת IPC** | **FlatBuffers / Binary Framing** (`tok-ipc`) וגשר **`tok-cli`** | תשתית מסגרות בינאריות ב-`tok-ipc` לצד תקשורת תהליכי משנה דטרמיניסטית מול `tok-cli`. | `[המלצה ארכיטקטונית]` |
+| **שכבת תצוגה מעומדת** | **`SpreadCanvas` (`tok-ui`) + `PageDomVirtualizer` (`tok-viewer`)** | היטל DOM דטרמיניסטי המונחה ישירות מקואורדינטות `PageLayoutBox` (ב-`pt`) עם וירטואליזציה של 3 עמודים פעילים, ללא תלות ב-Polyfills חיצוניים. | `[יכולת מאומתת]` |
 | **שכבת אינטראקציה ועריכה** | **HTML5 Canvas 2D / WebGL Overlay** | ציור סמן מהבהב, מלבני בחירה, ידיות שינוי גודל וסרגלים ב-120 FPS קבועים ללא יצירת אלמנטי DOM כבדים. | `[המלצה ארכיטקטונית]` |
 | **עגינת חלונות ממשק** | **`dockview`** (TypeScript) | מערכת פאנלים ועגינה מתקדמת התומכת בפיצול, הצמדה, טאבים וחלונות צפים נפרדים בדומה ל-VS Code ו-InDesign. | `[יכולת מאומתת]` |
 | **סביבת עבודה שוטפת** | **SQLite** במצב **WAL** (Write-Ahead Logging) | עמידות מושלמת בפני קריסות (ACID), שמירה אוטומטית חלקה ברקע ללא נעילת UI, שליפת עמודים אקראית באלפיות השנייה. | `[יכולת מאומתת]` |
@@ -441,16 +441,16 @@ graph TB
   5. כבילת המערכת ל-DOM תמנע כל אפשרות עתידית להחלפת מנוע הרינדור לנייטיב (Skia/Vello).
 
 ## 5.2 פסילה 2: שימוש ב-`contenteditable="true"` לעריכת טקסט מעומד
-- **הטכנולוגיה שנפסלה:** הפעלת תכונת ה-`contenteditable` המובנית של הדפדפן על גבי עמודי ה-Vivliostyle.
+- **הטכנולוגיה שנפסלה:** הפעלת תכונת ה-`contenteditable` המובנית של הדפדפן על גבי מכולות עמודי ה-DOM המעומדים.
 - **הנימוק המדויק:** `[מגבלה]`
-  בעימוד מקצועי, טקסט נחתך ומפוצל בין מכולות עמודים שונות (CSS Fragmentation). בעת חציית מעבר עמוד, מנגנון ה-`contenteditable` של הדפדפן נשבר לחלוטין: הסמן קופץ באופן בלתי נשלט, הדפדפן מזריק תגיות `<span>` ו-`<div>` שגויות לתוך נקודת החיתוך, מבנה הפרגמנטציה מושחת, ונוצר קיפאון והבהובי מסך חמורים (Screen Flickering).
+  בעימוד מקצועי, טקסט נחתך ומפוצל בין מכולות עמודים שונות (Page Containers). בעת חציית מעבר עמוד, מנגנון ה-`contenteditable` של הדפדפן נשבר לחלוטין: הסמן קופץ באופן בלתי נשלט, הדפדפן מזריק תגיות `<span>` ו-`<div>` שגויות לתוך נקודת החיתוך, מבנה הפרגמנטציה מושחת, ונוצר קיפאון והבהובי מסך חמורים (Screen Flickering).
 
 ## 5.3 פסילה 3: Tauri כמעטפת שולחן העבודה הראשית בשלב הנוכחי
 - **הטכנולוגיה שנפסלה:** שימוש ב-Tauri v2 עם ה-WebView של מערכת ההפעלה כמעטפת שולחן העבודה של TOK.
 - **הנימוק המדויק:** `[מגבלה חמורה]`
-  Tauri מסתמכת על ה-WebView המקומי של מערכת ההפעלה: WebView2 (Chromium/Blink) ב-Windows, לעומת WKWebView (WebKit) ב-macOS. מנוע Vivliostyle מתבסס על התנהגויות CSS Paged Media וחלוקת עמודות שמרונדרות באופן שונה ב-Blink לעומת WebKit. בתוכנת DTP מקצועית, שבה קובץ הנפתח ב-Windows חייב לקבל פריסת עמודים זהה עד לרמת המילימטר למחשב Mac – פער זה הוא סיכון בלתי קביל. לכן נבחרה מעטפת Electron מותאמת (Hardened Lean Electron) המבטיחה מנוע Chromium אחיד ב-100% בכל הפלטפורמות.
+  Tauri מסתמכת על ה-WebView המקומי של מערכת ההפעלה: WebView2 (Chromium/Blink) ב-Windows, לעומת WKWebView (WebKit) ב-macOS. היטל הגופנים ומטריקות התת-פיקסל של ה-DOM מרונדרים באופן שונה ב-Blink לעומת WebKit. בתוכנת DTP מקצועית, שבה קובץ הנפתח ב-Windows חייב לקבל תצוגת עמודים זהה עד לרמת המילימטר למחשב Mac – פער זה הוא סיכון בלתי קביל. לכן נבחרה מעטפת Electron מותאמת (Hardened Lean Electron) המבטיחה מנוע Chromium אחיד ב-100% בכל הפלטפורמות.
 
-## 5.4 פסילה 4: ייצור קובצי PDF לדפוס דרך פונקציית ההדפסה של Chromium / Vivliostyle
+## 5.4 פסילה 4: ייצור קובצי PDF לדפוס דרך פונקציית ההדפסה של Chromium
 - **הטכנולוגיה שנפסלה:** הסתמכות על `Page.printToPDF` של דפדפן Chromium להפקת קובצי הדפוס הסופיים.
 - **הנימוק המדויק:** `[מגבלה חמורה ומאומתת]`
   מנוע הרינדור של Chromium (Blink ו-Skia PDF Backend) תוכנן למסכים. הוא ממיר את כל הצבעים והתמונות למרחב sRGB, אינו תומך כלל ב-DeviceCMYK טהור, אינו תומך בצבעי ספוט (Spot Colors), אינו מאפשר הגדרת TrimBox ו-BleedBox לפי תקן ISO 15930, ואינו מסוגל להזריק את מילון ה-`OutputIntent` הנדרש לתקני PDF/X-1a ו-PDF/X-4. קובץ כזה ייפסל מיידית בכל בית דפוס מקצועי.
@@ -465,10 +465,10 @@ graph TB
 - **הנימוק המדויק:** `[מגבלה]`
   אלגוריתם חמדני שובר את השורה רק כשהמילה הבאה חורגת מגבול המסגרת. התוצאה היא מרווחים בלתי אחידים, שורות צפופות לצד שורות רופפות, ותופעות נפוצות של "נהרות לבנים" (Rivers of White) היורדים לאורך הפסקה. המערכת מחייבת שימוש באלגוריתם Knuth-Plass המבצע אופטימיזציה גלובלית על הפסקה כולה.
 
-## 5.7 פסילה 7: Paged.js כמנוע העימוד והתצוגה החלופי
-- **הטכנולוגיה שנפסלה:** שימוש בספריית Paged.js במקום Vivliostyle.
+## 5.7 פסילה 7: ספריות CSS Paged Media בדפדפן (`Paged.js` / Polyfills חיצוניים) כמנוע עימוד
+- **הטכנולוגיה שנפסלה:** שימוש בספריות Polyfill בדפדפן (`Paged.js` או ספריות CSS Fragmentation חיצוניות) כמנוע חישוב העימוד והתצוגה.
 - **הנימוק המדויק:** `[מגבלה]`
-  Paged.js מפגינה ביצועים נמוכים ביותר במסמכים מעל 50 עמודים, סובלת מחוסר יציבות כרוני בחישוב הערות שוליים מורכבות, ואינה בשלה לטיפול בעברית מורכבת בהשוואה למנוע הבוגר של Vivliostyle.
+  ספריות אלו מפגינות ביצועים נמוכים במסמכים מרובי עמודים, סובלות מחוסר יציבות בחישוב הערות שוליים מורכבות ומקראות גדולות, ואינן דטרמיניסטיות. לכן TOK מבצעת את כל העימוד ב-Rust (`tok-typeset`) ומקרינה את `PageLayoutBox` ישירות להיטל DOM דטרמיניסטי (`SpreadCanvas` + `PageDomVirtualizer`).
 
 ## 5.8 פסילה 8: סביבת Python מוטמעת (PyO3) כמנוע התוספים הפנימי
 - **הטכנולוגיה שנפסלה:** הטמעת מפרש Python בתוך ליבת התוכנה עבור תוספים.
@@ -500,7 +500,7 @@ graph TB
 
   2. **ארכיטקטורת עריכת טקסט דו-כיוונית מסורבלת ונחיתות מול אקוסיסטם הווב:** `[מגבלה]`
      מערכת הטקסט המובנית של Qt (`QTextDocument`, `QTextCursor`, `QTextLayout`) תוכננה עבור עריכת תמלילים משרדית ליניארית (Word Processing). היא אינה תומכת באופן טבעי במסגרות מקושרות רב-טוריות (Linked Flows), בפיצול מקטעים חוצה-עמודים לפי תקני CSS Paged Media, או בסנכרון רב-תזרימי הנדרש לספרי קודש (ש"ס ומקראות גדולות).
-     אם נבחר להשתמש ב-Qt רק כמעטפת המארחת את `QWebEngineView` (עבור Vivliostyle): נוצרת שכבת תיווך כפולה ומסורבלת (Double IPC Hop) – כל אירוע עריכה נדרש לעבור מה-DOM של WebEngine דרך גשר `QWebChannel` (WebSocket/IPC פנימי) אל ה-C++ של Qt, ומשם דרך C-FFI אל ליבת ה-Rust, ובחזרה. תקורת סריאליזציה זו גוזרת השהיות של עשרות מילי-שניות ומבטלת את היעד של הקלדה חלקה ב-120 FPS.
+     אם נבחר להשתמש ב-Qt רק כמעטפת המארחת את `QWebEngineView` (עבור תצוגת ה-DOM): נוצרת שכבת תיווך כפולה ומסורבלת (Double IPC Hop) – כל אירוע עריכה נדרש לעבור מה-DOM של WebEngine דרך גשר `QWebChannel` (WebSocket/IPC פנימי) אל ה-C++ של Qt, ומשם דרך C-FFI אל ליבת ה-Rust, ובחזרה. תקורת סריאליזציה זו גוזרת השהיות של עשרות מילי-שניות ומבטלת את היעד של הקלדה חלקה ב-120 FPS.
      יתרה מזו, אקוסיסטם הווב וה-TypeScript מעניק יתרון עצום במהירות הפיתוח והגמישות: שימוש במערכות עגינת פאנלים מובילות (`dockview`), עיצוב וקטורי מודרני ב-CSS/SVG, ומאות ספריות UI קלות משקל שאינן קיימות ב-QML/Qt Widgets.
 
   3. **מכשולי רישוי משפטיים וסיכונים מסחריים (LGPLv3 vs. Commercial Qt):** `[מגבלה משפטית חמורה]`
@@ -518,7 +518,7 @@ graph TB
 
 # פרק 6: תזרים נתונים מקצה לקצה (End-to-End Data Flow)
 
-## 6.1 תיאור מחזור החיים השלם: עריכה ← מודל מסמך ← HTML/CSS ← Vivliostyle ← עמודים מרונדרים
+## 6.1 תיאור מחזור החיים השלם: עריכה ← מודל מסמך ← `PageLayoutBox` (`pt`) ← `SpreadCanvas` & `PageDomVirtualizer` ← עמודים מרונדרים
 
 מחזור החיים של פעולת עריכה ב-TOK מתוכנן לפעול בסנכרון רב-שכבתי מדויק:
 
@@ -529,28 +529,28 @@ graph TB
 [2. Optimistic UI Caret Advance (<16ms)]
        │  (הסמן מוזז מקומית לפי מטריקות מקומיות לשמירה על חוויית הקלדה חלקה)
        ▼
-[3. Binary IPC Command (FlatBuffers)]
-       │  (פקודת InsertText מועברת מ-TypeScript ל-Rust Core דרך SharedArrayBuffer)
+[3. IPC / CLI Typeset Bridge Command]
+       │  (העברת פעולת העריכה מ-TypeScript ל-Rust Core)
        ▼
 [4. Transaction Application on TDM AST]
        │  (הטרנזקציה מוחלת על עץ ה-B-Tree ב-Rust; נוצר Snapshot קפוא חדש בשיתוף מבני)
        │  (דלתא הופכית נדחפת למחסנית ה-Undo; נרשמת טרנזקציה ל-SQLite WAL)
        ▼
 [5. Off-Thread Typesetting Worker (Rayon)]
-       │  (פסקה P מעומדת מחדש ב-Knuth-Plass + HarfBuzz FFI)
+       │  (פסקה P מעומדת מחדש ב-Knuth-Plass + rustybuzz + Cassowary + Co-Pagination)
        ▼
 [6. Convergence Check (עקרון ההתכנסות)]
        ├── [השבירה בעמוד K לא שינתה נקודת יציאה] ──► [עצירה מידית! שאר הספר תקף]
        └── [השבירה בעמוד K גלשה לעמוד K+1] ──────► [דחיפה מדורגת עד התכנסות ב-1-3 עמודים]
        ▼
-[7. Spatial Index & Geometry Tree Update]
-       │  (עדכון מלבני הגליפים, השורות והעמודים ב-R-Tree)
+[7. Spatial Index & PageLayoutBox Update]
+       │  (עדכון מלבני הגליפים, השורות, המסגרות והעמודים ביחידות pt)
        ▼
-[8. Pre-paginated HTML/CSS Projection Compiler]
-       │  (ייצור מקטעי HTML מובנים מראש אך ורק עבור העמודים שהשתנו)
+[8. Deterministic DOM Projection (SpreadCanvas)]
+       │  (הקרנת PageLayoutBox למכולות עמודים ושורות מדויקות עבור העמודים בחלון הפעיל)
        ▼
-[9. Injection to Vivliostyle WebContents Sink]
-       │  (הזרקת ה-HTML המעודכן ל-DOM של עמודי ה-Viewport הפעילים)
+[9. Injection to PageDomVirtualizer Viewport Sink]
+       │  (הזרקת ה-HTML המעודכן ל-DOM של 3 עמודי ה-Viewport הפעילים [K-1, K, K+1])
        ▼
 [10. GPU Compositing & Screen Paint]
        │  (מנוע Blink של Chromium מרנדר את הגליפים על המסך)
@@ -567,25 +567,25 @@ sequenceDiagram
     actor User as משתמש / מקלדת
     participant Overlay as שכבת כיסוי שקופה (Canvas)
     participant UI_Host as מעטפת UI (TypeScript)
-    participant IPC as גשר בינארי (FlatBuffers)
+    participant IPC as גשר תקשורת (IPC / CLI Bridge)
     participant RustCore as ליבת המערכת (Rust TDM)
-    participant Typesetter as מעמד ברקע (Knuth-Plass/HarfBuzz)
-    participant VivSink as מנוע תצוגה (Vivliostyle/Chromium)
+    participant Typesetter as מעמד ברקע (Knuth-Plass/rustybuzz)
+    participant DomSink as מנוע תצוגה (SpreadCanvas + PageDomVirtualizer)
 
     User->>Overlay: הקשת מקש (תו 'א' בעברית)
     Overlay->>Overlay: הזזת סמן מקומית אופטימית (<16ms)
     Overlay->>UI_Host: אירוע קלט סמנטי
-    UI_Host->>IPC: פקודת InsertText (Binary Buffer)
+    UI_Host->>IPC: פקודת InsertText / Typeset
     IPC->>RustCore: החלת טרנזקציה
     RustCore->>RustCore: נרמול יוניקוד ויצירת Snapshot חדש
     RustCore->>Typesetter: חישוב עימוד אינקרמנטלי
-    Typesetter->>Typesetter: עיצוב HarfBuzz + Knuth-Plass
+    Typesetter->>Typesetter: עיצוב rustybuzz + Knuth-Plass + Cassowary
     Typesetter->>Typesetter: בדיקת התכנסות נקודת שבירה (Convergence)
-    Typesetter-->>RustCore: עץ גיאומטריה מעודכן
+    Typesetter-->>RustCore: עץ PageLayoutBox מעודכן (ב-pt)
     RustCore->>RustCore: כתיבה ל-SQLite WAL ברקע
-    RustCore->>IPC: קומפילציה ל-Pre-paginated HTML
-    IPC->>VivSink: עדכון DOM עבור עמוד K בלבד
-    VivSink->>VivSink: רינדור וציור GPU
+    RustCore->>IPC: החזרת תוצאות PageLayoutBox
+    IPC->>DomSink: עדכון DOM עבור עמוד K בחלון הפעיל בלבד
+    DomSink->>DomSink: רינדור וציור GPU
     IPC->>Overlay: אישור מיקום סמן גיאומטרי סופי
     Overlay->>Overlay: ציור סמן ובחירה מסונכרנים ב-100%
 ```
@@ -669,7 +669,7 @@ pub trait SpatialGeometryTree {
 ```
 
 ## 7.3 ממשק מנוע הרינדור המופשט (`RenderBackend`)
-`[המלצה ארכיטקטונית]` ממשק המאפשר החלפה עתידית של Vivliostyle במנוע נייטיב ללא שינוי בליבת TOK:
+`[המלצה ארכיטקטונית]` ממשק המאפשר החלפה עתידית של היטל ה-DOM (`SpreadCanvas`) במנוע גרפי נייטיב (Skia/Vello) ללא שינוי בליבת TOK:
 
 ```rust
 pub trait RenderBackend: Send + Sync {
@@ -700,8 +700,8 @@ interface CoordinateBridge {
 
 # פרק 8: עקרונות עיצוב מודל המסמך (Document Model Design Principles)
 
-## 8.1 ניתוק מוחלט מ-HTML/CSS ומ-Vivliostyle
-`[המלצה ארכיטקטונית]` מודל המסמך (TDM) מייצג אך ורק סמנטיקה טיפוגרפית: "פסקה", "הרצת טקסט", "סגנון תו", "הערת שוליים", "עוגן איור", "מדור". המודל אינו מכיל שמות תגיות HTML (`<p>`, `<div>`), אינו מכיל מחלקות CSS, ואינו מניח קיומו של מנוע פריסה מבוסס עמודות ווב. הפיכת המודל ל-HTML/CSS היא פעולת קומפילציה זמנית בלבד.
+## 8.1 ניתוק מוחלט מ-HTML/CSS וממנועי תצוגת דפדפן
+`[המלצה ארכיטקטונית]` מודל המסמך (TDM) מייצג אך ורק סמנטיקה טיפוגרפית: "פסקה", "הרצת טקסט", "סגנון תו", "הערת שוליים", "עוגן איור", "מדור". המודל אינו מכיל שמות תגיות HTML (`<p>`, `<div>`), אינו מכיל מחלקות CSS, ואינו מניח קיומו של מנוע פריסה מבוסס עמודות ווב. הפיכת המודל ל-HTML/CSS או להיטל `SpreadCanvas` מתוך `PageLayoutBox` היא פעולת קומפילציה חד-כיוונית בלבד.
 
 ## 8.2 אי-מוטביליות (Immutability) ושיתוף מבני (Structural Sharing)
 - **Persistent Tree Structure:** `[יכולת מאומתת]` המודל מבוסס על עצי RRB-Vector ו-B-Tree. כל שינוי בעץ אינו דורס נתונים קיימים, אלא מייצר עותק של נתיב הצמתים שהשתנו (Path Copying) תוך הצבעה על שאר חלקי העץ הקודם (Structural Sharing).
@@ -734,7 +734,7 @@ $$\text{TextAnchor} = \langle \text{NodeID: ULID}, \, \text{FractionalOffsetKey}
 `[יכולת מאומתת]` מניעת השימוש במחרוזות שטוחות (Flat Strings). כל תזרים טקסט מנוהל באמצעות עץ B-Tree Rope המחלק את הטקסט לבלוקים בני 1KB עד 4KB. פעולות הכנסה, מחיקה ופיצול מבוצעות בזמן $O(\log N)$, מה שמאפשר טיפול שוטף בספרים בני מיליוני מילים ללא השהיות זיכרון.
 
 ## 8.7 מפרט מיפוי CSS Named Pages ותמיכה בכפולות עמודים עבריות (RTL Spread Progression)
-`[המלצה ארכיטקטונית]` כדי לגשר בין מבנה המדורים ותבניות העמוד (Master Pages) של מודל המסמך (TDM) לבין מנוע התצוגה Vivliostyle, מנוע ה-Pre-Pagination של TOK מייצר גיליון סגנונות מובנה המתבסס על תקן W3C CSS Paged Media Module Level 3 ו-CSS Generated Content for Paged Media (GCPM).
+`[המלצה ארכיטקטונית]` כדי לגשר בין מבנה המדורים ותבניות העמוד (Master Pages) של מודל המסמך (TDM) לבין היטל התצוגה (`SpreadCanvas`) וייצוא ה-HTML (`tok-cli render-html`), מנוע ה-Pre-Pagination של TOK מייצר גיליון סגנונות מובנה המתבסס על תקן W3C CSS Paged Media Module Level 3 ו-CSS Generated Content for Paged Media (GCPM).
 
 ### 1. עקרון כיווניות הכפולות בספר עברי (RTL Spread Mapping) `[יכולת מאומתת]`
 בספר הנקרא מימין לשמאל:
@@ -862,7 +862,7 @@ $$\text{TextAnchor} = \langle \text{NodeID: ULID}, \, \text{FractionalOffsetKey}
 לחלופין, ניתן להגדיר מצב סמן יחיד מבוסס זיקה (`Single Caret with Affinity`) עם חיווי כיווני עדין בראש הסמן. שני המודלים מרונדרים בשכבת ה-Canvas Overlay ב-120 FPS חלקים ללא מגע ב-DOM. `[יכולת מאומתת]`
 
 ## 9.2 שכבת הכיסוי הגרפית השקופה (Transparent Canvas Overlay)
-`[המלצה ארכיטקטונית]` מעל שטח התצוגה של עמודי ה-Vivliostyle מוצבת שכבת כיסוי שקופה מבוססת HTML5 Canvas / WebGL. 
+`[המלצה ארכיטקטונית]` מעל שטח התצוגה של עמודי ה-DOM המוקרנים (`SpreadCanvas`) מוצבת שכבת כיסוי שקופה מבוססת HTML5 Canvas (`CanvasInteractionOverlay` בחבילת `tok-canvas`). 
 - השכבה מקבלת את כל אירועי העכבר (`pointerdown`, `pointermove`, `pointerup`).
 - הטקסט ב-DOM שמתחת מקבל `user-select: none;` ו-`pointer-events: none;` כדי למנוע חיכוך ושיבוש על ידי מנגנון הבחירה של הדפדפן.
 - כל הציורים האינטראקטיביים (סמן מהבהב, פוליגוני הדגשה של טקסט מסומן, גבולות תיבות וידיות גרירה) מבוצעים ישירות ב-Canvas ב-120 FPS.
@@ -938,9 +938,9 @@ div.tok-page {
 }
 ```
 
-### 3. נטרול אלגוריתם החיתוך המשני של Vivliostyle (Fragmentation Suppression) `[יכולת מאומתת]`
-כאשר Vivliostyle מקבל מסמך HTML שחולק מראש לעמודי `.tok-page` סגורים, קיים סיכון שמנגנון ה-Auto-Pagination שלו יזהה עודף זעיר ויפצל עמוד לשניים.  
-TOK מגדירה את Vivliostyle במצב **Single-Page Atomic Render Mode**: המנוע משמש לעיבוד ה-CSS Paged Media (שוליים, Bleed, כותרות רצות) אך אלגוריתם ה-Fragmentation מנוטרל לחלוטין לגבי תוכן הדפים הפנימי, תוך שמירה על עמודה בודדת קבועה (`column-count: 1`).
+### 3. נטרול פיצול משני בדפדפן ומצב רינדור עמוד אטומי (Single-Page Atomic Render Mode) `[יכולת מאומתת]`
+כאשר `SpreadCanvas` מקבל מערך עמודים שחולקו מראש במבני `PageLayoutBox` (ביחידות `pt`) למכולות `.tok-page` סגורות, קיים סיכון שמנגנון הפריסה של הדפדפן יזהה עודף תת-פיקסלי וישבור שורות או יגלוש.  
+לכן TOK מרנדרת כל עמוד במצב **Single-Page Atomic Render Mode**: כל מסגרת, שורה והערת שוליים ממוקמת לפי קואורדינטות ה-`PageLayoutBox` המחושבות ב-Rust (`tok-typeset`), ואלגוריתם ה-Fragmentation של הדפדפן מנוטרל לחלוטין לגבי תוכן הדפים הפנימי (`break-inside: avoid; overflow: hidden`).
 
 ## 9.7 אסטרטגיית כיול סמן בזמן אמת (Real-Time Caret Resynchronization Strategy)
 `[המלצה ארכיטקטונית]`
@@ -1088,27 +1088,25 @@ TOK מגדירה את Vivliostyle במצב **Single-Page Atomic Render Mode**: �
 [TOK Application System]
  │
  ├──► [Rust Core Dependencies (Cargo)]
- │     ├── harfbuzz-sys (v0.6+) ──► קישור FFI רשמי ל-HarfBuzz C++ לעיצוב OpenType מתקדם
+ │     ├── rustybuzz (v0.14+) ────► עיצוב גופנים OpenType ב-Rust טהור (HarfBuzz port)
  │     ├── unicode-bidi (v0.3+) ──► פירוק פסקאות Bidi לפי תקן Unicode UAX #9
  │     ├── unicode-normalization ──► נרמול יוניקוד קנוני (NFC/NFD)
+ │     ├── cassowary (v0.3+) ─────► פותר אילוצים ליניארי למסגרות מקראות גדולות וש"ס
  │     ├── rayon (v1.10+) ───────► מאגר תהליכונים מקבילי לחישובי עימוד
  │     ├── ropey (v1.6+) ────────► מבנה נתונים B-Tree Rope לניהול טקסט ארוך
  │     ├── ulid (v1.1+) ─────────► יצירת מזהים יציבים ממוינים לקסיקוגרפית
- │     ├── flatbuffers (v24.3+) ─► סריאליזציה בינארית באפס-העתקה ל-IPC
  │     ├── rusqlite (v0.31+) ────► ניהול מסד SQLite פנימי במצב WAL
  │     ├── zstd (v0.13+) ────────► דחיסה ופריסה מהירה של חבילת המסמך
- │     ├── zip (v2.1+) ──────────► ניהול ארכיב ZIP של קובץ ה-.tok
- │     ├── pdf-writer (v0.12+) ──► כתיבה ישירה של אובייקטי PDF בינאריים לדפוס
- │     ├── lcms2-sys (v2.16+) ───► ניהול צבע תקני (LittleCMS) ל-CMYK ופרופילי ICC
- │     ├── wasmtime (v24.0+) ────► זמן ריצה מבודד להרצת תוספי WASI 0.2
- │     └── rquickjs (v0.6+) ─────► מנוע QuickJS מבודד לסקריפטינג של מעצבים
+ │     ├── zip (v0.6+) ──────────► ניהול ארכיב ZIP של קובץ ה-.tok
+ │     ├── pdf-writer (v0.10+) ──► כתיבה ישירה של אובייקטי PDF/X-1a בינאריים לדפוס
+ │     └── sha2 (v0.10+) ────────► חתימות קריפטוגרפיות (SHA-256) לנכסים ואימות דטרמיניזם
  │
- ├──► [Electron & UI Dependencies (npm/pnpm)]
- │     ├── electron (v32+) ──────► מעטפת שולחן עבודה עם מנוע Chromium אחיד
- │     ├── @vivliostyle/core ────► מנוע עימוד תצוגתי CSS Paged Media
- │     ├── dockview (v1.3+) ─────► מערכת עגינת חלונות, פאנלים וסביבות עבודה
- │     ├── flatbuffers ──────────► פענוח מהיר של נתוני גיאומטריה ב-TypeScript
- │     └── lucide / canvas ──────► אייקונים וקטוריים וספריות עזר לציור
+ ├──► [Electron & UI Dependencies (npm)]
+ │     ├── electron (v29+) ──────► מעטפת שולחן עבודה עם מנוע Chromium אחיד
+ │     ├── tok-ui (SpreadCanvas) ► היטל DOM דטרמיניסטי מתוך קואורדינטות PageLayoutBox (pt)
+ │     ├── tok-viewer ───────────► מנהל וירטואליזציה של עמודים (PageDomVirtualizer)
+ │     ├── tok-canvas ───────────► שכבת כיסוי שקופה (CanvasInteractionOverlay) וסמן RTL
+ │     └── tok-story-editor ─────► עורך סיפור רציף (Unpaginated Story Editor)
  │
  └──► [System / External Tool Dependencies (Optional Bridges)]
        ├── pandoc (CLI subprocess) ──► גשר ייבוא חיצוני לקובצי ODT, LaTeX, DocBook
@@ -1121,9 +1119,9 @@ TOK מגדירה את Vivliostyle במצב **Single-Page Atomic Render Mode**: �
 
 | # | סיכון ארכיטקטוני מזוהה | חומרה | תיאור הסיכון ונקודת הכשל | תוכנית הפחתה מחייבת (Mitigation Plan) | סיווג |
 |---|---|---|---|---|---|
-| **R-1** | **מגבלות מנוע הדפסת Chromium/Vivliostyle ב-PDF** | **קריטית** | מנוע ההדפסה של הדפדפן ממיר הכל ל-sRGB, אינו תומך ב-CMYK, צבעי ספוט ותיבות דפוס PDF/X. | **אימוץ ארכיטקטורת צינור PDF דואלי:** Vivliostyle משמש לתצוגת מסך ואינטראקציה בלבד; מנוע Rust Native PDF עצמאי מפיק את קובצי ה-PDF/X לדפוס. | `[המלצה ארכיטקטונית]` |
+| **R-1** | **מגבלות מנוע הדפסת Chromium ב-PDF** | **קריטית** | מנוע ההדפסה של הדפדפן ממיר הכל ל-sRGB, אינו תומך ב-CMYK, צבעי ספוט ותיבות דפוס PDF/X. | **אימוץ ארכיטקטורת צינור PDF דואלי:** היטל ה-DOM (`SpreadCanvas`) משמש לתצוגת מסך ואינטראקציה בלבד; מנוע Rust Native PDF עצמאי (`tok-pdf`) מפיק את קובצי ה-PDF/X לדפוס. | `[המלצה ארכיטקטונית]` |
 | **R-2** | **נדידת פריסה ופער תת-פיקסלי (Layout Drift)** | **גבוהה** | חישובי שבירת שורות ב-Rust עשויים להתרנדר שונה ב-Chromium עקב הינטינג ועיגול פיקסלים. | **כפיית שורות קשיחה מהמודל ל-DOM:** ה-HTML המוזרק כולל מכולות שורה סגורות מראש (`<div class="tok-line">`), מה שמבטל לחלוטין את חופש השבירה של הדפדפן. | `[המלצה ארכיטקטונית]` |
-| **R-3** | **פערי רינדור בין WebKit ל-Blink במעטפות מערכת (Tauri)** | **גבוהה** | ב-Tauri, דפי Vivliostyle יתרנדרו שונה ב-Windows (Edge) לעומת Mac (Safari). | **פסילת Tauri ושימוש ב-Hardened Electron:** הבטחת מנוע Chromium זהה ב-100% בכל הפלטפורמות. | `[המלצה ארכיטקטונית]` |
+| **R-3** | **פערי רינדור בין WebKit ל-Blink במעטפות מערכת (Tauri)** | **גבוהה** | ב-Tauri, דפי המסמך יתרנדרו שונה ב-Windows (Edge) לעומת Mac (Safari). | **פסילת Tauri ושימוש ב-Hardened Electron:** הבטחת מנוע Chromium זהה ב-100% בכל הפלטפורמות. | `[המלצה ארכיטקטונית]` |
 | **R-4** | **התנגשויות סימני ניקוד וטעמי מקרא מרובים בעברית** | **בינונית-גבוהה** | באותיות הנושאות דגש, ניקוד וטעם, סימנים עלולים לדרוך זה על זה ולהפוך לבלתי קריאים. | 1. הפעלת טבלאות OpenType GPOS `mkmk`.<br>2. שער נרמול קנוני בכניסה למודל.<br>3. אלגוריתם עוקף התנגשויות אופטי (Optical Collision Resolver). | `[המלצה ארכיטקטונית]` |
 | **R-5** | **תנודות מחזוריות בעימוד הערות שוליים (Oscillation Thrashing)** | **בינונית** | הוספת הערת שוליים מצמצמת את העמוד ודוחפת את העוגן לעמוד הבא, בלולאה אינסופית. | **אלגוריתם תכנות דינמי עם ניקוד Badness מבוקר:** שילוב אלגוריתם TeX/Typst המאפשר פיצול מבוקר של הערות שוליים ארוכות על פני עמודים. | `[יכולת מאומתת]` |
 | **R-6** | **זליגת זיכרון וקיפאון בדפדפן במסמכי ענק** | **גבוהה** | החזקת מאות עמודים ב-DOM גורמת לקריסת תהליך ה-Renderer. | **Pre-Pagination ו-Viewport Virtualization:** החזקת 3 עמודים פעילים בלבד ב-DOM בכל רגע נתון. | `[המלצה ארכיטקטונית]` |
@@ -1138,11 +1136,11 @@ TOK מגדירה את Vivliostyle במצב **Single-Page Atomic Render Mode**: �
 1. **נעילה 1: ליבת המערכת ומודל המסמך ייכתבו אך ורק ב-Rust.** `[המלצה ארכיטקטונית]`
    שפת הליבה היא Rust. מודל המסמך, אלגוריתמי העימוד, ניהול הגופנים, עיצוב ה-HarfBuzz, מנוע הטרנזקציות ומערכת האחסון ימומשו ב-Rust לבטיחות זיכרון וביצועי על.
 
-2. **נעילה 2: עצמאות מוחלטת של מודל המסמך (TDM) מ-HTML, מ-CSS ומ-Vivliostyle.** `[המלצה ארכיטקטונית]`
+2. **נעילה 2: עצמאות מוחלטת של מודל המסמך (TDM) מ-HTML, מ-CSS וממנועי תצוגה.** `[המלצה ארכיטקטונית]`
    מודל המסמך הקנוני הוא עץ סמנטי עצמאי. אין להשתמש ב-DOM של הדפדפן כמודל נתונים, ואין לבצע מניפולציות DOM כמקור אמת של תוכן.
 
 3. **נעילה 3: ארכיטקטורת צינור רינדור דואלי (Dual Pipeline) עבור PDF ותצוגה.** `[המלצה ארכיטקטונית]`
-   מנוע הדפדפן ו-Vivliostyle מיועדים לתצוגת מסך ואינטראקציה בלבד. הפקת קובצי PDF/X תקניים לדפוס תבוצע באופן בלעדי על ידי מנוע ה-PDF הנייטיבי ב-Rust.
+   מנוע הדפדפן והיטל ה-DOM (`SpreadCanvas`) מיועדים לתצוגת מסך ואינטראקציה בלבד. הפקת קובצי PDF/X תקניים לדפוס תבוצע באופן בלעדי על ידי מנוע ה-PDF הנייטיבי ב-Rust (`tok-pdf`).
 
 4. **נעילה 4: פרימיטיבים טיפוגרפיים Bidi-First ו-RTL-First בכל שכבות המערכת.** `[המלצה ארכיטקטונית]`
    תמיכה בעברית, Bidi ו-RTL אינה תכונה שניתן "להוסיף מאוחר יותר". מודל הסמן, בדיקת הפגיעה (Hit-Testing), פריסת כפולות העמודים ושרשור המסגרות מתוכננים מן היסוד ל-RTL.
@@ -1165,8 +1163,8 @@ TOK מגדירה את Vivliostyle במצב **Single-Page Atomic Render Mode**: �
 1. **גמישות 1: פריימוורק ממשק המשתמש של המעטפת (UI Component Framework).** `[המלצה ארכיטקטונית]`
    הבחירה בין React, Svelte, Solid או Web Components טהורים עבור סרגלי הכלים ופלטות העיצוב נשמרת גמישה. מעטפת ה-UI היא צרכן קצה (Consumer) של הליבה דרך פרוטוקול IPC מוגדר, וניתן להחליף את ספריית הרכיבים ללא פגיעה בליבה.
 
-2. **גמישות 2: החלפת מנוע הרינדור התצוגתי (Vivliostyle מול Native Skia/Vello).** `[המלצה ארכיטקטונית]`
-   הודות לממשק `RenderBackend` המופשט, TOK מתחילה עם Vivliostyle כמנוע תצוגה מהיר, אך שומרת על גמישות מלאה לעבור בעתיד למנוע רינדור גרפי נייטיב מלא (Skia או Vello ב-Rust מואצי GPU) מבלי לגעת במודל המסמך או במנוע הטיפוגרפי.
+2. **גמישות 2: החלפת מנוע הרינדור התצוגתי (היטל DOM `SpreadCanvas` מול Native Skia/Vello).** `[המלצה ארכיטקטונית]`
+   הודות לממשק `RenderBackend` המופשט ולייצוא `PageLayoutBox` (ביחידות `pt`), TOK משתמשת בהיטל DOM דטרמיניסטי (`SpreadCanvas` + `PageDomVirtualizer`) כמנוע תצוגה מהיר, אך שומרת על גמישות מלאה לעבור בעתיד למנוע רינדור גרפי נייטיב מלא (Skia או Vello ב-Rust מואצי GPU) מבלי לגעת במודל המסמך או במנוע הטיפוגרפי.
 
 3. **גמישות 3: פרטי מנוע הרצת סקריפטים של משתמשים (QuickJS מול V8 Isolate).** `[שאלה פתוחה למחקר עתידי]`
    סביבת הסקריפטים הבסיסית תתבסס על QuickJS בשל פשטותו ומשקלו הקל, אך הממשק נשמר מופשט כך שניתן יהיה לשדרג ל-V8 Isolates אם יידרשו ביצועי JIT כבדים למאקרואים מורכבים.
@@ -1212,10 +1210,10 @@ typesetok-monorepo/
 │       └── Cargo.toml
 │
 ├── packages/                        # מעטפת הממשק ב-TypeScript / Web
-│   ├── tok-electron/                # תהליך ראשי של Electron, ניהול חלונות, תפריטי OS
-│   ├── tok-ui/                      # סביבת עבודה, מערכת פאנלים ועגינה (dockview), סרגלים
-│   ├── tok-canvas/                  # שכבת כיסוי שקופה (Overlay Canvas), סמן ובחירה וירטואלית
-│   ├── tok-viewer/                  # אינטגרציה עם Vivliostyle Core Polyfill ומנהל וירטואליזציה
+│   ├── tok-electron/                # תהליך ראשי של Electron, ניהול חלונות, תפריטי OS וגשר IPC ל-tok-cli
+│   ├── tok-ui/                      # סביבת עבודה, פאנלים, גשר עימוד (typesetBridge) והיטל DOM דטרמיניסטי (SpreadCanvas)
+│   ├── tok-canvas/                  # שכבת כיסוי שקופה (CanvasInteractionOverlay), סמן ובחירה וירטואלית
+│   ├── tok-viewer/                  # מנהל וירטואליזציה של עמודים ב-DOM (PageDomVirtualizer)
 │   └── tok-story-editor/            # עורך סיפור רציף (Unpaginated Editor)
 │
 ├── schemas/                         # סכמות חוזים משותפות
@@ -1260,7 +1258,7 @@ typesetok-monorepo/
   └── בינארי tok-cli, בדיקות עומס במסמכים בני 1,000 עמודים, אימות דטרמיניזם מוחלט (Bit-for-bit)
 
 שלב 7: מעטפת שולחן עבודה ושכבת תצוגה מרונדרת (תחילת UI)
-  └── Electron Shell, אינטגרציית Vivliostyle ב-WebContents, וירטואליזציה של עמודים ב-DOM
+  └── Electron Shell, היטל DOM דטרמיניסטי (SpreadCanvas), וירטואליזציה של עמודים ב-DOM (PageDomVirtualizer)
 
 שלב 8: שכבת אינטראקציה, סמן וירטואלי ועריכה חיה
   └── שכבת Canvas Overlay, בדיקת פגיעה (Hit-Testing) ב-RTL, בחירה ויזואלית, עורך סיפור רציף
@@ -1295,7 +1293,7 @@ typesetok-monorepo/
 
 ### ADL-004: ארכיטקטורת צינור רינדור דואלי (Dual Pipeline) לקדם-דפוס
 - **הקשר (Context):** מנוע ההדפסה של Chromium אינו מסוגל לייצר קובצי PDF/X עם DeviceCMYK וצבעי ספוט.
-- **החלטה (Decision):** הפרדה לשני צינורות: Vivliostyle לתצוגת מסך ואינטראקציה, ומנוע Rust Native PDF נפרד לחלוטין לדפוס.
+- **החלטה (Decision):** הפרדה לשני צינורות: היטל DOM דטרמיניסטי (`SpreadCanvas` + `PageDomVirtualizer`) לתצוגת מסך ואינטראקציה, ומנוע Rust Native PDF נפרד לחלוטין (`tok-pdf`) לדפוס.
 - **השלכות (Consequences):** פיתוח מנוע כתיבת PDF ב-Rust, עמידה מלאה בתקני ISO 15930 לדפוס מקצועי.
 - **סטטוס:** אושר (Approved). `[המלצה ארכיטקטונית]`
 
@@ -1305,10 +1303,10 @@ typesetok-monorepo/
 - **השלכות (Consequences):** דורש מימוש עצמאי של ניווט מקלדת ובחירה, אך מבטיח יציבות עריכה ב-120 FPS ואפס תקלות DOM.
 - **סטטוס:** אושר (Approved). `[המלצה ארכיטקטונית]`
 
-### ADL-006: עקרון ה-Pre-Pagination בליבת ה-Rust
-- **הקשר (Context):** Vivliostyle לבדו אינו מסוגל לנהל מקראות גדולות ומסגרות מקושרות מורכבות.
-- **החלטה (Decision):** TOK מחשבת בעצמה את שבירת השורות וחלוקת העמודים, ומזריקה ל-Vivliostyle קובצי HTML מחולקים מראש.
-- **השלכות (Consequences):** Vivliostyle משמש כמנוע תצוגה מהיר ודטרמיניסטי ללא צורך באלגוריתמיקה כבדה בדפדפן.
+### ADL-006: עקרון ה-Pre-Pagination בליבת ה-Rust והיטל `PageLayoutBox`
+- **הקשר (Context):** מנועי דפדפן וספריות Polyfill אינם מסוגלים לנהל מקראות גדולות ומסגרות מקושרות מורכבות בדטרמיניזם מוחלט.
+- **החלטה (Decision):** TOK מחשבת בעצמה בליבת ה-Rust (`tok-typeset`) את שבירת השורות, פתרון האילוצים וחלוקת העמודים, ומעבירה מבני `PageLayoutBox` מדויקים (ביחידות `pt`) לרכיב `SpreadCanvas` ב-`tok-ui` ולמנהל הווירטואליזציה `PageDomVirtualizer` ב-`tok-viewer`.
+- **השלכות (Consequences):** תצוגת המסך משמשת כהיטל מהיר ודטרמיניסטי לחלוטין של גיאומטריית הליבה ללא תלות בספריות CSS Paged Media חיצוניות.
 - **סטטוס:** אושר (Approved). `[המלצה ארכיטקטונית]`
 
 ### ADL-007: אלגוריתם שבירת שורות גלובלי Knuth-Plass כברירת מחדל
@@ -1317,9 +1315,9 @@ typesetok-monorepo/
 - **השלכות (Consequences):** איכות טיפוגרפית עילאית ברמת InDesign ו-TeX, תקורה חישובית מתונה המנוהלת במטמון פסקתי.
 - **סטטוס:** אושר (Approved). `[המלצה ארכיטקטונית]`
 
-### ADL-008: שילוב מנוע HarfBuzz בקישור FFI ישיר ושער נרמול ת"י 6100
+### ADL-008: שילוב מנוע עיצוב גופנים (`rustybuzz`) ושער נרמול טיפוגרפי עברי קנוני
 - **הקשר (Context):** עברית מורכבת עם ניקוד וטעמי מקרא דורשת תמיכה מלאה ומוכחת בטבלאות GPOS `mark` ו-`mkmk`. יתרה מזו, נרמול Unicode NFD סטנדרטי משבש את סדר הדיאקריטים לפי CCC ומחריב את פעולת ה-GPOS.
-- **החלטה (Decision):** `[המלצה ארכיטקטונית]` שילוב מנוע HarfBuzz הרשמי דרך מעטפת Rust FFI (`harfbuzz-sys`), יחד עם שער נרמול קלט קנוני האוכף את סדר תקן ישראלי ת"י 6100: $\text{Base} \rightarrow \text{Shin/Sin Dot} \rightarrow \text{Dagesh/Mapiq} \rightarrow \text{Niqqud} \rightarrow \text{Meteg} \rightarrow \text{Te'amim}$, והזנת המאגר תחת `HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES`.
+- **החלטה (Decision):** `[המלצה ארכיטקטונית]` שילוב מנוע `rustybuzz` (מימוש HarfBuzz ב-Rust טהור), יחד עם שער נרמול קלט קנוני האוכף את הסדר הטיפוגרפי העברי הקנוני: $\text{Base} \rightarrow \text{Shin/Sin Dot} \rightarrow \text{Dagesh/Mapiq} \rightarrow \text{Niqqud} \rightarrow \text{Meteg} \rightarrow \text{Te'amim}$, והזנת המאגר ברמת אשכולות גרפמיים מונוטוניים.
 - **השלכות (Consequences):** תאימות מושלמת של 100% לחוקי OpenType ודקדוק עברי, מניעת ריחוף או התנגשות דיאקריטים, תוך שמירה על ביצועי Native.
 - **סטטוס:** אושר (Approved). `[המלצה ארכיטקטונית]`
 
