@@ -17,6 +17,8 @@ export interface HistoryRecord {
   paragraphsAfter: StoryParagraph[];
   selectionBefore?: StorySelection;
   selectionAfter?: StorySelection;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 export class StoryHistory {
@@ -58,6 +60,8 @@ export class StoryHistory {
       isTyping?: boolean;
       selectionBefore?: StorySelection;
       selectionAfter?: StorySelection;
+      onUndo?: () => void;
+      onRedo?: () => void;
     }
   ): void {
     const now = Date.now();
@@ -91,7 +95,9 @@ export class StoryHistory {
       paragraphsBefore: cloneBefore,
       paragraphsAfter: cloneAfter,
       selectionBefore: options?.selectionBefore,
-      selectionAfter: options?.selectionAfter
+      selectionAfter: options?.selectionAfter,
+      onUndo: options?.onUndo,
+      onRedo: options?.onRedo
     };
 
     this.undoStack.push(record);
@@ -111,6 +117,7 @@ export class StoryHistory {
     if (!record) return null;
 
     this.redoStack.push(record);
+    record.onUndo?.();
     return {
       paragraphs: JSON.parse(JSON.stringify(record.paragraphsBefore)),
       selection: record.selectionBefore
@@ -126,6 +133,7 @@ export class StoryHistory {
     if (!record) return null;
 
     this.undoStack.push(record);
+    record.onRedo?.();
     return {
       paragraphs: JSON.parse(JSON.stringify(record.paragraphsAfter)),
       selection: record.selectionAfter
