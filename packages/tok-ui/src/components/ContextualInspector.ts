@@ -269,21 +269,21 @@ export class ContextualInspector {
     geoCard.appendChild(this.row(
       this.createScrubber(t('inspPosX'), this.selectedFrame.xMm, t('unitMm'), 0, 300, (v) => {
         this.selectedFrame.xMm = v;
-        this.callbacks.onFrameChange({ xMm: v });
+        this.callbacks.onFrameChange({ id: this.selectedFrame.id, xMm: v });
       }),
       this.createScrubber(t('inspPosY'), this.selectedFrame.yMm, t('unitMm'), 0, 400, (v) => {
         this.selectedFrame.yMm = v;
-        this.callbacks.onFrameChange({ yMm: v });
+        this.callbacks.onFrameChange({ id: this.selectedFrame.id, yMm: v });
       })
     ));
     geoCard.appendChild(this.row(
       this.createScrubber(t('inspWidthW'), this.selectedFrame.widthMm, t('unitMm'), 10, 300, (v) => {
         this.selectedFrame.widthMm = v;
-        this.callbacks.onFrameChange({ widthMm: v });
+        this.callbacks.onFrameChange({ id: this.selectedFrame.id, widthMm: v });
       }),
       this.createScrubber(t('inspHeightH'), this.selectedFrame.heightMm, t('unitMm'), 10, 400, (v) => {
         this.selectedFrame.heightMm = v;
-        this.callbacks.onFrameChange({ heightMm: v });
+        this.callbacks.onFrameChange({ id: this.selectedFrame.id, heightMm: v });
       })
     ));
     this.element.appendChild(geoCard);
@@ -293,7 +293,7 @@ export class ContextualInspector {
     const flows = ['gemara', 'rashi', 'tosafot', 'notes'].map((id) => ({ value: id, label: this.flowName(id) }));
     flowCard.appendChild(selectField(t('inspFlowThreading'), flows, flow, (value) => {
       this.selectedFrame.flowId = value as TextFrameData['flowId'];
-      this.callbacks.onFrameChange({ flowId: this.selectedFrame.flowId });
+      this.callbacks.onFrameChange({ id: this.selectedFrame.id, flowId: this.selectedFrame.flowId });
       this.render();
     }));
     const thread = el('div', 'tok-status-line');
@@ -307,20 +307,20 @@ export class ContextualInspector {
     insetCard.appendChild(this.row(
       this.createScrubber(t('inspTop'), this.selectedFrame.insetTopMm, t('unitMm'), 0, 30, (v) => {
         this.selectedFrame.insetTopMm = v;
-        this.callbacks.onFrameChange({ insetTopMm: v });
+        this.callbacks.onFrameChange({ id: this.selectedFrame.id, insetTopMm: v });
       }),
       this.createScrubber(t('inspBottom'), this.selectedFrame.insetBottomMm, t('unitMm'), 0, 30, (v) => {
         this.selectedFrame.insetBottomMm = v;
-        this.callbacks.onFrameChange({ insetBottomMm: v });
+        this.callbacks.onFrameChange({ id: this.selectedFrame.id, insetBottomMm: v });
       })
     ));
     const rightInset = this.createScrubber(t('inspRight'), this.selectedFrame.insetRightMm, t('unitMm'), 0, 30, (v) => {
       this.selectedFrame.insetRightMm = v;
-      this.callbacks.onFrameChange({ insetRightMm: v });
+      this.callbacks.onFrameChange({ id: this.selectedFrame.id, insetRightMm: v });
     });
     const leftInset = this.createScrubber(t('inspLeft'), this.selectedFrame.insetLeftMm, t('unitMm'), 0, 30, (v) => {
       this.selectedFrame.insetLeftMm = v;
-      this.callbacks.onFrameChange({ insetLeftMm: v });
+      this.callbacks.onFrameChange({ id: this.selectedFrame.id, insetLeftMm: v });
     });
     // Keep the physical order (Right field on the right) in both UI directions.
     insetCard.appendChild(i18n.getDirection() === 'rtl' ? this.row(rightInset, leftInset) : this.row(leftInset, rightInset));
@@ -333,7 +333,7 @@ export class ContextualInspector {
       { id: 'justify', label: t('inspJustify') }
     ], this.selectedFrame.verticalAlign, (id) => {
       this.selectedFrame.verticalAlign = id;
-      this.callbacks.onFrameChange({ verticalAlign: id });
+      this.callbacks.onFrameChange({ id: this.selectedFrame.id, verticalAlign: id });
     }, { fill: true }));
     this.element.appendChild(insetCard);
   }
@@ -488,11 +488,26 @@ export class ContextualInspector {
     this.element.appendChild(this.createHeader(t('inspSelected'), t('inspImageFrame'), t('inspImage'), 'image'));
 
     const imgCard = this.createCard(t('inspFitting'));
+    const isHe = i18n.getLanguage() === 'he';
+    const notice = el(
+      'p',
+      'tok-panel-note',
+      { style: 'margin:0 0 8px;color:var(--tok-text-muted);font-size:12px;' },
+      isHe
+        ? 'שיבוץ תמונות רסטר מתוכנן לגרסה עתידית (בקרים מושבתים).'
+        : 'Raster image placement is planned for a future release (controls disabled).'
+    );
+    imgCard.appendChild(notice);
+
     const fits = [t('inspFitProportional'), t('inspFitFill'), t('inspFitFrame')];
-    imgCard.appendChild(selectField(t('inspFitting'), fits.map((f) => ({ value: f, label: f })), fits[0], () => {}));
-    imgCard.appendChild(this.createStatusRow(t('inspEffRes'), t('inspEffResOk'), 'var(--tok-status-success)'));
-    imgCard.appendChild(this.createStatusRow(t('inspColorSpace'), 'CMYK Coated', 'var(--tok-text-primary)'));
-    imgCard.appendChild(this.createStatusRow(t('inspWrap'), t('inspWrapAround'), 'var(--tok-accent-text)'));
+    const fitField = selectField(t('inspFitting'), fits.map((f) => ({ value: f, label: f })), fits[0], () => {});
+    fitField.querySelectorAll('select').forEach((sel) => {
+      sel.disabled = true;
+    });
+    imgCard.appendChild(fitField);
+    imgCard.appendChild(this.createStatusRow(t('inspEffRes'), '—', 'var(--tok-text-muted)'));
+    imgCard.appendChild(this.createStatusRow(t('inspColorSpace'), '—', 'var(--tok-text-muted)'));
+    imgCard.appendChild(this.createStatusRow(t('inspWrap'), t('inspWrapAround'), 'var(--tok-text-muted)'));
     this.element.appendChild(imgCard);
   }
 
@@ -505,12 +520,12 @@ export class ContextualInspector {
     const alignCard = this.createCard(t('inspAlignDist'));
     const grid = el('div', undefined, { style: 'display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px' });
     const actions = [
-      { id: 'right', label: t('inspAlignRight') },
-      { id: 'center', label: t('inspAlignCenter') },
-      { id: 'left', label: t('inspAlignLeft') },
-      { id: 'top', label: t('inspAlignTop') },
-      { id: 'middle', label: t('inspAlignMiddle') },
-      { id: 'bottom', label: t('inspAlignBottom') }
+      { id: 'align-right', label: t('inspAlignRight') },
+      { id: 'align-center', label: t('inspAlignCenter') },
+      { id: 'align-left', label: t('inspAlignLeft') },
+      { id: 'align-top', label: t('inspAlignTop') },
+      { id: 'align-middle', label: t('inspAlignMiddle') },
+      { id: 'align-bottom', label: t('inspAlignBottom') }
     ];
     for (const a of actions) {
       grid.appendChild(button(a.label, { className: 'tok-btn tok-btn-sm', onClick: () => this.callbacks.onAlignFrames(a.id) }));
@@ -518,7 +533,12 @@ export class ContextualInspector {
     alignCard.appendChild(grid);
     alignCard.appendChild(button(t('inspDistribute'), {
       className: 'tok-btn tok-btn-primary tok-btn-block tok-btn-sm',
-      onClick: () => this.callbacks.onAlignFrames('distribute-vertical')
+      onClick: () => this.callbacks.onAlignFrames('distribute-v')
+    }));
+    const isHe = i18n.getLanguage() === 'he';
+    alignCard.appendChild(button(isHe ? 'פזר אופקית במרווחים שווים' : 'Distribute Horizontally', {
+      className: 'tok-btn tok-btn-block tok-btn-sm',
+      onClick: () => this.callbacks.onAlignFrames('distribute-h')
     }));
     this.element.appendChild(alignCard);
   }
