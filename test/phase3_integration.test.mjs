@@ -31,6 +31,11 @@ async function loadTs(relPath) {
     bundle: true,
     format: 'esm',
     platform: 'neutral',
+    alias: {
+      'tok-viewer': path.join(rootDir, 'packages/tok-viewer/src/index.ts'),
+      'tok-canvas': path.join(rootDir, 'packages/tok-canvas/src/index.ts'),
+      'tok-story-editor': path.join(rootDir, 'packages/tok-story-editor/src/index.ts'),
+    },
     outfile,
     logLevel: 'silent',
   });
