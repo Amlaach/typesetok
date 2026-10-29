@@ -451,14 +451,16 @@ function createWindow(): void {
         return;
       }
 
-      // Query renderer for dirty / unsaved changes
-      const isDirty = await win.webContents.executeJavaScript(
-        'Boolean((window as any).appInstance?.getDocumentState?.()?.isDirty || (window as any).__tokIsDirty)'
-      ).catch(() => false);
+      // Query renderer for dirty / unsaved changes with timeout and valid JavaScript
+      const dirtyPromise = win.webContents.executeJavaScript(
+        'Boolean(window.appInstance?.getDocumentState?.()?.isDirty || window.__tokIsDirty)'
+      );
+      const timeoutPromise = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1500));
+      const isDirty = await Promise.race([dirtyPromise, timeoutPromise]).catch(() => false);
 
       if (!isDirty) {
         isForceClosing = true;
-        win.close();
+        win.destroy();
         return;
       }
 
@@ -475,9 +477,11 @@ function createWindow(): void {
 
       if (choice.response === 0) {
         // Save before exit
-        const saveResult = await win.webContents.executeJavaScript(
-          'Promise.resolve((window as any).appInstance?.handleSystemAction?.("save-document"))'
-        ).catch(() => false);
+        const savePromise = win.webContents.executeJavaScript(
+          'Promise.resolve(window.appInstance?.handleSystemAction?.("save-document")).then(() => true).catch(() => false)'
+        );
+        const saveTimeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000));
+        const saveResult = await Promise.race([savePromise, saveTimeout]).catch(() => false);
 
         if (saveResult === false) {
           logger.info('[MAIN] Save before exit was cancelled or failed; keeping window open');
@@ -485,15 +489,15 @@ function createWindow(): void {
           return;
         }
 
-        // Allow save I/O to flush
+        // Allow save I/O to flush, then destroy window safely
         setTimeout(() => {
           isForceClosing = true;
-          if (!win.isDestroyed()) win.close();
+          if (!win.isDestroyed()) win.destroy();
         }, 300);
       } else if (choice.response === 1) {
-        // Discard without saving
+        // Discard without saving - unconditionally destroy window
         isForceClosing = true;
-        win.close();
+        win.destroy();
       } else {
         // Cancel: keep window open
         logger.info('[MAIN] Window close cancelled by user');
@@ -502,7 +506,7 @@ function createWindow(): void {
     } catch (err: any) {
       logger.warn('[MAIN] Exception in window close guard; closing safely', { error: err?.message });
       isForceClosing = true;
-      if (!win.isDestroyed()) win.close();
+      if (!win.isDestroyed()) win.destroy();
     }
   });
 
