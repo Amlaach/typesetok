@@ -1,11 +1,12 @@
 import { t, tf, i18n } from '../i18n';
-import { el, icon } from '../ui';
+import { el, icon, button } from '../ui';
 
 export interface StatusBarCallbacks {
   onZoomChange: (zoomPercent: number) => void;
   onPageClick?: () => void;
   onPreflightClick: () => void;
   onWordCountClick?: () => void;
+  onExportPdf?: () => void;
 }
 
 export const ZOOM_PRESETS = [50, 75, 100, 125, 150, 200];
@@ -163,6 +164,19 @@ export class StatusBar {
       this.callbacks.onZoomChange(z);
     });
     this.element.appendChild(this.zoomSelect);
+
+    if (this.callbacks.onExportPdf) {
+      const exportBtn = button(t('topBarExportPdf'), {
+        className: 'tok-btn tok-btn-primary tok-btn-sm tok-status-export-btn',
+        icon: 'export',
+        attrs: { 'aria-keyshortcuts': 'Control+E', title: `${t('topBarExportPdf')} (Ctrl+E)` },
+        onClick: () => this.callbacks.onExportPdf?.()
+      });
+      exportBtn.style.height = '24px';
+      exportBtn.style.padding = '0 10px';
+      exportBtn.style.fontSize = '12px';
+      this.element.appendChild(exportBtn);
+    }
 
     this.refresh();
   }
