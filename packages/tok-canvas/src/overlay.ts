@@ -1,7 +1,19 @@
 /**
  * Transparent Canvas Overlay (Section 9.2).
  *
- * Sits directly over the Vivliostyle pre-paginated view.
+ * Sits directly over a pre-paginated view as a standalone low-level HTML5 `<canvas>`
+ * interaction layer.
+ *
+ * Architectural Note:
+ * In the main TypesetOK desktop workbench (`tok-ui`), interactive page sheets, text frame
+ * selection, multi-frame alignment, and inline RTL story editing are rendered directly via
+ * DOM page elements inside `SpreadCanvas` (`packages/tok-ui/src/components/SpreadCanvas.ts`)
+ * backed by `PageDomVirtualizer` (`packages/tok-viewer/src/virtualizer.ts`).
+ *
+ * `@deprecated` for the main `SpreadCanvas` DOM workbench — retained as a standalone
+ * low-level `<canvas>` hit-testing and optimistic caret overlay utility for headless or
+ * custom canvas-hosted embeds.
+ *
  * Responsible for:
  * 1. Optimistic caret advance (<16ms) upon keypress in RTL.
  * 2. Visual selection highlighting across Hebrew glyph boxes without DOM selection breakage.
