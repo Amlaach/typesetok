@@ -1,7 +1,9 @@
 //! /ToUnicode CMap Generator for Searchable & Copy-Pasteable Hebrew Text in PDF.
 //!
 //! Maps glyph IDs to standard Unicode scalar values, guaranteeing that
-//! Hebrew text copied from the PDF matches SI 6100 normalized text.
+//! Hebrew text copied from the PDF matches Canonical Hebrew Normalization
+//! (Unicode NFC + Masoretic/SBL Combining Class Ordering:
+//! Base -> Dagesh/Shin-Sin -> Vowel Niqqud -> Cantillation Taamim).
 
 use std::collections::BTreeMap;
 
