@@ -154,7 +154,7 @@ const GUIDE_SECTIONS: GuideSection[] = [
     icon: 'sparkle',
     contentHe: [
       {
-        title: 'נרמול ניקוד וטעמים (ת״י 6100)',
+        title: 'נרמול ניקוד וטעמים (יוניקוד קנוני)',
         body: 'המערכת כוללת מנוע ייעודי לנרמול רצפי יוניקוד של אות, ניקוד וטעמים. הפעולה מתקנת שגיאות הקלדה נפוצות ומבטיחה יישור מושלם של סימני הניקוד מעל ומתחת לאותיות.'
       },
       {
@@ -168,8 +168,8 @@ const GUIDE_SECTIONS: GuideSection[] = [
     ],
     contentEn: [
       {
-        title: 'Niqqud & Cantillation Normalization',
-        body: 'Built-in engine conforming to SI 6100 standardizes Unicode sequences (base letter, niqqud, dagesh, cantillation) ensuring flawless glyph rendering.'
+        title: 'Canonical Unicode Hebrew Normalization',
+        body: 'Built-in canonical Unicode normalization engine standardizes Hebrew combining sequences (Shin/Sin dot, dagesh/rafe, niqqud vowels, cantillation marks) ensuring flawless glyph rendering.'
       },
       {
         title: 'Divine Names Shield',
