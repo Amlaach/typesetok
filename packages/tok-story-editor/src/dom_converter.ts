@@ -220,8 +220,12 @@ export function parseParagraphDom(pEl: HTMLElement): StoryParagraph {
     }
   }
 
-  for (let i = 0; i < pEl.childNodes.length; i++) {
-    traverse(pEl.childNodes[i], {});
+  if (pEl.childNodes && pEl.childNodes.length > 0) {
+    for (let i = 0; i < pEl.childNodes.length; i++) {
+      traverse(pEl.childNodes[i], {});
+    }
+  } else if (pEl.textContent) {
+    rawText = pEl.textContent;
   }
 
   const charCount = Array.from(rawText).length;
