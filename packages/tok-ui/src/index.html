@@ -776,11 +776,18 @@
     .tok-toast {
       position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); z-index: 99999; pointer-events: none;
       display: flex; align-items: center; gap: 10px; max-width: min(560px, calc(100vw - 48px));
-      padding: 10px 16px; border-radius: 10px; font-size: 13px;
-      background: var(--tok-text-primary); color: var(--tok-bg-surface-1); box-shadow: var(--tok-shadow-float);
+      padding: 9px 16px 9px 12px; border-radius: var(--tok-radius-lg); font-size: 13px; line-height: 1.4;
+      background: var(--tok-bg-elevated); color: var(--tok-text-primary);
+      border: 1px solid var(--tok-border-subtle); border-inline-start: 3px solid var(--tok-accent-primary);
+      box-shadow: var(--tok-shadow-float);
       animation: tokRiseToast 0.18s ease-out;
     }
-    .tok-toast.tok-toast-error { background: var(--tok-status-error); color: #FFFFFF; }
+    .tok-toast > svg {
+      flex: none; box-sizing: content-box; padding: 4px; border-radius: 50%;
+      color: var(--tok-accent-text); background: var(--tok-accent-soft);
+    }
+    .tok-toast.tok-toast-error { background: var(--tok-error-soft); border-color: var(--tok-status-error); }
+    .tok-toast.tok-toast-error > svg { color: var(--tok-status-error); background: transparent; }
 
     @keyframes tokFade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes tokRise { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
