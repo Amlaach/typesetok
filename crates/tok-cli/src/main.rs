@@ -28,6 +28,7 @@ COMMANDS:
     diagnose-recompute <INPUT>      Run 3-position invalidation & cache diagnostic report
     save-package <INPUT> <OUTPUT>   Save document JSON into an atomic .tok package
     open-package <INPUT> <OUTPUT>   Open and extract a .tok package into document JSON
+    run-plugins <INPUT> <OUTPUT>    Run built-in pre-typeset plugins on document JSON
     benchmark-typeset [--pages N]   Run 1,000-page stress test and cascade latency benchmark
     verify-determinism              Verify bit-for-bit layout & PDF output determinism
     inspect-package <INPUT>         Inspect .tok package manifest, metadata, and assets
@@ -45,16 +46,16 @@ EXAMPLES:
 }
 
 fn create_sample_hebrew_document(num_paragraphs: usize) -> DocumentModel {
-    let mut root = DocumentRoot::new("תלמוד בבלי - מסכת ברכות");
+    let mut root = DocumentRoot::new("׳×׳׳׳•׳“ ׳‘׳‘׳׳™ - ׳׳¡׳›׳× ׳‘׳¨׳›׳•׳×");
     let sec = &mut root.sections[0];
     let flow = sec.main_flow_mut().unwrap();
 
     let sample_texts = [
-        "מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית? מִשָּׁעָה שֶׁהַכֹּהֲנִים נִכְנָסִים לֶאֱכֹל בִּתְרוּמָתָן, עַד סוֹף הָאַשְׁמוּרָה הָרִאשׁוֹנָה, דִּבְרֵי רַבִּי אֱלִיעֶזֶר. וַחֲכָמִים אוֹמְרִים: עַד חֲצוֹת. רַבָּן גַּמְלִיאֵל אוֹמֵר: עַד שֶׁיַּעֲלֶה עַמּוּד הַשָּׁחַר.",
-        "מַעֲשֶׂה שֶׁבָּאוּ בָנָיו מִבֵּית הַמִּשְׁתֶּה, אָמְרוּ לוֹ: לֹא קָרִינוּ אֶת שְׁמַע! אָמַר לָהֶם: אִם לֹא עָלָה עַמּוּד הַשָּׁחַר, חַיָּבִין אַתֶּם לִקְרוֹת.",
-        "וְלֹא זוֹ בִלְבַד, אֶלָּא כָּל מַה שֶׁאָמְרוּ חֲכָמִים עַד חֲצוֹת, מִצְוָתָן עַד שֶׁיַּעֲלֶה עַמּוּד הַשָּׁחַר. הֶקְטֵר חֲלָבִים וְאֵבָרִים מִצְוָתָן עַד שֶׁיַּעֲלֶה עַמּוּד הַשָּׁחַר, וְכָל הַנֶּאֱכָלִים לְיוֹם אֶחָד מִצְוָתָן עַד שֶׁיַּעֲלֶה עַמּוּד הַשָּׁחַר.",
-        "אִם כֵּן, לָמָּה אָמְרוּ חֲכָמִים עַד חֲצוֹת? כְּדֵי לְהַרְחִיק אֶת הָאָדָם מִן הָעֲבֵרָה, שֶׁלֹּא יֹאמַר אָדָם: יֵשׁ לִי עוֹד זְמַן, וְנִמְצָא יָשֵׁן וְעוֹבֵר עַל דִּבְרֵי תוֹרָה.",
-        "תַּנָּא הֵיכָא קָאֵי דְּקָתָנֵי מֵאֵימָתַי? וְתוּ, מַאי שְׁנָא דְּתָנֵי בְּעַרְבִית בְּרֵישָׁא, לִתְנֵי דְּשַׁחֲרִית בְּרֵישָׁא? תַּנָּא אַקְּרָא קָאֵי, דִּכְתִיב: בְּשָׁכְבְּךָ וּבְקוּמֶךָ.",
+        "׳ײµ׳ײµ׳™׳ײ¸׳×ײ·׳™ ׳§׳•ײ¹׳¨ײ´׳™׳ ׳ײ¶׳× ׳©ײ°׳׳ײ·׳¢ ׳‘ײ°ײ¼׳¢ײ·׳¨ײ°׳‘ײ´׳™׳×? ׳ײ´׳©ײ¸ײ¼׳׳¢ײ¸׳” ׳©ײ¶׳׳”ײ·׳›ײ¹ײ¼׳”ײ²׳ ײ´׳™׳ ׳ ײ´׳›ײ°׳ ײ¸׳¡ײ´׳™׳ ׳ײ¶׳ײ±׳›ײ¹׳ ׳‘ײ´ײ¼׳×ײ°׳¨׳•ײ¼׳ײ¸׳×ײ¸׳, ׳¢ײ·׳“ ׳¡׳•ײ¹׳£ ׳”ײ¸׳ײ·׳©ײ°׳׳׳•ײ¼׳¨ײ¸׳” ׳”ײ¸׳¨ײ´׳׳©׳׳•ײ¹׳ ײ¸׳”, ׳“ײ´ײ¼׳‘ײ°׳¨ײµ׳™ ׳¨ײ·׳‘ײ´ײ¼׳™ ׳ײ±׳ײ´׳™׳¢ײ¶׳–ײ¶׳¨. ׳•ײ·׳—ײ²׳›ײ¸׳ײ´׳™׳ ׳׳•ײ¹׳ײ°׳¨ײ´׳™׳: ׳¢ײ·׳“ ׳—ײ²׳¦׳•ײ¹׳×. ׳¨ײ·׳‘ײ¸ײ¼׳ ׳’ײ·ײ¼׳ײ°׳ײ´׳™׳ײµ׳ ׳׳•ײ¹׳ײµ׳¨: ׳¢ײ·׳“ ׳©ײ¶׳׳™ײ·ײ¼׳¢ײ²׳ײ¶׳” ׳¢ײ·׳ײ¼׳•ײ¼׳“ ׳”ײ·׳©ײ¸ײ¼׳׳—ײ·׳¨.",
+        "׳ײ·׳¢ײ²׳©ײ¶׳‚׳” ׳©ײ¶׳׳‘ײ¸ײ¼׳׳•ײ¼ ׳‘ײ¸׳ ײ¸׳™׳• ׳ײ´׳‘ײµײ¼׳™׳× ׳”ײ·׳ײ´ײ¼׳©ײ°׳׳×ײ¶ײ¼׳”, ׳ײ¸׳ײ°׳¨׳•ײ¼ ׳׳•ײ¹: ׳ײ¹׳ ׳§ײ¸׳¨ײ´׳™׳ ׳•ײ¼ ׳ײ¶׳× ׳©ײ°׳׳ײ·׳¢! ׳ײ¸׳ײ·׳¨ ׳ײ¸׳”ײ¶׳: ׳ײ´׳ ׳ײ¹׳ ׳¢ײ¸׳ײ¸׳” ׳¢ײ·׳ײ¼׳•ײ¼׳“ ׳”ײ·׳©ײ¸ײ¼׳׳—ײ·׳¨, ׳—ײ·׳™ײ¸ײ¼׳‘ײ´׳™׳ ׳ײ·׳×ײ¶ײ¼׳ ׳ײ´׳§ײ°׳¨׳•ײ¹׳×.",
+        "׳•ײ°׳ײ¹׳ ׳–׳•ײ¹ ׳‘ײ´׳ײ°׳‘ײ·׳“, ׳ײ¶׳ײ¸ײ¼׳ ׳›ײ¸ײ¼׳ ׳ײ·׳” ׳©ײ¶׳׳ײ¸׳ײ°׳¨׳•ײ¼ ׳—ײ²׳›ײ¸׳ײ´׳™׳ ׳¢ײ·׳“ ׳—ײ²׳¦׳•ײ¹׳×, ׳ײ´׳¦ײ°׳•ײ¸׳×ײ¸׳ ׳¢ײ·׳“ ׳©ײ¶׳׳™ײ·ײ¼׳¢ײ²׳ײ¶׳” ׳¢ײ·׳ײ¼׳•ײ¼׳“ ׳”ײ·׳©ײ¸ײ¼׳׳—ײ·׳¨. ׳”ײ¶׳§ײ°׳˜ײµ׳¨ ׳—ײ²׳ײ¸׳‘ײ´׳™׳ ׳•ײ°׳ײµ׳‘ײ¸׳¨ײ´׳™׳ ׳ײ´׳¦ײ°׳•ײ¸׳×ײ¸׳ ׳¢ײ·׳“ ׳©ײ¶׳׳™ײ·ײ¼׳¢ײ²׳ײ¶׳” ׳¢ײ·׳ײ¼׳•ײ¼׳“ ׳”ײ·׳©ײ¸ײ¼׳׳—ײ·׳¨, ׳•ײ°׳›ײ¸׳ ׳”ײ·׳ ײ¶ײ¼׳ײ±׳›ײ¸׳ײ´׳™׳ ׳ײ°׳™׳•ײ¹׳ ׳ײ¶׳—ײ¸׳“ ׳ײ´׳¦ײ°׳•ײ¸׳×ײ¸׳ ׳¢ײ·׳“ ׳©ײ¶׳׳™ײ·ײ¼׳¢ײ²׳ײ¶׳” ׳¢ײ·׳ײ¼׳•ײ¼׳“ ׳”ײ·׳©ײ¸ײ¼׳׳—ײ·׳¨.",
+        "׳ײ´׳ ׳›ײµײ¼׳, ׳ײ¸׳ײ¸ײ¼׳” ׳ײ¸׳ײ°׳¨׳•ײ¼ ׳—ײ²׳›ײ¸׳ײ´׳™׳ ׳¢ײ·׳“ ׳—ײ²׳¦׳•ײ¹׳×? ׳›ײ°ײ¼׳“ײµ׳™ ׳ײ°׳”ײ·׳¨ײ°׳—ײ´׳™׳§ ׳ײ¶׳× ׳”ײ¸׳ײ¸׳“ײ¸׳ ׳ײ´׳ ׳”ײ¸׳¢ײ²׳‘ײµ׳¨ײ¸׳”, ׳©ײ¶׳׳ײ¹ײ¼׳ ׳™ײ¹׳׳ײ·׳¨ ׳ײ¸׳“ײ¸׳: ׳™ײµ׳©׳ ׳ײ´׳™ ׳¢׳•ײ¹׳“ ׳–ײ°׳ײ·׳, ׳•ײ°׳ ײ´׳ײ°׳¦ײ¸׳ ׳™ײ¸׳©ײµ׳׳ ׳•ײ°׳¢׳•ײ¹׳‘ײµ׳¨ ׳¢ײ·׳ ׳“ײ´ײ¼׳‘ײ°׳¨ײµ׳™ ׳×׳•ײ¹׳¨ײ¸׳”.",
+        "׳×ײ·ײ¼׳ ײ¸ײ¼׳ ׳”ײµ׳™׳›ײ¸׳ ׳§ײ¸׳ײµ׳™ ׳“ײ°ײ¼׳§ײ¸׳×ײ¸׳ ײµ׳™ ׳ײµ׳ײµ׳™׳ײ¸׳×ײ·׳™? ׳•ײ°׳×׳•ײ¼, ׳ײ·׳׳™ ׳©ײ°׳׳ ײ¸׳ ׳“ײ°ײ¼׳×ײ¸׳ ײµ׳™ ׳‘ײ°ײ¼׳¢ײ·׳¨ײ°׳‘ײ´׳™׳× ׳‘ײ°ײ¼׳¨ײµ׳™׳©ײ¸׳׳, ׳ײ´׳×ײ°׳ ײµ׳™ ׳“ײ°ײ¼׳©ײ·׳׳—ײ²׳¨ײ´׳™׳× ׳‘ײ°ײ¼׳¨ײµ׳™׳©ײ¸׳׳? ׳×ײ·ײ¼׳ ײ¸ײ¼׳ ׳ײ·׳§ײ°ײ¼׳¨ײ¸׳ ׳§ײ¸׳ײµ׳™, ׳“ײ´ײ¼׳›ײ°׳×ײ´׳™׳‘: ׳‘ײ°ײ¼׳©ײ¸׳׳›ײ°׳‘ײ°ײ¼׳ײ¸ ׳•ײ¼׳‘ײ°׳§׳•ײ¼׳ײ¶׳ײ¸.",
     ];
 
     let mut prev_idx = FractionalIndex::initial();
@@ -90,7 +91,7 @@ struct RawStoryPara {
 }
 
 fn convert_multi_flow_state_to_root(raw: RawMultiFlowState) -> DocumentRoot {
-    let title = raw.title.unwrap_or_else(|| "מסמך ללא שם".to_string());
+    let title = raw.title.unwrap_or_else(|| "׳׳¡׳׳ ׳׳׳ ׳©׳".to_string());
     let mut root = DocumentRoot::new(&title);
     if let Some(settings) = raw.settings {
         root.metadata.document_settings = Some(settings);
@@ -478,7 +479,7 @@ fn handle_benchmark(pages_target: usize) -> Result<(), Box<dyn std::error::Error
         .ok_or("benchmark corpus has no paragraphs")?
         .clone();
     let cascade_start = Instant::now();
-    target_para.text.push_str(" הֶסְבֵּר נוֹסָף לְפֵרוּשׁ רַשִׁ\"י הַקָּדוֹשׁ.");
+    target_para.text.push_str(" ׳”ײ¶׳¡ײ°׳‘ײµײ¼׳¨ ׳ ׳•ײ¹׳¡ײ¸׳£ ׳ײ°׳₪ײµ׳¨׳•ײ¼׳©׳ ׳¨ײ·׳©ײ´׳\"׳™ ׳”ײ·׳§ײ¸ײ¼׳“׳•ײ¹׳©׳.");
 
     // Typeset modified single paragraph
     let _rebroken = engine.typeset_paragraph(&target_para, 453.55, 11.0, 14.5);
@@ -500,7 +501,7 @@ fn handle_benchmark(pages_target: usize) -> Result<(), Box<dyn std::error::Error
     let mut modified_doc = doc.root().clone();
     let mod_id = target_para.id;
     if let Some(p) = modified_doc.find_paragraph_mut(mod_id) {
-        p.text.push_str(" הֶסְבֵּר נוֹסָף לְפֵרוּשׁ רַשִׁ\"י הַקָּדוֹשׁ.");
+        p.text.push_str(" ׳”ײ¶׳¡ײ°׳‘ײµײ¼׳¨ ׳ ׳•ײ¹׳¡ײ¸׳£ ׳ײ°׳₪ײµ׳¨׳•ײ¼׳©׳ ׳¨ײ·׳©ײ´׳\"׳™ ׳”ײ·׳§ײ¸ײ¼׳“׳•ײ¹׳©׳.");
     }
     let inc_start = Instant::now();
     let (_inc_pages, inc_diag) =
@@ -707,6 +708,35 @@ fn handle_open_package(input: &str, output: &str) -> Result<(), Box<dyn std::err
     Ok(())
 }
 
+fn handle_run_plugins(input: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
+    println!(
+        "[TOK-CLI] Running built-in typographic plugins on document: {} -> {}",
+        input, output
+    );
+    let (doc, _manifest) = load_document_input(input, 5)?;
+    let mut root = doc.root().clone();
+
+    let host = tok_plugin_host::PluginHost::with_builtin_plugins();
+    let transactions = host.run_before_typeset(&mut root);
+    let ops_count: usize = transactions.iter().map(|tx| tx.operations.len()).sum();
+    println!(
+        "  - Executed {} plugins ({} atomic operations applied)",
+        transactions.len(),
+        ops_count
+    );
+
+    if let Some(parent) = Path::new(output).parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+
+    let json_bytes = serde_json::to_vec_pretty(&root)?;
+    fs::write(output, json_bytes)?;
+    println!("  [SUCCESS] Written plugin-processed DocumentRoot JSON to: {}", output);
+    Ok(())
+}
+
 fn handle_typeset_document(input: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("[TOK-CLI] Typesetting document layout to JSON: {}", output);
     let (doc, _) = load_document_input(input, 1)?;
@@ -806,7 +836,7 @@ fn handle_diagnose_recompute(input: &str) -> Result<(), Box<dyn std::error::Erro
     if let Some(id) = p0_id {
         if let Some(p) = doc.find_paragraph_mut(id) {
             p.text
-                .push_str(" תוספת מלל בתחילת הספר לבדיקת גלישת עמודים.");
+                .push_str(" ׳×׳•׳¡׳₪׳× ׳׳׳ ׳‘׳×׳—׳™׳׳× ׳”׳¡׳₪׳¨ ׳׳‘׳“׳™׳§׳× ׳’׳׳™׳©׳× ׳¢׳׳•׳“׳™׳.");
         }
         let (_p, diag1) = engine.typeset_document_incremental(&doc, &pages1, Some(id));
         let r1 = tok_typeset::diagnostics::RecomputeReport::from_diagnostics(&diag1, pages1.len());
@@ -824,7 +854,7 @@ fn handle_diagnose_recompute(input: &str) -> Result<(), Box<dyn std::error::Erro
         .map(|p| p.id);
     if let Some(id) = mid_id {
         if let Some(p) = doc.find_paragraph_mut(id) {
-            p.text.push_str(" עריכה באמצע המסמך.");
+            p.text.push_str(" ׳¢׳¨׳™׳›׳” ׳‘׳׳׳¦׳¢ ׳”׳׳¡׳׳.");
         }
         let (_p, diag2) = engine.typeset_document_incremental(&doc, &pages1, Some(id));
         let r2 = tok_typeset::diagnostics::RecomputeReport::from_diagnostics(&diag2, pages1.len());
@@ -923,6 +953,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             handle_open_package(&args[2], &args[3])?;
         }
+        "run-plugins" => {
+            if args.len() < 4 {
+                eprintln!("Usage: tok-cli run-plugins <INPUT.json | INPUT.tok | --demo> <OUTPUT.json>");
+                std::process::exit(1);
+            }
+            handle_run_plugins(&args[2], &args[3])?;
+        }
         "benchmark-typeset" => {
             let mut pages = 1000;
             if args.len() >= 4 && args[2] == "--pages" {
@@ -957,4 +994,32 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_run_plugins_on_document_root() {
+        let mut root = DocumentRoot::new("בדיקת תוספים");
+        root.sections[0]
+            .main_flow_mut()
+            .unwrap()
+            .paragraphs
+            .push(ParagraphNode::new(
+                FractionalIndex::initial(),
+                "normal",
+                "אמר ר' משה בן מימון (רמב\"ם) בשם אל שדי וא-להים",
+            ));
+
+        let host = tok_plugin_host::PluginHost::with_builtin_plugins();
+        host.run_before_typeset(&mut root);
+
+        let text = &root.sections[0].main_flow().unwrap().paragraphs[0].text;
+        assert_eq!(
+            text,
+            "אמר ר׳ משה בן מימון (רמב״ם) בשם אל\u{00A0}שדי וא\u{2060}-\u{2060}להים"
+        );
+    }
 }
