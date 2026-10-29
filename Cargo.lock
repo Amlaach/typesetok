@@ -891,6 +891,7 @@ dependencies = [
  "sha2",
  "tok-core",
  "tok-pdf",
+ "tok-plugin-host",
  "tok-storage",
  "tok-typeset",
 ]
