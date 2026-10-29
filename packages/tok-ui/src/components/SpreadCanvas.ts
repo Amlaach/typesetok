@@ -1,7 +1,8 @@
-import { PageDescriptor } from 'tok-viewer';
+import { PageDescriptor, PageDomVirtualizer, computeActiveWindow } from 'tok-viewer';
 import { SelectionMode, TextFrameData } from '../types';
 import { t, tf, i18n } from '../i18n';
 import { el, icon, iconButton, button } from '../ui';
+import { alignFrames, FrameAlignType, FrameRect } from '../utils/frameAlignment';
 
 /**
  * Spread geometry for a right-to-left bound book.
@@ -45,7 +46,16 @@ export function fitZoom(viewportWidth: number, viewportHeight: number, pageWidth
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.floor(z)));
 }
 
-
+/** Escapes HTML entities to prevent XSS injection when interpolating strings into innerHTML. */
+export function escapeHtml(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 type FlowId = 'gemara' | 'rashi' | 'tosafot' | 'notes';
 
@@ -67,6 +77,8 @@ export interface SpreadCanvasCallbacks {
   onZoomChange?: (zoomPercent: number) => void;
   /** User clicked on an interactive text frame on the canvas. */
   onSelectFrameFlow?: (flowId: string, paraId?: string) => void;
+  /** User double clicked on an interactive text frame on the canvas. */
+  onFrameDoubleClick?: (flowId: string, paraId?: string) => void;
 }
 
 export class SpreadCanvas {
@@ -81,6 +93,21 @@ export class SpreadCanvas {
   private activePageIndex = 0;
   private pages: PageDescriptor[] = [];
   private selectedFrameId: string | null = null;
+  private selectedFrameIds: Set<string> = new Set();
+  private frameRects: Map<string, FrameRect> = new Map();
+  private virtualizer: PageDomVirtualizer;
+  private layerVisibility: Record<string, boolean> = {
+    'text-main': true,
+    'text-commentary': true,
+    decorations: true,
+    guides: true
+  };
+  private layerLocks: Record<string, boolean> = {
+    'text-main': false,
+    'text-commentary': false,
+    decorations: false,
+    guides: true
+  };
   private innerContainer!: HTMLElement;
   /** Takes the scaled size of the pages so the scroll area matches what is drawn. */
   private zoomBox!: HTMLElement;
@@ -95,6 +122,9 @@ export class SpreadCanvas {
     this.element = el('div', 'tok-canvas-shell');
     this.scroller = el('main', 'tok-canvas-container', { dir: 'rtl', tabindex: '-1' });
     this.element.appendChild(this.scroller);
+
+    const virtualizerHost = el('div', 'tok-virtualizer-host', { 'aria-hidden': 'true', style: 'display:none;' });
+    this.virtualizer = new PageDomVirtualizer(virtualizerHost);
 
     this.renderContainer();
     this.bindEvents();
@@ -128,13 +158,34 @@ export class SpreadCanvas {
       cancelAnimationFrame(this.scrollRaf);
       this.scrollRaf = 0;
     }
+    this.virtualizer.destroy();
     this.element.remove();
+  }
+
+  public getVirtualizer(): PageDomVirtualizer {
+    return this.virtualizer;
+  }
+
+  public getActiveWindow(): { start: number; end: number } {
+    return computeActiveWindow(this.activePageIndex, this.pages.length);
+  }
+
+  private syncActiveVirtualWindow(): void {
+    const win = computeActiveWindow(this.activePageIndex, this.pages.length);
+    this.innerContainer.querySelectorAll<HTMLElement>('.tok-page-sheet[data-page-index]').forEach((sheet) => {
+      const idx = parseInt(sheet.dataset.pageIndex || '-1', 10);
+      const inWindow = idx >= win.start && idx <= win.end;
+      sheet.classList.toggle('tok-page-mounted', inWindow);
+      sheet.dataset.virtualMounted = String(inWindow);
+    });
   }
 
   public setPages(pages: PageDescriptor[], activeIndex = 0): void {
     this.pages = pages;
     this.activePageIndex = activeIndex;
     this.lastReportedPage = activeIndex;
+    this.virtualizer.setPages(pages);
+    this.virtualizer.updateActiveWindow(activeIndex);
     this.renderSpreads();
     // After layout: fit the first spread to the window once, then reveal the active page.
     requestAnimationFrame(() => {
@@ -148,6 +199,8 @@ export class SpreadCanvas {
 
   public scrollToPage(pageIndex: number): void {
     this.activePageIndex = pageIndex;
+    this.virtualizer.updateActiveWindow(pageIndex);
+    this.syncActiveVirtualWindow();
     // While the smooth scroll runs, the pages it passes must not be reported; the
     // target is reported right away and tracking resumes once scrolling settles.
     this.programmaticScroll = true;
@@ -267,7 +320,7 @@ export class SpreadCanvas {
     if (!sheet) return;
 
     const html = paragraphs
-      .map((p) => `<p data-para-id="${p.id}" class="${p.styleId ? `tok-style-${p.styleId}` : ''}" style="margin:0 0 0.6em;line-height:1.55;">${p.text || '&nbsp;'}</p>`)
+      .map((p) => `<p data-para-id="${escapeHtml(p.id)}" class="${p.styleId ? `tok-style-${escapeHtml(p.styleId)}` : ''}" style="margin:0 0 0.6em;line-height:1.55;">${escapeHtml(p.text) || '&nbsp;'}</p>`)
       .join('');
 
     page.htmlContent = html;
@@ -429,6 +482,61 @@ export class SpreadCanvas {
 
     this.updateZoomBox();
     this.updateGuides();
+    this.syncActiveVirtualWindow();
+    this.applyLayerStates();
+  }
+
+  private flowToLayerId(flowId: string): string {
+    return flowId === 'gemara' || flowId === 'main' ? 'text-main' : 'text-commentary';
+  }
+
+  private defaultFrameRect(frameId: string, flowId: string): FrameRect {
+    switch (flowId) {
+      case 'rashi':
+        return { id: frameId, x: 150, y: 45, w: 55, h: 240, width: 55, height: 240 };
+      case 'tosafot':
+        return { id: frameId, x: 10, y: 45, w: 55, h: 240, width: 55, height: 240 };
+      case 'notes':
+        return { id: frameId, x: 35, y: 290, w: 110, h: 45, width: 110, height: 45 };
+      case 'gemara':
+      default:
+        return { id: frameId, x: 35, y: 45, w: 110, h: 240, width: 110, height: 240 };
+    }
+  }
+
+  private ensureFrameRect(frame: HTMLElement, frameId: string, flowId: string): FrameRect {
+    const existing = this.frameRects.get(frameId);
+    if (existing) {
+      this.syncFrameElementRect(frame, existing);
+      return existing;
+    }
+    const parseStyleNum = (val: string | undefined, fallback: number): number => {
+      if (!val) return fallback;
+      const n = parseFloat(val);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    const defaults = this.defaultFrameRect(frameId, flowId);
+    const w = parseStyleNum(frame.style.width || frame.dataset.rectW, defaults.w);
+    const h = parseStyleNum(frame.style.height || frame.dataset.rectH, defaults.h);
+    const rect: FrameRect = {
+      id: frameId,
+      x: parseStyleNum(frame.style.left || frame.dataset.rectX, defaults.x),
+      y: parseStyleNum(frame.style.top || frame.dataset.rectY, defaults.y),
+      w,
+      h,
+      width: w,
+      height: h
+    };
+    this.frameRects.set(frameId, rect);
+    this.syncFrameElementRect(frame, rect);
+    return rect;
+  }
+
+  private syncFrameElementRect(frame: HTMLElement, rect: FrameRect): void {
+    frame.dataset.rectX = String(rect.x);
+    frame.dataset.rectY = String(rect.y);
+    frame.dataset.rectW = String(rect.w);
+    frame.dataset.rectH = String(rect.h);
   }
 
   private createPageSheet(page: PageDescriptor, position: number): HTMLElement {
@@ -454,13 +562,13 @@ export class SpreadCanvas {
     });
 
     // Shading along the spine (the inner edge).
-    const spine = el('div', 'tok-page-spine', { 'aria-hidden': 'true' });
+    const spine = el('div', 'tok-page-spine', { 'aria-hidden': 'true', 'data-layer-id': 'decorations' });
     spine.style[isRightPage ? 'left' : 'right'] = '0';
     spine.style.background = `linear-gradient(to ${isRightPage ? 'left' : 'right'}, rgba(40,30,10,.10), rgba(40,30,10,0))`;
     sheet.appendChild(spine);
 
     // 1. Running head: page number on the outer corner.
-    const head = el('div', 'tok-page-head');
+    const head = el('div', 'tok-page-head', { 'data-layer-id': 'decorations' });
     const pageNo = el('span', undefined, undefined, `דף ${page.gematriaNumber} ${amud}`);
     if (isRightPage) head.append(pageNo);
     else head.append(pageNo);
@@ -489,25 +597,51 @@ export class SpreadCanvas {
 
       // Bind interactive clicks on all frames inside the rendered multi-flow content
       const frames = content.querySelectorAll<HTMLElement>('.tok-interactive-frame');
-      frames.forEach((fr) => {
+      frames.forEach((fr, idx) => {
+        const rawFlow = fr.dataset.flowId || 'gemara';
+        const flowId = (rawFlow === 'main' || rawFlow === 'primary') ? 'gemara' : (rawFlow as FlowId);
+        const frameId = fr.dataset.frameId || `frame-${page.pageIndex}-${flowId}-${idx}`;
+        fr.dataset.frameId = frameId;
+        fr.dataset.layerId = this.flowToLayerId(flowId);
+        this.ensureFrameRect(fr, frameId, flowId);
+
+        fr.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          const target = e.target as HTMLElement | null;
+          const paraEl = target?.closest('[data-para-id]') as HTMLElement | null;
+          const paraId = paraEl?.dataset?.paraId;
+          this.callbacks.onFrameDoubleClick?.(flowId, paraId);
+        });
+
         fr.addEventListener('click', (e) => {
           e.stopPropagation();
-          const flowId = (fr.dataset.flowId || 'gemara') as FlowId;
-          const frameId = fr.dataset.frameId || `frame-${page.pageIndex}-${flowId}`;
+          const layerId = fr.dataset.layerId || this.flowToLayerId(flowId);
+          if (this.isLayerLocked(layerId) || !this.isLayerVisible(layerId)) return;
+
           const target = e.target as HTMLElement | null;
           const paraEl = target?.closest('[data-para-id]') as HTMLElement | null;
           const paraId = paraEl?.dataset?.paraId;
 
-          this.selectFrame(fr, {
-            id: frameId,
-            title: this.flowTitle(flowId),
-            flowId,
-            className: '',
-            text: ''
-          });
+          this.selectFrame(
+            fr,
+            {
+              id: frameId,
+              title: this.flowTitle(flowId),
+              flowId,
+              className: '',
+              text: ''
+            },
+            e.shiftKey
+          );
+
+          if (this.selectedFrameIds.size > 1) {
+            this.callbacks.onSelectionModeChange('multi');
+            return;
+          }
 
           this.callbacks.onSelectFrameFlow?.(flowId, paraId);
 
+          const rect = this.ensureFrameRect(fr, frameId, flowId);
           const sel = window.getSelection();
           if (sel && sel.toString().trim().length > 0) {
             this.callbacks.onSelectionModeChange('text-edit');
@@ -520,10 +654,10 @@ export class SpreadCanvas {
           } else {
             this.callbacks.onSelectionModeChange('text-frame', {
               id: frameId,
-              xMm: 35,
-              yMm: 45,
-              widthMm: 110,
-              heightMm: 240,
+              xMm: rect.x,
+              yMm: rect.y,
+              widthMm: rect.w,
+              heightMm: rect.h,
               rotationDeg: 0,
               flowId,
               columns: 1,
@@ -532,7 +666,7 @@ export class SpreadCanvas {
               insetBottomMm: 3,
               insetRightMm: 4,
               insetLeftMm: 4,
-              verticalAlign: 'top',
+              verticalAlign: (fr.dataset.verticalAlign as TextFrameData['verticalAlign']) || 'top',
               text: ''
             });
           }
@@ -552,10 +686,10 @@ export class SpreadCanvas {
     }
 
     // 3. Running foot.
-    sheet.appendChild(el('div', 'tok-page-foot', { 'aria-hidden': 'true' }, `- ${page.gematriaNumber} -`));
+    sheet.appendChild(el('div', 'tok-page-foot', { 'aria-hidden': 'true', 'data-layer-id': 'decorations' }, `- ${page.gematriaNumber} -`));
 
     // Guides (margin rectangle, baseline grid).
-    const guides = el('div', 'tok-guides-layer', { 'aria-hidden': 'true' });
+    const guides = el('div', 'tok-guides-layer', { 'aria-hidden': 'true', 'data-layer-id': 'guides' });
     const marginGuide = el('div', 'tok-guide-margin-rect');
     marginGuide.style.inset = '36px 38px 40px';
     guides.appendChild(marginGuide);
@@ -568,14 +702,29 @@ export class SpreadCanvas {
   }
 
   private createInteractiveFrame(params: FrameParams): HTMLElement {
-    const frame = el('div', 'tok-interactive-frame', { 'data-frame-id': params.id, 'data-flow-id': params.flowId });
+    const layerId = this.flowToLayerId(params.flowId);
+    const frame = el('div', 'tok-interactive-frame', {
+      'data-frame-id': params.id,
+      'data-flow-id': params.flowId,
+      'data-layer-id': layerId
+    });
     const inner = el('div', `tok-frame-text ${params.className}`);
-    inner.innerHTML = (params.label ? `<div class="tok-frame-label">${params.label}</div>` : '') + (params.text || '');
+    inner.innerHTML = (params.label ? `<div class="tok-frame-label" data-layer-id="decorations">${escapeHtml(params.label)}</div>` : '') + (params.text ? escapeHtml(params.text) : '');
     frame.appendChild(inner);
+    this.ensureFrameRect(frame, params.id, params.flowId);
 
     frame.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.selectFrame(frame, params);
+      if (this.isLayerLocked(layerId) || !this.isLayerVisible(layerId)) return;
+
+      this.selectFrame(frame, params, e.shiftKey);
+
+      if (this.selectedFrameIds.size > 1) {
+        this.callbacks.onSelectionModeChange('multi');
+        return;
+      }
+
+      const rect = this.ensureFrameRect(frame, params.id, params.flowId);
 
       const sel = window.getSelection();
       if (sel && sel.toString().trim().length > 0) {
@@ -590,10 +739,10 @@ export class SpreadCanvas {
       } else {
         this.callbacks.onSelectionModeChange('text-frame', {
           id: params.id,
-          xMm: 35,
-          yMm: 45,
-          widthMm: 110,
-          heightMm: 240,
+          xMm: rect.x,
+          yMm: rect.y,
+          widthMm: rect.w,
+          heightMm: rect.h,
           rotationDeg: 0,
           flowId: params.flowId,
           columns: 1,
@@ -602,7 +751,7 @@ export class SpreadCanvas {
           insetBottomMm: 3,
           insetRightMm: 4,
           insetLeftMm: 4,
-          verticalAlign: 'top',
+          verticalAlign: (frame.dataset.verticalAlign as TextFrameData['verticalAlign']) || 'top',
           text: params.text
         });
       }
@@ -611,11 +760,25 @@ export class SpreadCanvas {
     return frame;
   }
 
-  private selectFrame(frame: HTMLElement, params: FrameParams): void {
-    this.clearFrameSelection();
+  private selectFrame(frame: HTMLElement, params: FrameParams, additive = false): void {
+    if (additive) {
+      if (this.selectedFrameIds.has(params.id)) {
+        this.selectedFrameIds.delete(params.id);
+        frame.classList.remove('tok-selected');
+        frame.querySelectorAll('.tok-resize-handle, .tok-frame-tag').forEach((h) => h.remove());
+        const remaining = Array.from(this.selectedFrameIds);
+        this.selectedFrameId = remaining[remaining.length - 1] || null;
+        return;
+      }
+    } else {
+      this.clearFrameSelection();
+    }
     this.selectedFrameId = params.id;
+    this.selectedFrameIds.add(params.id);
     frame.classList.add('tok-selected');
-    frame.appendChild(el('span', 'tok-frame-tag', { 'aria-hidden': 'true' }, params.title));
+    if (!frame.querySelector('.tok-frame-tag')) {
+      frame.appendChild(el('span', 'tok-frame-tag', { 'aria-hidden': 'true' }, params.title));
+    }
 
     // Corner handles
     const corners: [string, string, string][] = [
@@ -639,6 +802,197 @@ export class SpreadCanvas {
       f.querySelectorAll('.tok-resize-handle, .tok-frame-tag').forEach((h) => h.remove());
     });
     this.selectedFrameId = null;
+    this.selectedFrameIds.clear();
+  }
+
+  public getSelectedFrameIds(): string[] {
+    return Array.from(this.selectedFrameIds);
+  }
+
+  public selectFramesByIds(frameIds: string[]): void {
+    this.clearFrameSelection();
+    for (const id of frameIds) {
+      const frame = this.innerContainer.querySelector<HTMLElement>(`.tok-interactive-frame[data-frame-id="${id}"]`);
+      if (frame) {
+        const flowId = (frame.dataset.flowId || 'gemara') as FlowId;
+        this.selectFrame(
+          frame,
+          { id, title: this.flowTitle(flowId), flowId, className: '', text: '' },
+          true
+        );
+      } else {
+        this.selectedFrameIds.add(id);
+        this.selectedFrameId = id;
+      }
+    }
+    if (this.selectedFrameIds.size > 1) {
+      this.callbacks.onSelectionModeChange('multi');
+    }
+  }
+
+  public alignSelectedFrames(alignType: FrameAlignType | string): { before: FrameRect[]; after: FrameRect[] } {
+    let targetFrames: HTMLElement[] = [];
+    if (this.selectedFrameIds.size >= 2) {
+      for (const id of this.selectedFrameIds) {
+        const f = this.innerContainer.querySelector<HTMLElement>(`.tok-interactive-frame[data-frame-id="${id}"]`);
+        if (f) targetFrames.push(f);
+      }
+    }
+    if (targetFrames.length < 2) {
+      const activeSheet = this.innerContainer.querySelector<HTMLElement>(`.tok-page-sheet[data-page-index="${this.activePageIndex}"]`);
+      if (activeSheet) {
+        targetFrames = Array.from(activeSheet.querySelectorAll<HTMLElement>('.tok-interactive-frame')).filter((f) => {
+          const lid = f.dataset.layerId || this.flowToLayerId(f.dataset.flowId || 'gemara');
+          return this.isLayerVisible(lid) && !this.isLayerLocked(lid);
+        });
+      }
+    }
+    if (targetFrames.length < 2) {
+      targetFrames = Array.from(this.innerContainer.querySelectorAll<HTMLElement>('.tok-interactive-frame')).filter((f) => {
+        const lid = f.dataset.layerId || this.flowToLayerId(f.dataset.flowId || 'gemara');
+        return this.isLayerVisible(lid) && !this.isLayerLocked(lid);
+      });
+    }
+
+    const before: FrameRect[] = targetFrames.map((f, idx) => {
+      const flowId = f.dataset.flowId || 'gemara';
+      const id = f.dataset.frameId || `frame-${this.activePageIndex}-${flowId}-${idx}`;
+      f.dataset.frameId = id;
+      const rect = this.ensureFrameRect(f, id, flowId);
+      return { ...rect };
+    });
+
+    const after = alignFrames(before, alignType);
+    this.applyFrameRects(after);
+    return { before, after };
+  }
+
+  public applyFrameRects(rects: FrameRect[]): void {
+    for (const r of rects) {
+      const w = r.w ?? r.width ?? 110;
+      const h = r.h ?? r.height ?? 240;
+      const normalized: FrameRect = { ...r, w, h, width: w, height: h };
+      this.frameRects.set(r.id, normalized);
+      const frame = this.innerContainer.querySelector<HTMLElement>(`.tok-interactive-frame[data-frame-id="${r.id}"]`);
+      if (frame) {
+        this.syncFrameElementRect(frame, normalized);
+        frame.style.left = `${r.x}pt`;
+        frame.style.top = `${r.y}pt`;
+        frame.style.width = `${w}pt`;
+        frame.style.height = `${h}pt`;
+      }
+    }
+  }
+
+  public applyFrameGeometry(geometry: Partial<TextFrameData>): void {
+    const targetId = geometry.id || this.selectedFrameId;
+    let frame: HTMLElement | null = null;
+    if (targetId) {
+      frame = this.innerContainer.querySelector<HTMLElement>(`.tok-interactive-frame[data-frame-id="${targetId}"]`);
+    }
+    if (!frame) {
+      const activeSheet = this.innerContainer.querySelector<HTMLElement>(`.tok-page-sheet[data-page-index="${this.activePageIndex}"]`);
+      frame = activeSheet?.querySelector<HTMLElement>('.tok-interactive-frame') || null;
+    }
+    if (!frame) return;
+
+    const frameId = frame.dataset.frameId || targetId || `frame-main-${this.activePageIndex}`;
+    const flowId = frame.dataset.flowId || 'gemara';
+    const rect = { ...this.ensureFrameRect(frame, frameId, flowId) };
+
+    if (typeof geometry.xMm === 'number') {
+      rect.x = geometry.xMm;
+      frame.style.left = `${geometry.xMm}pt`;
+    }
+    if (typeof geometry.yMm === 'number') {
+      rect.y = geometry.yMm;
+      frame.style.top = `${geometry.yMm}pt`;
+    }
+    if (typeof geometry.widthMm === 'number') {
+      rect.w = geometry.widthMm;
+      rect.width = geometry.widthMm;
+      frame.style.width = `${geometry.widthMm}pt`;
+    }
+    if (typeof geometry.heightMm === 'number') {
+      rect.h = geometry.heightMm;
+      rect.height = geometry.heightMm;
+      frame.style.height = `${geometry.heightMm}pt`;
+    }
+    this.frameRects.set(frameId, rect);
+    this.syncFrameElementRect(frame, rect);
+
+    const textEl = frame.querySelector<HTMLElement>('.tok-frame-text') || frame;
+    if (typeof geometry.insetTopMm === 'number') textEl.style.paddingTop = `${geometry.insetTopMm}mm`;
+    if (typeof geometry.insetBottomMm === 'number') textEl.style.paddingBottom = `${geometry.insetBottomMm}mm`;
+    if (typeof geometry.insetRightMm === 'number') textEl.style.paddingRight = `${geometry.insetRightMm}mm`;
+    if (typeof geometry.insetLeftMm === 'number') textEl.style.paddingLeft = `${geometry.insetLeftMm}mm`;
+
+    if (geometry.verticalAlign) {
+      frame.dataset.verticalAlign = geometry.verticalAlign;
+      const justifyMap: Record<TextFrameData['verticalAlign'], string> = {
+        top: 'flex-start',
+        center: 'center',
+        bottom: 'flex-end',
+        justify: 'space-between'
+      };
+      const justify = justifyMap[geometry.verticalAlign] || 'flex-start';
+      frame.style.display = 'flex';
+      frame.style.flexDirection = 'column';
+      frame.style.justifyContent = justify;
+      textEl.style.display = 'flex';
+      textEl.style.flexDirection = 'column';
+      textEl.style.justifyContent = justify;
+      textEl.style.flex = '1';
+    }
+  }
+
+  public setLayerVisibility(layerId: string, visible: boolean): void {
+    this.layerVisibility[layerId] = visible;
+    if (!visible) {
+      this.innerContainer.querySelectorAll<HTMLElement>(`.tok-interactive-frame[data-layer-id="${layerId}"].tok-selected`).forEach((f) => {
+        const fid = f.dataset.frameId;
+        if (fid) this.selectedFrameIds.delete(fid);
+        f.classList.remove('tok-selected');
+        f.querySelectorAll('.tok-resize-handle, .tok-frame-tag').forEach((h) => h.remove());
+      });
+    }
+    this.applyLayerStates();
+  }
+
+  public setLayerLocked(layerId: string, locked: boolean): void {
+    this.layerLocks[layerId] = locked;
+    if (locked) {
+      this.innerContainer.querySelectorAll<HTMLElement>(`.tok-interactive-frame[data-layer-id="${layerId}"].tok-selected`).forEach((f) => {
+        const fid = f.dataset.frameId;
+        if (fid) this.selectedFrameIds.delete(fid);
+        f.classList.remove('tok-selected');
+        f.querySelectorAll('.tok-resize-handle, .tok-frame-tag').forEach((h) => h.remove());
+      });
+    }
+    this.applyLayerStates();
+  }
+
+  public isLayerVisible(layerId: string): boolean {
+    return this.layerVisibility[layerId] !== false;
+  }
+
+  public isLayerLocked(layerId: string): boolean {
+    return Boolean(this.layerLocks[layerId]);
+  }
+
+  private applyLayerStates(): void {
+    this.innerContainer.querySelectorAll<HTMLElement>('[data-layer-id]').forEach((elem) => {
+      const lid = elem.dataset.layerId || '';
+      const visible = this.isLayerVisible(lid);
+      const locked = this.isLayerLocked(lid);
+      elem.classList.toggle('tok-layer-hidden', !visible);
+      elem.classList.toggle('tok-layer-locked', locked);
+      elem.style.display = visible ? '' : 'none';
+      if (elem.classList.contains('tok-interactive-frame')) {
+        elem.style.pointerEvents = locked ? 'none' : '';
+        elem.setAttribute('aria-disabled', String(locked));
+      }
+    });
   }
 
   private updateGuides(): void {
@@ -738,15 +1092,18 @@ export class SpreadCanvas {
         if (page === null || page === this.lastReportedPage) return;
         this.lastReportedPage = page;
         this.activePageIndex = page;
+        this.virtualizer.updateActiveWindow(page);
+        this.syncActiveVirtualWindow();
         this.callbacks.onPageChange(page);
       });
     }, { passive: true });
   }
 
   private flowTitle(flowId: string): string {
-    switch (flowId) {
+    const canonical = (flowId === 'main' || flowId === 'primary') ? 'gemara' : flowId;
+    switch (canonical) {
       case 'gemara':
-        return 'גמרא (טקסט ראשי)';
+        return 'טקסט ראשי';
       case 'rashi':
         return 'רש"י';
       case 'tosafot':
