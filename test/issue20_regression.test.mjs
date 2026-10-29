@@ -21,6 +21,11 @@ async function loadTs(relPath) {
     bundle: true,
     format: 'esm',
     platform: 'neutral',
+    alias: {
+      'tok-viewer': path.join(rootDir, 'packages/tok-viewer/src/index.ts'),
+      'tok-canvas': path.join(rootDir, 'packages/tok-canvas/src/index.ts'),
+      'tok-story-editor': path.join(rootDir, 'packages/tok-story-editor/src/index.ts'),
+    },
     outfile,
     logLevel: 'silent',
   });
@@ -185,4 +190,44 @@ describe('GitHub Issue #20 Regression Tests: All Bugs Verified', () => {
     });
   });
 
+
+  describe('Regression: Export Button at Bottom, Safe Window Close & Flow Main Normalization', () => {
+    it('Export button is located in StatusBar and TopSystemBar has no export button', () => {
+      const topBarTs = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/components/TopSystemBar.ts'), 'utf-8');
+      const statusBarTs = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/components/StatusBar.ts'), 'utf-8');
+      const appTs = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/app.ts'), 'utf-8');
+
+      assert.ok(!topBarTs.includes("button(t('topBarExportPdf')"), 'TopSystemBar does not render the export button');
+      assert.ok(statusBarTs.includes("onExportPdf?: () => void;"), 'StatusBar declares onExportPdf callback');
+      assert.ok(statusBarTs.includes("button(t('topBarExportPdf')"), 'StatusBar renders export button');
+      assert.ok(appTs.includes("onExportPdf: () => this.handleSystemAction('export-pdf')"), 'App wires onExportPdf to status bar');
+    });
+
+    it('Window close guard in Electron main uses win.destroy() and valid JS with timeout', () => {
+      const mainTs = fs.readFileSync(path.join(rootDir, 'packages/tok-electron/src/main.ts'), 'utf-8');
+      assert.ok(mainTs.includes('win.destroy()'), 'Main uses win.destroy() to ensure clean unblocked window closing');
+      assert.ok(!mainTs.includes('(window as any)'), 'Main does not pass TypeScript "as any" to Chromium executeJavaScript');
+      assert.ok(mainTs.includes('timeoutPromise'), 'Main sets a safe timeout on renderer dirty check');
+    });
+
+    it('Flow id main and primary are mapped to gemara in typesetBridge and app.ts', async () => {
+      const { layoutToPageDescriptors } = await loadTs('packages/tok-ui/src/engine/typesetBridge.ts');
+      const dummyLayout = [{
+        page_number: 1,
+        recto: false,
+        frames: [{
+          frame_id: 'frame_1_main',
+          flow_id: 'main',
+          rect: { x: 10, y: 10, width: 200, height: 300 },
+          lines: []
+        }]
+      }];
+      const descriptors = layoutToPageDescriptors(dummyLayout);
+      assert.equal(descriptors.length, 1);
+      assert.ok(descriptors[0].htmlContent.includes('data-flow-id="gemara"'), 'typesetBridge normalizes flow_id "main" to "gemara"');
+
+      const appTs = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/app.ts'), 'utf-8');
+      assert.ok(appTs.includes("const canonicalFlowId = (flowId === 'main' || flowId === 'primary') ? 'gemara' : flowId;"), 'App normalizes main and primary flows to gemara');
+    });
+  });
 });
