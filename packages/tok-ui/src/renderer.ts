@@ -1,5 +1,4 @@
 import { TypesetOkApp } from './app';
-import { t } from './i18n';
 
 // Bootstrap TypesetOK Workbench
 window.addEventListener('DOMContentLoaded', () => {
@@ -22,7 +21,6 @@ window.addEventListener('DOMContentLoaded', () => {
   // Hook into IPC bridge if running inside Electron
   const tokIpc = (window as any).tokIpc;
   if (tokIpc) {
-    app.showToast(t('toastShellConnected'));
     // Native menu actions from the main process
     tokIpc.onEvent?.((payload: any) => {
       if (payload && typeof payload === 'object') runAction(payload.action, payload.data);

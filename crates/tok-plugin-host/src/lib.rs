@@ -74,7 +74,10 @@ pub trait TokPlugin: Send + Sync {
 
     /// Executes the plugin against `doc` and applies the resulting transaction in-place,
     /// enforcing `ReadDocument` and `ModifyText` capability requirements.
-    fn try_on_before_typeset(&self, doc: &mut DocumentRoot) -> Result<CompoundTransaction, PluginError> {
+    fn try_on_before_typeset(
+        &self,
+        doc: &mut DocumentRoot,
+    ) -> Result<CompoundTransaction, PluginError> {
         let meta = self.metadata();
         if !meta.capabilities.contains(&PluginCapability::ReadDocument) {
             return Err(PluginError::PermissionDenied {
@@ -88,9 +91,7 @@ pub trait TokPlugin: Send + Sync {
             ctx.transaction
         };
 
-        if !tx.operations.is_empty()
-            && !meta.capabilities.contains(&PluginCapability::ModifyText)
-        {
+        if !tx.operations.is_empty() && !meta.capabilities.contains(&PluginCapability::ModifyText) {
             return Err(PluginError::PermissionDenied {
                 plugin_id: meta.id.clone(),
                 capability: "ModifyText".to_string(),
@@ -742,7 +743,10 @@ impl HebrewGrepAcronymPlugin {
 }
 
 impl ConfiguredHebrewGrepAcronymPlugin {
-    pub fn on_before_typeset(&self, doc: &mut DocumentRoot) -> Result<CompoundTransaction, PluginError> {
+    pub fn on_before_typeset(
+        &self,
+        doc: &mut DocumentRoot,
+    ) -> Result<CompoundTransaction, PluginError> {
         TokPlugin::try_on_before_typeset(self, doc)
     }
 }
@@ -999,13 +1003,15 @@ mod tests {
     #[test]
     fn divine_name_shield_protects_sacred_names_and_is_idempotent() {
         let mut doc = DocumentRoot::new("בדיקת שמות קדושים");
-        doc.sections[0].main_flow_mut().unwrap().paragraphs.push(
-            ParagraphNode::new(
+        doc.sections[0]
+            .main_flow_mut()
+            .unwrap()
+            .paragraphs
+            .push(ParagraphNode::new(
                 FractionalIndex::initial(),
                 "normal",
                 "אמר אל שדי כי א-להים וכן י-ה-ו-ה בבית-ספר רגיל",
-            ),
-        );
+            ));
 
         let plugin = DivineNameShieldPlugin;
         plugin.on_before_typeset(&mut doc);
@@ -1021,7 +1027,10 @@ mod tests {
         // Idempotence: f(f(x)) == f(x)
         plugin.on_before_typeset(&mut doc);
         let after_twice = &doc.sections[0].main_flow().unwrap().paragraphs[0].text;
-        assert_eq!(after_twice, &after_once, "DivineNameShieldPlugin must be idempotent");
+        assert_eq!(
+            after_twice, &after_once,
+            "DivineNameShieldPlugin must be idempotent"
+        );
     }
 
     #[test]
@@ -1108,11 +1117,17 @@ mod tests {
         for sample in samples {
             let s1 = shield_sacred_names(sample);
             let s2 = shield_sacred_names(&s1);
-            assert_eq!(s1, s2, "shield_sacred_names idempotence failed on {sample:?}");
+            assert_eq!(
+                s1, s2,
+                "shield_sacred_names idempotence failed on {sample:?}"
+            );
 
             let a1 = convert_hebrew_acronyms(sample);
             let a2 = convert_hebrew_acronyms(&a1);
-            assert_eq!(a1, a2, "convert_hebrew_acronyms idempotence failed on {sample:?}");
+            assert_eq!(
+                a1, a2,
+                "convert_hebrew_acronyms idempotence failed on {sample:?}"
+            );
         }
 
         // Combined host run_before_typeset idempotence
@@ -1123,7 +1138,11 @@ mod tests {
                 .main_flow_mut()
                 .unwrap()
                 .paragraphs
-                .push(ParagraphNode::new(FractionalIndex::initial(), "normal", sample));
+                .push(ParagraphNode::new(
+                    FractionalIndex::initial(),
+                    "normal",
+                    sample,
+                ));
         }
 
         host.run_before_typeset(&mut doc);
