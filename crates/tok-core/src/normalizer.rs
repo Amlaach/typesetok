@@ -1,10 +1,11 @@
-//! Hebrew Typographic Normalizer according to Israeli Standard SI 6100 (ת"י 6100).
+//! Canonical Hebrew Normalization (Unicode NFC + Masoretic/SBL Combining Class Ordering:
+//! Base -> Dagesh/Shin-Sin -> Vowel Niqqud -> Cantillation Taamim).
 //!
 //! Standard Unicode NFD sorts combining marks strictly by Canonical Combining Class (CCC).
 //! This erroneously swaps Dagesh (CCC=21) before Shin Dot (CCC=24) and pushes Qamats (CCC=18)
 //! ahead of Dagesh, which breaks OpenType GPOS feature lookups (`mark`, `mkmk`) in fonts.
 //!
-//! SI 6100 mandates the canonical order:
+//! Canonical Hebrew Normalization enforces the deterministic Masoretic/SBL order:
 //! Base Letter -> Shin/Sin Dot -> Dagesh/Mapiq/Rafe -> Niqqud -> Meteg -> Te'amim
 
 use unicode_normalization::UnicodeNormalization;
@@ -21,8 +22,15 @@ pub enum HebrewMarkCategory {
 
 pub struct HebrewNormalizer;
 
+/// Canonical Hebrew Normalization (Unicode NFC + Masoretic/SBL Combining Class Ordering:
+/// Base -> Dagesh/Shin-Sin -> Vowel Niqqud -> Cantillation Taamim).
+pub fn canonicalize_hebrew(input: &str) -> String {
+    HebrewNormalizer::normalize(input)
+}
+
 impl HebrewNormalizer {
-    /// Classifies a combining character into the SI 6100 category.
+    /// Classifies a combining character into its Canonical Hebrew Normalization
+    /// (Masoretic/SBL Combining Class Ordering) category.
     pub fn mark_category(c: char) -> Option<HebrewMarkCategory> {
         let code = c as u32;
         match code {
@@ -66,7 +74,9 @@ impl HebrewNormalizer {
         result
     }
 
-    /// Normalizes Hebrew text strictly according to SI 6100.
+    /// Normalizes Hebrew text using Canonical Hebrew Normalization
+    /// (Unicode NFC + Masoretic/SBL Combining Class Ordering:
+    /// Base -> Dagesh/Shin-Sin -> Vowel Niqqud -> Cantillation Taamim).
     pub fn normalize(input: &str) -> String {
         // Step 1: Decompose any legacy presentation forms
         let decomposed = Self::decompose_presentation_forms(input);
@@ -99,6 +109,11 @@ impl HebrewNormalizer {
 
         flush_marks(&mut current_marks, &mut result);
         result
+    }
+
+    /// Alias for [`HebrewNormalizer::normalize`].
+    pub fn canonicalize_hebrew(input: &str) -> String {
+        Self::normalize(input)
     }
 
     /// Returns true if character is a Hebrew letter (Alef .. Tav, final forms).
@@ -176,7 +191,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_si_6100_ordering_shin_dagesh_qamats() {
+    fn test_canonical_hebrew_ordering_shin_dagesh_qamats() {
         // Input with wrong order: Base + Qamats (\u{05B8}) + Dagesh (\u{05BC}) + Shin Dot (\u{05C1})
         let wrong_input = "\u{05E9}\u{05B8}\u{05BC}\u{05C1}";
 
@@ -192,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn test_si_6100_with_meteg_and_teamim() {
+    fn test_canonical_hebrew_with_meteg_and_teamim() {
         // Base Bet + Patah + Te'amim (Etnahta \u{0591}) + Dagesh + Meteg
         let input = "\u{05D1}\u{05B7}\u{0591}\u{05BC}\u{05BD}";
         let normalized = HebrewNormalizer::normalize(input);
@@ -320,5 +335,90 @@ mod tests {
         assert!(HebrewNormalizer::is_bidi_control('\u{2069}')); // PDI
         assert!(!HebrewNormalizer::is_bidi_control('א'));
         assert!(!HebrewNormalizer::is_bidi_control('A'));
+    }
+
+    #[test]
+    fn property_canonicalize_hebrew_idempotence_and_nfc_length_preservation() {
+        let corpus = [
+            "בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם וְאֵ֥ת הָאָֽרֶץ׃",
+            "\u{05E9}\u{0591}\u{05BD}\u{05B8}\u{05BC}\u{05C1}\u{05DC}\u{05D5}\u{05B9}\u{05DD}",
+            "\u{05D0}\u{05B2}\u{0591}\u{05DC}\u{05B9}\u{05D4}\u{05B4}\u{0596}\u{05D9}\u{05DD}",
+            "רַמְבַּ״ם וְשַׁ״ס עִם אנגלית ABC 123!",
+            "\u{FB2A}\u{05B8}\u{0591} \u{FB31}\u{05B7}\u{05BD}",
+        ];
+
+        for sample in corpus {
+            let first = canonicalize_hebrew(sample);
+            let second = canonicalize_hebrew(&first);
+            assert_eq!(first, second, "canonicalize_hebrew must be idempotent");
+
+            // Standard Hebrew codepoints do not precompose under Unicode NFC,
+            // so once presentation forms are decomposed, NFC and canonicalize_hebrew
+            // strictly preserve character and byte lengths.
+            let nfc_input: String = first.nfc().collect();
+            let after_nfc = canonicalize_hebrew(&nfc_input);
+            assert_eq!(
+                after_nfc.chars().count(),
+                nfc_input.chars().count(),
+                "Length in scalar values must be preserved after NFC"
+            );
+            assert_eq!(
+                after_nfc.len(),
+                nfc_input.len(),
+                "Byte length must be preserved after NFC"
+            );
+            assert_eq!(after_nfc, first);
+        }
+    }
+
+    #[test]
+    fn property_commutative_equivalence_of_combining_mark_permutations() {
+        // 5 combining marks from distinct Masoretic/SBL categories:
+        // ShinDot (\u{05C1}), Dagesh (\u{05BC}), Qamats (\u{05B8}), Meteg (\u{05BD}), Etnahta (\u{0591})
+        let marks = ['\u{05C1}', '\u{05BC}', '\u{05B8}', '\u{05BD}', '\u{0591}'];
+        let base = '\u{05E9}'; // Shin
+        let expected = "\u{05E9}\u{05C1}\u{05BC}\u{05B8}\u{05BD}\u{0591}";
+
+        // Generate all 5! = 120 permutations via Heap's algorithm
+        let mut perm = marks;
+        let mut c = [0usize; 5];
+        let mut count = 0usize;
+
+        let check = |p: &[char; 5]| {
+            let mut s = String::new();
+            s.push(base);
+            for &m in p {
+                s.push(m);
+            }
+            let canonical = canonicalize_hebrew(&s);
+            assert_eq!(
+                canonical, expected,
+                "Permutation {:?} must canonicalize to expected order",
+                p
+            );
+        };
+
+        check(&perm);
+        count += 1;
+
+        let mut i = 0;
+        while i < 5 {
+            if c[i] < i {
+                if i % 2 == 0 {
+                    perm.swap(0, i);
+                } else {
+                    perm.swap(c[i], i);
+                }
+                check(&perm);
+                count += 1;
+                c[i] += 1;
+                i = 0;
+            } else {
+                c[i] = 0;
+                i += 1;
+            }
+        }
+
+        assert_eq!(count, 120, "All 120 permutations of 5 marks must be tested");
     }
 }
