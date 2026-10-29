@@ -172,9 +172,13 @@ export class StoryEditor {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
-      if (this.onStoryChangeCallback) {
-        this.onStoryChangeCallback(this.lastSavedParagraphs);
-      }
+    }
+    const domParas = this.parseAllParagraphsDom();
+    if (domParas.length > 0) {
+      this.lastSavedParagraphs = domParas;
+    }
+    if (this.onStoryChangeCallback) {
+      this.onStoryChangeCallback(this.cloneParagraphs(this.lastSavedParagraphs));
     }
   }
 
@@ -238,16 +242,31 @@ export class StoryEditor {
 
   /** Current paragraphs as edited with semantic spans and style patches. */
   public getStory(freshFromDom = false): StoryParagraph[] {
-    if (freshFromDom || this.lastSavedParagraphs.length === 0) {
+    if (freshFromDom) {
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
+      const domParas = this.parseAllParagraphsDom();
+      if (domParas.length > 0 || this.lastSavedParagraphs.length === 0) {
+        this.lastSavedParagraphs = domParas;
+      }
+    } else if (this.lastSavedParagraphs.length === 0) {
       this.lastSavedParagraphs = this.parseAllParagraphsDom();
     }
     return this.cloneParagraphs(this.lastSavedParagraphs);
   }
 
   public parseAllParagraphsDom(): StoryParagraph[] {
-    return Array.from(this.editorEl.querySelectorAll<HTMLElement>('p[data-para-id]')).map((p) =>
-      parseParagraphDom(p)
+    const queried = Array.from(this.editorEl.querySelectorAll<HTMLElement>('p[data-para-id]'));
+    if (queried.length > 0) {
+      return queried.map((p) => parseParagraphDom(p));
+    }
+    const directChildren = Array.from(this.editorEl.children || []).filter(
+      (c): c is HTMLElement =>
+        (c as HTMLElement).tagName?.toUpperCase() === 'P' && Boolean((c as HTMLElement).dataset?.paraId)
     );
+    return directChildren.map((p) => parseParagraphDom(p));
   }
 
   /** Retrieve a single paragraph by ID */
@@ -327,7 +346,11 @@ export class StoryEditor {
     return true;
   }
 
-  public executeTransaction(description: string, fn: () => void): void {
+  public executeTransaction(
+    description: string,
+    fn: () => void,
+    hooks?: { onUndo?: () => void; onRedo?: () => void }
+  ): void {
     const before = this.getStory();
     const selBefore = this.getStorySelection();
 
@@ -341,7 +364,9 @@ export class StoryEditor {
       description,
       isTyping: false,
       selectionBefore: selBefore || undefined,
-      selectionAfter: selAfter || undefined
+      selectionAfter: selAfter || undefined,
+      onUndo: hooks?.onUndo,
+      onRedo: hooks?.onRedo
     });
 
     this.lastSavedParagraphs = JSON.parse(JSON.stringify(after));
