@@ -1,6 +1,24 @@
-//! `tok-ipc` - Zero-Copy Binary IPC Bridge for TypesetOK (TOK).
+//! `tok-ipc` - Zero-Copy Binary IPC Framing Protocol for TypesetOK (TOK).
 //!
-//! Provides high-speed communication between Electron / TypeScript UI and the Rust Core engine.
+//! # Architecture & Role in the Workspace
+//!
+//! TypesetOK uses a dual-channel communication model between the Electron/TypeScript desktop shell
+//! and the native Rust typesetting & pre-press engine:
+//!
+//! 1. **Length-Prefixed Binary IPC Protocol (`tok-ipc`)**:
+//!    Provides [`MessageFramer`], [`IpcCommand`], and [`IpcEvent`] for low-latency streaming
+//!    interaction over byte streams (such as stdio pipes or local sockets). Every frame consists
+//!    of a 4-byte little-endian payload length header (`FRAME_HEADER_LEN`) bounded by
+//!    [`MAX_MESSAGE_SIZE`](protocol::MAX_MESSAGE_SIZE) followed by a structured command or event
+//!    payload (interactive text edits, hit-testing, drop-cap and polygon exclusion zone updates,
+//!    multi-flow commentary anchor linking, and column height balancing).
+//!
+//! 2. **Headless CLI Subprocess Invocation (`tok-cli`)**:
+//!    Complements the streaming protocol by exposing deterministic batch operations—such as
+//!    full-document typesetting (`typeset-document`), incremental reflow (`incremental-typeset`),
+//!    ISO PDF/X-1a export (`render-pdf`), pre-paginated HTML export (`render-html`), `.tok`
+//!    package persistence (`save-package`, `open-package`), and pre-typeset typographic plugins
+//!    (`run-plugins`)—via direct `tok-cli` subprocess execution.
 
 pub mod protocol;
 
