@@ -11,6 +11,7 @@ export interface StructureBarCallbacks {
   onSelectFlow: (flowId: string) => void;
   onSelectStyle: (styleId: string) => void;
   onToggleLayer: (layerId: string, visible: boolean) => void;
+  onLockLayer?: (layerId: string, locked: boolean) => void;
   onOpenSettings?: () => void;
   onOpenAbout?: () => void;
   /** The side panel was opened or closed from the rail. */
@@ -123,6 +124,24 @@ export class StructureBar {
 
   public getFlows(): MultiFlowItem[] {
     return this.flows.map((f) => ({ ...f }));
+  }
+
+  public getLayers(): { id: string; name: string; visible: boolean; locked: boolean }[] {
+    return this.layers.map((l) => ({ ...l }));
+  }
+
+  public setLayerVisibility(layerId: string, visible: boolean): void {
+    const layer = this.layers.find((l) => l.id === layerId);
+    if (!layer) return;
+    layer.visible = visible;
+    if (this.activeTab === 'layers') this.renderPanel();
+  }
+
+  public setLayerLocked(layerId: string, locked: boolean): void {
+    const layer = this.layers.find((l) => l.id === layerId);
+    if (!layer) return;
+    layer.locked = locked;
+    if (this.activeTab === 'layers') this.renderPanel();
   }
 
   /** Opens/closes the side panel (the rail always stays). */
@@ -394,6 +413,7 @@ export class StructureBar {
       lock.addEventListener('click', () => {
         l.locked = !l.locked;
         syncLock();
+        this.callbacks.onLockLayer?.(l.id, l.locked);
       });
       syncLock();
       row.appendChild(lock);
