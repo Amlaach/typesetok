@@ -101,6 +101,7 @@ export const strings: Translations = {
   structureSpreadRight: { he: 'כפולה ימנית', en: 'right of spread' },
   structureSpreadLeft: { he: 'כפולה שמאלית', en: 'left of spread' },
   structureFlowsTitle: { he: 'תזרימים', en: 'Flows' },
+  structureChangeTemplate: { he: 'החלפת תבנית ספר…', en: 'Change book layout…' },
   structureFlowsDesc: { he: 'כל תזרים הוא טקסט רציף אחד. המנוע מפזר אותו על פני העמודים לפי צורת הדף.', en: 'Each flow is one continuous text. The engine pours it across the pages following the page layout.' },
   structureFlowPosition: { he: 'מיקום', en: 'Position' },
   structureStylesTitle: { he: 'סגנונות', en: 'Styles' },
@@ -109,6 +110,7 @@ export const strings: Translations = {
   structureShowLayer: { he: 'הצג שכבה', en: 'Show layer' },
   structureLockLayer: { he: 'נעל שכבה', en: 'Lock layer' },
   structureUnlockLayer: { he: 'שחרר נעילת שכבה', en: 'Unlock layer' },
+  toastTemplateSwitched: { he: 'תבנית הספר הוחלפה ל: {name}', en: 'Book layout changed to: {name}' },
 
   // Settings Tabs
   settingsTitle: { he: 'הגדרות', en: 'Settings' },
@@ -381,7 +383,6 @@ export const strings: Translations = {
   appLangEnglish: { he: 'English', en: 'English' },
   appLayerShown: { he: 'מוצגת', en: 'shown' },
   appLayerHidden: { he: 'מוסתרת', en: 'hidden' },
-  toastShellConnected: { he: 'מעטפת TypesetOK פעילה ומחוברת לליבת Rust', en: 'TypesetOK shell is active and connected to the Rust core' },
   toastLangSwitched: { he: 'שפת הממשק הוחלפה ל-{lang}', en: 'Interface language switched to {lang}' },
   toastLangUpdated: { he: 'שפת הממשק עודכנה: {lang}', en: 'Interface language updated: {lang}' },
   toastFlowSelected: { he: 'תזרים נבחר: {name}', en: 'Flow selected: {name}' },

@@ -2,12 +2,13 @@ import { app, BrowserWindow, ipcMain, shell, dialog, IpcMainInvokeEvent } from '
 import * as path from 'path';
 import * as fs from 'fs';
 import * as zlib from 'zlib';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { buildApplicationMenu } from './menu';
 import { logger } from './logger';
 import { updater, getAppVersion, isSafeExternalUrl } from './updater';
 import { pluginManager } from './plugin-manager';
+import { parseInstallLanguage, parseInstallProjectsDir, InstallLanguage } from './install-language';
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
@@ -744,6 +745,48 @@ handle('tok:typeset-document', async (_, payload: { document?: unknown; inputPat
 });
 
 // Logger Handlers
+// What the user picked in the Windows installer (language and projects folder), read once from the registry.
+// The language is requested synchronously by the preload on first run, because the renderer needs it before it starts.
+let installRegistryCache: { language: InstallLanguage | null; projectsDir: string | null } | undefined;
+function readInstallRegistry(): { language: InstallLanguage | null; projectsDir: string | null } {
+  if (installRegistryCache) return installRegistryCache;
+  const info: { language: InstallLanguage | null; projectsDir: string | null } = { language: null, projectsDir: null };
+  if (process.platform === 'win32') {
+    for (const root of ['HKCU', 'HKLM']) {
+      try {
+        const out = execFileSync('reg', ['query', `${root}\\Software\\TypesetOK`], { encoding: 'utf8', timeout: 3000, windowsHide: true });
+        info.language ||= parseInstallLanguage(out);
+        info.projectsDir ||= parseInstallProjectsDir(out);
+      } catch {
+        // key missing (portable run, dev build): keep the defaults
+      }
+    }
+  }
+  installRegistryCache = info;
+  return info;
+}
+ipcMain.on('tok:get-install-language', (event) => {
+  event.returnValue = isAppUrl(event.senderFrame?.url) ? readInstallRegistry().language : null;
+});
+
+/** The installer's projects folder, only if it still exists as a directory. */
+function getProjectsDir(): string | undefined {
+  const dir = readInstallRegistry().projectsDir;
+  try {
+    return dir && fs.statSync(dir).isDirectory() ? dir : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A bare file name (or nothing) opens in the projects folder; a full path the caller chose is kept. */
+function withProjectsDir(defaultPath?: string): string | undefined {
+  const dir = getProjectsDir();
+  if (!dir) return defaultPath;
+  if (!defaultPath) return dir;
+  return path.basename(defaultPath) === defaultPath ? path.join(dir, defaultPath) : defaultPath;
+}
+
 handle('tok:get-recent-logs', () => logger.getRecentLogs(100));
 handle('tok:open-logs-folder', () => logger.openLogsFolder());
 handle('tok:clean-old-logs', (_, days?: number) =>
@@ -782,7 +825,7 @@ handle('tok:get-app-info', () => ({
 handle('tok:show-save-dialog', async (_, options?: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) => {
   if (!mainWindow) return null;
   const res = await dialog.showSaveDialog(mainWindow, {
-    defaultPath: options?.defaultPath,
+    defaultPath: withProjectsDir(options?.defaultPath),
     filters: options?.filters ?? [{ name: 'All Files', extensions: ['*'] }],
   });
   if (res.canceled) return null;
@@ -792,6 +835,7 @@ handle('tok:show-save-dialog', async (_, options?: { defaultPath?: string; filte
 handle('tok:show-open-dialog', async (_, options?: { filters?: { name: string; extensions: string[] }[] }) => {
   if (!mainWindow) return null;
   const res = await dialog.showOpenDialog(mainWindow, {
+    defaultPath: getProjectsDir(),
     filters: options?.filters ?? [{ name: 'TypesetOK Document', extensions: ['tok'] }],
   });
   if (res.canceled || !res.filePaths.length) return null;

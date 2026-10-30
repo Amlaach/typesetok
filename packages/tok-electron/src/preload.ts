@@ -1,5 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// First run after install: adopt the language picked in the installer. A language the user already
+// chose inside the app (saved under tok_lang) always wins. Runs before the page, so the UI starts correctly.
+try {
+  if (!localStorage.getItem('tok_lang')) {
+    const installLang = ipcRenderer.sendSync('tok:get-install-language');
+    if (installLang === 'he' || installLang === 'en') localStorage.setItem('tok_lang', installLang);
+  }
+} catch {
+  // storage unavailable: the UI falls back to its default language
+}
+
 export interface TokIpcBridge {
   sendCommand: (cmd: unknown) => Promise<unknown>;
   onEvent: (callback: (event: unknown) => void) => () => void;
