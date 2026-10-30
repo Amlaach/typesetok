@@ -51,6 +51,36 @@ function runWhenIdle(fn: () => void): void {
   });
 }
 
+/** Flow template chosen per imported source file, so re-opening it does not ask again. */
+const IMPORT_TEMPLATE_STORAGE_KEY = 'tok_import_templates';
+const IMPORT_TEMPLATE_IDS: readonly TemplateType[] = ['prose', 'notes', 'gemara', 'mikraot', 'bulletin'];
+
+function readImportTemplates(): Record<string, string> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(IMPORT_TEMPLATE_STORAGE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberImportTemplate(filePath: string | undefined, templateId: TemplateType): void {
+  if (!filePath) return;
+  try {
+    const all = readImportTemplates();
+    all[filePath] = templateId;
+    const keys = Object.keys(all);
+    // Keep the map small: drop the oldest entries beyond 100 files.
+    for (const k of keys.slice(0, Math.max(0, keys.length - 100))) delete all[k];
+    localStorage.setItem(IMPORT_TEMPLATE_STORAGE_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+function recallImportTemplate(filePath: string): TemplateType | null {
+  const id = readImportTemplates()[filePath];
+  return IMPORT_TEMPLATE_IDS.includes(id as TemplateType) ? (id as TemplateType) : null;
+}
+
 /** i18n keys for the display names of the multi-flow ids used by the structure bar. */
 const FLOW_NAME_KEYS: Record<string, string> = {
   gemara: 'inspFlowGemara',
@@ -892,6 +922,7 @@ export class TypesetOkApp {
       this.importTemplateModalInstance = new ImportTemplateModal({
         onSelect: (templateId) => {
           if (this.pendingImportResult) {
+            rememberImportTemplate(this.pendingImportResult.filePath, templateId);
             this.applyImportedDocument(this.pendingImportResult.result, this.pendingImportResult.filePath, templateId);
             this.pendingImportResult = null;
           }
@@ -2050,7 +2081,7 @@ export class TypesetOkApp {
 
     this.hasOpenDocument = true;
     this.setDirty(false);
-    this.topBar.setDocumentTitle(name, false);
+    this.showDocumentTitle(name, false);
     addRecentProject({ name, pages: this.pages.length, lastSavedAt: new Date().toISOString() });
     this.welcomeModal.setHasOpenDocument(true);
     this.welcomeModal.hide();
@@ -2085,7 +2116,7 @@ export class TypesetOkApp {
           this.currentFilePath = targetPath;
           this.documentTitle = baseName.replace(/\.tok$/i, '');
           this.setDirty(false);
-          this.topBar.setDocumentTitle(this.documentTitle, false);
+          this.showDocumentTitle(this.documentTitle, false);
           addRecentProject({
             name: baseName,
             path: targetPath,
@@ -2116,7 +2147,7 @@ export class TypesetOkApp {
           this.currentFilePath = targetPath;
           this.documentTitle = baseName.replace(/\.tok$/i, '');
           this.setDirty(false);
-          this.topBar.setDocumentTitle(this.documentTitle, false);
+          this.showDocumentTitle(this.documentTitle, false);
           addRecentProject({
             name: baseName,
             path: targetPath,
@@ -2146,10 +2177,10 @@ export class TypesetOkApp {
     const displayTitle = title || docRoot.metadata?.title || baseName;
     this.documentTitle = displayTitle;
     this.setDirty(false);
-    this.topBar.setDocumentTitle(displayTitle, false);
+    this.showDocumentTitle(displayTitle, false);
 
     if (newState.settings) {
-      this.inspector.setDocumentSettings(newState.settings);
+      this.inspector.setDocumentSettings({ ...newState.settings, title: displayTitle });
     }
 
     const flowKeys = Object.keys(newState.flows);
@@ -2219,7 +2250,7 @@ export class TypesetOkApp {
 
     this.documentTitle = baseName;
     this.setDirty(false);
-    this.topBar.setDocumentTitle(baseName, false);
+    this.showDocumentTitle(baseName, false);
     this.currentFilePath = filePath;
     if (this.pages.length === 0) {
       this.pages = [{
@@ -2286,6 +2317,13 @@ export class TypesetOkApp {
         throw new Error('IPC reader not available');
       }
 
+      // Re-opening a known file (recent projects, OS file association) reuses the flow chosen the first
+      // time; the picker still appears for a first import and for an explicit "Import document".
+      const remembered = explicitPath ? recallImportTemplate(targetPath) : null;
+      if (remembered) {
+        this.applyImportedDocument(result, targetPath, remembered);
+        return;
+      }
       this.pendingImportResult = { result, filePath: targetPath };
       this.importTemplateModal.show(result);
     } catch (err: any) {
@@ -2335,7 +2373,7 @@ export class TypesetOkApp {
     this.resetDocumentSession();
     this.documentTitle = result.title;
     this.currentFilePath = filePath || '';
-    this.topBar.setDocumentTitle(this.documentTitle, true);
+    this.showDocumentTitle(this.documentTitle, true);
     this.setDirty(true);
     this.hasOpenDocument = true;
     this.welcomeModal.setHasOpenDocument(true);
@@ -2658,12 +2696,18 @@ export class TypesetOkApp {
     }, 3200);
   }
 
+  /** Shows the document title in the top bar and in the inspector header, so both always agree. */
+  private showDocumentTitle(title: string, isDirty: boolean): void {
+    this.topBar.setDocumentTitle(title, isDirty);
+    this.inspector?.setDocumentSettings({ title });
+  }
+
   public renameDocument(newTitle: string): void {
     const trimmed = newTitle.trim();
     if (!trimmed || trimmed === this.documentTitle) return;
     this.documentTitle = trimmed;
     this.documentState.title = trimmed;
-    this.topBar.setDocumentTitle(trimmed, true);
+    this.showDocumentTitle(trimmed, true);
     this.setDirty(true);
     this.showToast(tf('toastTitleRenamed', { title: trimmed }));
   }

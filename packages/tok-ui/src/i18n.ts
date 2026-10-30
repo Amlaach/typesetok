@@ -381,7 +381,6 @@ export const strings: Translations = {
   appLangEnglish: { he: 'English', en: 'English' },
   appLayerShown: { he: 'מוצגת', en: 'shown' },
   appLayerHidden: { he: 'מוסתרת', en: 'hidden' },
-  toastShellConnected: { he: 'מעטפת TypesetOK פעילה ומחוברת לליבת Rust', en: 'TypesetOK shell is active and connected to the Rust core' },
   toastLangSwitched: { he: 'שפת הממשק הוחלפה ל-{lang}', en: 'Interface language switched to {lang}' },
   toastLangUpdated: { he: 'שפת הממשק עודכנה: {lang}', en: 'Interface language updated: {lang}' },
   toastFlowSelected: { he: 'תזרים נבחר: {name}', en: 'Flow selected: {name}' },
