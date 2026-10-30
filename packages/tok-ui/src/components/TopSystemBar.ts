@@ -1,3 +1,4 @@
+import { UpdatesBellButton } from '../updates/UpdatesBellButton';
 import { ViewMode } from '../types';
 import { t, i18n } from '../i18n';
 import { el, icon, iconButton, kbd, button } from '../ui';
@@ -11,6 +12,7 @@ export interface TopSystemBarCallbacks {
   onToggleLanguage?: () => void;
   onOpenSettings?: () => void;
   onOpenAbout?: () => void;
+  onOpenWhatsNew?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
   onRenameDocument?: (newTitle: string) => void;
@@ -302,6 +304,12 @@ export class TopSystemBar {
     }
     end.appendChild(undo);
     end.appendChild(redo);
+    if (this.callbacks.onOpenWhatsNew) {
+      const bell = new UpdatesBellButton({
+        onClick: () => this.callbacks.onOpenWhatsNew?.()
+      });
+      end.appendChild(bell.element);
+    }
 
     this.element.appendChild(end);
   }
