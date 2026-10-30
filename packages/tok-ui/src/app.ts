@@ -2213,7 +2213,8 @@ export class TypesetOkApp {
 
   public openAnyFile(filePath: string): void {
     const ext = filePath.split('.').pop()?.toLowerCase();
-    this.welcomeModal.setHasOpenDocument(true);
+    // The "document open" flag is set only once loading succeeds (loadDocumentRoot / applyImportedDocument),
+    // otherwise a failed or cancelled open leaves the welcome screen's close button stuck on "return to document".
     this.welcomeModal.hide();
     if (ext === 'docx' || ext === 'md' || ext === 'txt' || ext === 'markdown') {
       this.promptAndImportDocument(filePath);
@@ -2244,6 +2245,7 @@ export class TypesetOkApp {
             ? 'הקובץ אינו חבילת פרויקט (.tok) תקינה. אם זהו מסמך Word או Markdown, השתמש ב"ייבוא מסמך".'
             : (err?.userMessage || rawMsg);
           this.showToast(tf('toastOpenError', { error: errorMsg }), true);
+          if (!this.hasOpenDocument) this.welcomeModal.show();
         });
       return;
     }
@@ -2329,6 +2331,7 @@ export class TypesetOkApp {
     } catch (err: any) {
       console.error('[TOK] Import error:', err);
       this.showToast(tf('toastImportError', { error: err?.userMessage || err?.message || String(err) }), true);
+      if (!this.hasOpenDocument) this.welcomeModal.show();
     }
   }
 

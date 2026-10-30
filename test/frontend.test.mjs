@@ -3600,3 +3600,22 @@ describe('Milestone 3 & 4 Regression: Frame Alignment, Canonical Hebrew Combinin
   });
 });
 
+describe('Welcome screen exit: a failed or cancelled open must not leave the close button on "return to document"', () => {
+  const appTs = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/app.ts'), 'utf-8');
+
+  test('openAnyFile does not mark a document as open before it has loaded', () => {
+    const start = appTs.indexOf('public openAnyFile(');
+    assert.ok(start > 0, 'openAnyFile must exist');
+    const body = appTs.slice(start, appTs.indexOf('\n  }\n', start));
+    assert.ok(!body.includes('setHasOpenDocument(true)'), 'flag must only be set after a successful load');
+  });
+
+  test('failed open and failed import bring the welcome screen back when no document is open', () => {
+    const openErr = appTs.indexOf("tf('toastOpenError', { error: errorMsg })");
+    const importErr = appTs.indexOf("tf('toastImportError', { error: err?.userMessage");
+    for (const idx of [openErr, importErr]) {
+      assert.ok(idx > 0, 'error path must exist');
+      assert.ok(appTs.slice(idx, idx + 260).includes('this.welcomeModal.show()'), 'welcome screen must be restored');
+    }
+  });
+});
