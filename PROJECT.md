@@ -44,6 +44,7 @@ TypesetOK הינה תוכנת DTP (עימוד וסדר דפוס) שולחנית 
 | 19| License & Dependency Notice Audit | Complete license audit, dependency notices, and copyright headers | M5 | Survey / R5 |
 | 20| E2E Testing Suite (Tiers 1-4) | Comprehensive opaque-box test suite across 4 tiers derived from requirements | E2E-Track | Dual Track |
 | 21| 100% E2E Pass & Adversarial Hardening | Pass 100% E2E test suite + Tier 5 adversarial testing & verification | M6 (Final) | Dual Track |
+| 22| Bilingual What's New System | Side drawer for minor updates, popup dialog for major updates, unread bell indicator, and full Hebrew/English changelog | M6 | Feature Track |
 
 ---
 
