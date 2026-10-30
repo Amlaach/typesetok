@@ -5,7 +5,7 @@ import {
   UpdateImportance,
   ChangeCategory
 } from './types';
-import { CHANGELOG_ENTRIES } from './changelogData';
+import { CHANGELOG_ENTRIES } from './changelogData.js';
 
 const STORAGE_KEY = 'tok_updates_state_v1';
 
