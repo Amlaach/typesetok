@@ -7,12 +7,14 @@ import * as esbuild from 'esbuild';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { syncChangelog } from './sync-changelog.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const uiDir = path.join(rootDir, 'packages/tok-ui');
 const dev = process.argv.includes('--dev');
 
 try {
+  syncChangelog();
   await esbuild.build({
     entryPoints: [path.join(uiDir, 'src/renderer.ts')],
     outfile: path.join(uiDir, 'dist/renderer.js'),

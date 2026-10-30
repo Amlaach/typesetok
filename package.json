@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "build:ts": "tsc --build",
+    "sync:changelog": "node scripts/sync-changelog.mjs",
     "bundle:ui": "node scripts/bundle-ui.mjs",
     "lint": "tsc --build",
     "build": "npm run build:ts && npm run bundle:ui",

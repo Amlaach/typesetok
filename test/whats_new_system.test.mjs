@@ -10,6 +10,7 @@ const rootDir = path.resolve(__dirname, '..');
 
 import { CHANGELOG_ENTRIES } from '../packages/tok-ui/dist/updates/changelogData.js';
 import { UpdatesStateManager, compareSemver } from '../packages/tok-ui/dist/updates/updatesManager.js';
+import { parseChangelogMarkdown } from '../scripts/sync-changelog.mjs';
 import { strings } from '../packages/tok-ui/dist/i18n.js';
 
 describe("What's New System - Full Test Suite", () => {
@@ -61,6 +62,32 @@ describe("What's New System - Full Test Suite", () => {
           }
         }
       }
+    });
+  });
+
+  describe('CHANGELOG.md Markdown Source-of-Truth & Parser', () => {
+    test('CHANGELOG.md exists in project root and parses cleanly', () => {
+      const changelogFile = path.join(rootDir, 'CHANGELOG.md');
+      assert.ok(fs.existsSync(changelogFile), 'CHANGELOG.md must exist in root');
+
+      const content = fs.readFileSync(changelogFile, 'utf8');
+      const parsed = parseChangelogMarkdown(content);
+
+      assert.ok(parsed.length >= 3, 'Must parse at least 3 releases');
+      assert.equal(parsed[0].version, '0.30.4');
+      assert.equal(parsed[1].version, '0.30.0');
+      assert.equal(parsed[1].importance, 'major');
+      assert.ok(parsed[1].highlights.length >= 4, 'Major release must parse highlights');
+    });
+
+    test('Strict No-Emoji & No-Vibe-Coding Policy in changelog and UI text', () => {
+      const emojiRegex = /[\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/u;
+
+      const changelogContent = fs.readFileSync(path.join(rootDir, 'CHANGELOG.md'), 'utf8');
+      assert.equal(emojiRegex.test(changelogContent), false, 'CHANGELOG.md must NOT contain any emojis (official vector icons only)');
+
+      const dataContent = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/updates/changelogData.ts'), 'utf8');
+      assert.equal(emojiRegex.test(dataContent), false, 'changelogData.ts must NOT contain any emojis');
     });
   });
 
