@@ -3620,3 +3620,20 @@ describe('Welcome screen exit: a failed or cancelled open must not leave the clo
     }
   });
 });
+
+describe('Side panel flows follow the document template (new and opened documents)', () => {
+  const appTs = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/app.ts'), 'utf-8').replace(/\r\n/g, '\n');
+  const bodyOf = (signature) => {
+    const start = appTs.indexOf(signature);
+    assert.ok(start > 0, `${signature} must exist`);
+    return appTs.slice(start, appTs.indexOf('\n  }\n', start));
+  };
+
+  test('creating a document from a template refreshes the structure bar flows', () => {
+    assert.ok(bodyOf('private handleTemplateSelect(').includes('this.structureBar.setFlows(getFlowsForTemplate('));
+  });
+
+  test('opening a saved document refreshes the structure bar flows', () => {
+    assert.ok(bodyOf('private loadDocumentRoot(').includes('this.structureBar.setFlows(getFlowsForTemplate('));
+  });
+});

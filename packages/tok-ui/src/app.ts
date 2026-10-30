@@ -2075,6 +2075,8 @@ export class TypesetOkApp {
 
     this.activeFlowId = 'gemara';
     this.storyEditor.loadStory(this.documentState.flows.gemara);
+    // The side panel must list the flows of this template, not whatever was loaded before.
+    this.structureBar.setFlows(getFlowsForTemplate(this.documentState.templateType));
     this.activePageIndex = 0;
     this.structureBar.setActivePage(0);
     this.repaginateAndSync(true);
@@ -2188,6 +2190,8 @@ export class TypesetOkApp {
       ? this.activeFlowId
       : (flowKeys[0] || 'gemara');
     this.activeFlowId = activeKey;
+    this.structureBar.setFlows(getFlowsForTemplate(newState.templateType));
+    this.structureBar.setActiveFlow(activeKey);
     const activeStory = newState.flows[activeKey] || [];
     this.storyEditor.loadStory(activeStory);
 
