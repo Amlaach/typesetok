@@ -1,9 +1,18 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, '..');
+
 import { CHANGELOG_ENTRIES } from '../packages/tok-ui/dist/updates/changelogData.js';
 import { UpdatesStateManager, compareSemver } from '../packages/tok-ui/dist/updates/updatesManager.js';
+import { strings } from '../packages/tok-ui/dist/i18n.js';
 
-describe("What's New System - Unit Tests", () => {
+describe("What's New System - Full Test Suite", () => {
   beforeEach(() => {
     UpdatesStateManager.resetInstance();
   });
@@ -170,6 +179,87 @@ describe("What's New System - Unit Tests", () => {
       const searchEng = manager.filterEntries({ searchQuery: 'Huge feature' });
       assert.equal(searchEng.length, 1);
       assert.equal(searchEng[0].version, '1.0.0');
+    });
+  });
+
+  describe('Localization & i18n Key Coverage', () => {
+    test('all What\'s New translation keys exist and are non-empty in Hebrew and English', () => {
+      const requiredKeys = [
+        'whatsNewTitle',
+        'whatsNewSubtitle',
+        'whatsNewMajorTitle',
+        'whatsNewMajorSubtitle',
+        'whatsNewBadgeMajor',
+        'whatsNewBadgeMinor',
+        'whatsNewBadgePatch',
+        'whatsNewFilterAll',
+        'whatsNewFilterMajor',
+        'whatsNewFilterMinor',
+        'whatsNewFilterFixes',
+        'whatsNewFilterTypography',
+        'whatsNewSearchPlaceholder',
+        'whatsNewExploreAll',
+        'whatsNewGotIt',
+        'whatsNewDontShowAgain',
+        'whatsNewViewHistory',
+        'whatsNewCheckUpdates',
+        'whatsNewNoResults',
+        'whatsNewCatFeatures',
+        'whatsNewCatImprovements',
+        'whatsNewCatFixes',
+        'whatsNewCatTypography',
+        'whatsNewCatPerformance',
+        'whatsNewUnreadAria',
+        'menuWhatsNew',
+        'commandPaletteWhatsNew'
+      ];
+
+      for (const k of requiredKeys) {
+        assert.ok(strings[k], `Missing i18n key: ${k}`);
+        assert.ok(strings[k].he && strings[k].he.trim().length > 0, `Key ${k} must have Hebrew string`);
+        assert.ok(strings[k].en && strings[k].en.trim().length > 0, `Key ${k} must have English string`);
+      }
+    });
+  });
+
+  describe('UI Component Integration & Wiring', () => {
+    test('UpdatesDrawer source defines side panel with filter chips and search', () => {
+      const drawerSrc = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/components/UpdatesDrawer.ts'), 'utf8');
+      assert.ok(drawerSrc.includes('tok-updates-drawer'), 'Must declare drawer class');
+      assert.ok(drawerSrc.includes('tok-filter-chip'), 'Must support filter chips');
+      assert.ok(drawerSrc.includes('tok-updates-search-input'), 'Must support search input');
+      assert.ok(drawerSrc.includes('populateCards'), 'Must have card populating logic');
+    });
+
+    test('MajorUpdateModal source defines popup dialog with highlights grid and dismissal checkbox', () => {
+      const modalSrc = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/components/MajorUpdateModal.ts'), 'utf8');
+      assert.ok(modalSrc.includes('tok-major-dialog'), 'Must declare major dialog class');
+      assert.ok(modalSrc.includes('tok-major-showcase-grid'), 'Must include showcase grid');
+      assert.ok(modalSrc.includes('dontShowAgainCheckbox'), 'Must include dont-show-again checkbox');
+      assert.ok(modalSrc.includes('dismissMajorPrompt'), 'Must hook into dismissal logic');
+    });
+
+    test('TopSystemBar includes unread bell button and quick menu entry', () => {
+      const barSrc = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/components/TopSystemBar.ts'), 'utf8');
+      assert.ok(barSrc.includes('UpdatesBellButton'), 'Must use UpdatesBellButton');
+      assert.ok(barSrc.includes('menuWhatsNew'), 'Must declare menuWhatsNew quick action');
+      assert.ok(barSrc.includes('open-whats-new'), 'Must dispatch open-whats-new action');
+    });
+
+    test('App shell exposes openWhatsNew, openMajorUpdate, and command palette action', () => {
+      const appSrc = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/app.ts'), 'utf8');
+      assert.ok(appSrc.includes('openWhatsNew('), 'Must provide openWhatsNew method');
+      assert.ok(appSrc.includes('openMajorUpdate('), 'Must provide openMajorUpdate method');
+      assert.ok(appSrc.includes('cmd-whats-new'), 'Must register palette command');
+      assert.ok(appSrc.includes('checkStartupUpdatesPrompt'), 'Must check updates prompt on startup');
+    });
+
+    test('AboutModal and SettingsModal offer direct links to What\'s New', () => {
+      const aboutSrc = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/components/AboutModal.ts'), 'utf8');
+      assert.ok(aboutSrc.includes('whatsNewTitle'), 'AboutModal must link to What\'s New');
+
+      const settingsSrc = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/components/SettingsModal.ts'), 'utf8');
+      assert.ok(settingsSrc.includes('whatsNewViewHistory'), 'SettingsModal updates tab must link to What\'s New history');
     });
   });
 });
