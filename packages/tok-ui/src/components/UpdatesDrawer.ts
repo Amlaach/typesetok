@@ -3,7 +3,7 @@ import { el, icon, iconButton, button } from '../ui';
 import { ModalController } from './ModalController';
 import { UpdatesStateManager } from '../updates/updatesManager';
 import { ChangelogEntryCard } from '../updates/ChangelogEntryCard';
-import { ChangelogEntry, UpdatesFilterOptions } from '../updates/types';
+import { UpdatesFilterOptions, ChangeCategory, UpdateImportance } from '../updates/types';
 
 export interface UpdatesDrawerCallbacks {
   onClose: () => void;
@@ -19,6 +19,7 @@ export class UpdatesDrawer {
   private stateManager: UpdatesStateManager;
   private filterOptions: UpdatesFilterOptions = { category: 'all', importance: 'all', searchQuery: '' };
   private cardsContainer!: HTMLElement;
+  private searchInput!: HTMLInputElement;
 
   constructor(callbacks: UpdatesDrawerCallbacks, customManager?: UpdatesStateManager) {
     this.callbacks = callbacks;
@@ -86,9 +87,64 @@ export class UpdatesDrawer {
     }));
     drawer.appendChild(head);
 
-    // 2. Filter Area slot (implemented in next commit)
-    const filterSlot = el('div', 'tok-updates-filter-slot');
-    drawer.appendChild(filterSlot);
+    // 2. Filter & Search Controls Bar
+    const filterSection = el('div', 'tok-updates-filter-bar');
+
+    // Search input
+    const searchWrap = el('div', 'tok-updates-search-wrap');
+    searchWrap.appendChild(icon('search', 16));
+    this.searchInput = el('input', 'tok-input tok-updates-search-input', {
+      type: 'search',
+      placeholder: t('whatsNewSearchPlaceholder'),
+      'aria-label': t('whatsNewSearchPlaceholder'),
+      value: this.filterOptions.searchQuery || ''
+    }) as HTMLInputElement;
+
+    this.searchInput.addEventListener('input', () => {
+      this.filterOptions.searchQuery = this.searchInput.value;
+      this.populateCards();
+    });
+    searchWrap.appendChild(this.searchInput);
+    filterSection.appendChild(searchWrap);
+
+    // Filter Chips
+    const chipsRow = el('div', 'tok-updates-filter-chips', { role: 'tablist' });
+
+    const filterPresets: Array<{ id: string; label: string; importance?: UpdateImportance | 'all'; category?: ChangeCategory | 'all' }> = [
+      { id: 'all', label: t('whatsNewFilterAll'), importance: 'all', category: 'all' },
+      { id: 'major', label: t('whatsNewFilterMajor'), importance: 'major', category: 'all' },
+      { id: 'improvements', label: t('whatsNewFilterMinor'), importance: 'all', category: 'improvements' },
+      { id: 'fixes', label: t('whatsNewFilterFixes'), importance: 'all', category: 'fixes' },
+      { id: 'typography', label: t('whatsNewFilterTypography'), importance: 'all', category: 'typography' }
+    ];
+
+    for (const preset of filterPresets) {
+      const isSelected = (preset.importance ? this.filterOptions.importance === preset.importance : true) &&
+                         (preset.category ? this.filterOptions.category === preset.category : true);
+
+      const chip = el('button', `tok-filter-chip ${isSelected ? 'tok-filter-chip-active' : ''}`, {
+        type: 'button',
+        role: 'tab',
+        'aria-selected': String(isSelected)
+      }, preset.label);
+
+      chip.addEventListener('click', () => {
+        this.filterOptions.importance = preset.importance;
+        this.filterOptions.category = preset.category;
+        drawer.querySelectorAll('.tok-filter-chip').forEach((c) => {
+          c.classList.remove('tok-filter-chip-active');
+          c.setAttribute('aria-selected', 'false');
+        });
+        chip.classList.add('tok-filter-chip-active');
+        chip.setAttribute('aria-selected', 'true');
+        this.populateCards();
+      });
+
+      chipsRow.appendChild(chip);
+    }
+
+    filterSection.appendChild(chipsRow);
+    drawer.appendChild(filterSection);
 
     // 3. Scrollable Changelog Cards List
     const body = el('div', 'tok-drawer-body tok-updates-body');
