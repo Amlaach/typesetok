@@ -19,6 +19,7 @@ export interface SettingsModalCallbacks {
   setGuide?: (guide: 'margins' | 'baseline', visible: boolean) => void;
   getZoom?: () => number;
   setZoom?: (zoom: number) => void;
+  onOpenWhatsNew?: () => void;
 }
 
 type SettingsTab = 'appearance' | 'accessibility' | 'logs' | 'updates' | 'plugins';
@@ -467,6 +468,27 @@ export class SettingsModal {
 
     const resultBox = el('div', 'tok-card', { 'aria-live': 'polite', style: 'font-size:13px;color:var(--tok-text-secondary)' }, t('updatesHint'));
     container.appendChild(resultBox);
+    const historyCard = el('div', 'tok-card tok-card-row', { style: 'margin-top: 12px;' });
+    const histInfo = el('div', undefined, { style: 'display:flex;flex-direction:column;gap:2px' });
+    histInfo.appendChild(el('span', undefined, { style: 'font-size:13px;font-weight:600' }, t('whatsNewTitle')));
+    histInfo.appendChild(el('span', undefined, { style: 'font-size:12px;color:var(--tok-text-secondary)' }, t('whatsNewSubtitle')));
+    historyCard.appendChild(histInfo);
+
+    const histBtn = button(t('whatsNewViewHistory'), {
+      className: 'tok-btn tok-btn-secondary',
+      icon: 'sparkle',
+      attrs: { 'data-focus-key': 'open-whats-new-tab' },
+      onClick: () => {
+        this.hide();
+        if (this.callbacks.onOpenWhatsNew) {
+          this.callbacks.onOpenWhatsNew();
+        } else {
+          (window as any).tokApp?.openWhatsNew?.();
+        }
+      }
+    });
+    historyCard.appendChild(histBtn);
+    container.appendChild(historyCard);
 
     const showLatest = (version?: string) => {
       resultBox.innerHTML = '';

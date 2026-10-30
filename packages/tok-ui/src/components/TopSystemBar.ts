@@ -1,3 +1,4 @@
+import { UpdatesBellButton } from '../updates/UpdatesBellButton';
 import { ViewMode } from '../types';
 import { t, i18n } from '../i18n';
 import { el, icon, iconButton, kbd, button } from '../ui';
@@ -11,6 +12,7 @@ export interface TopSystemBarCallbacks {
   onToggleLanguage?: () => void;
   onOpenSettings?: () => void;
   onOpenAbout?: () => void;
+  onOpenWhatsNew?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
   onRenameDocument?: (newTitle: string) => void;
@@ -36,6 +38,7 @@ const MENU_ITEMS: MenuItem[] = [
   { labelKey: 'menuExportPdf', shortcut: 'Ctrl+E', action: 'export-pdf' },
   { type: 'separator' },
   { labelKey: 'sidebarSettings', shortcut: 'Ctrl+,', action: 'open-settings' },
+  { labelKey: 'menuWhatsNew', action: 'open-whats-new' },
   { labelKey: 'sidebarAbout', action: 'open-about' },
   { type: 'separator' },
   { labelKey: 'menuExit', shortcut: 'Ctrl+Q', action: 'quit-app' }
@@ -302,6 +305,12 @@ export class TopSystemBar {
     }
     end.appendChild(undo);
     end.appendChild(redo);
+    if (this.callbacks.onOpenWhatsNew) {
+      const bell = new UpdatesBellButton({
+        onClick: () => this.callbacks.onOpenWhatsNew?.()
+      });
+      end.appendChild(bell.element);
+    }
 
     this.element.appendChild(end);
   }
