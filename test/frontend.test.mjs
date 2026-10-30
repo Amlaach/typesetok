@@ -3662,6 +3662,21 @@ describe('Installer language is adopted by the app on first run', () => {
     assert.ok(main.slice(at, at + 220).includes('isAppUrl('), 'sender must be validated');
   });
 
+  test('parseInstallProjectsDir reads the installer projects folder, including spaces', async () => {
+    const { parseInstallProjectsDir } = await loadTs('packages/tok-electron/src/install-language.ts');
+    const out = '\r\n    ProjectsDir    REG_SZ    C:\\Users\\Dan Cohen\\TypesetOK Projects\r\n    Language    REG_SZ    en\r\n';
+    assert.equal(parseInstallProjectsDir(out), 'C:\\Users\\Dan Cohen\\TypesetOK Projects');
+    assert.equal(parseInstallProjectsDir('    Language    REG_SZ    he\r\n'), null);
+    assert.equal(parseInstallProjectsDir(''), null);
+  });
+
+  test('save and open dialogs start in the installer projects folder', () => {
+    const main = read('packages/tok-electron/src/main.ts');
+    assert.ok(main.includes('defaultPath: withProjectsDir(options?.defaultPath)'), 'save dialog');
+    const open = main.indexOf("handle('tok:show-open-dialog'");
+    assert.ok(open > 0 && main.slice(open, open + 300).includes('defaultPath: getProjectsDir()'), 'open dialog');
+  });
+
   test('the Inno Setup installer still records the chosen language', () => {
     const iss = read('scripts/installer.iss');
     assert.ok(iss.includes("'Software\\TypesetOK', 'Language', 'he'") && iss.includes("'Software\\TypesetOK', 'Language', 'en'"));

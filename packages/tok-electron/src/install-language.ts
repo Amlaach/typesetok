@@ -19,3 +19,10 @@ export function parseInstallLanguage(regQueryOutput: string): InstallLanguage | 
   }
   return null;
 }
+
+/** Projects folder picked in the installer (`ProjectsDir    REG_SZ    <path>`), or null when absent. */
+export function parseInstallProjectsDir(regQueryOutput: string): string | null {
+  if (typeof regQueryOutput !== 'string') return null;
+  const m = /^\s*ProjectsDir\s+REG_SZ\s+(.+?)\s*$/im.exec(regQueryOutput);
+  return m && m[1] ? m[1] : null;
+}
