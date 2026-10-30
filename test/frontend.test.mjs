@@ -3601,7 +3601,8 @@ describe('Milestone 3 & 4 Regression: Frame Alignment, Canonical Hebrew Combinin
 });
 
 describe('Welcome screen exit: a failed or cancelled open must not leave the close button on "return to document"', () => {
-  const appTs = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/app.ts'), 'utf-8');
+  // Normalize line endings: Windows checkouts use CRLF, which would break the slicing below.
+  const appTs = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/app.ts'), 'utf-8').replace(/\r\n/g, '\n');
 
   test('openAnyFile does not mark a document as open before it has loaded', () => {
     const start = appTs.indexOf('public openAnyFile(');
