@@ -1,3 +1,4 @@
+import { getAppVersion } from './appInfo';
 import { TopSystemBar } from './components/TopSystemBar';
 import { StructureBar } from './components/StructureBar';
 import { ContextualInspector } from './components/ContextualInspector';
@@ -9,6 +10,9 @@ import { ExportDialog, ExportOptions } from './components/ExportDialog';
 import { WelcomeModal, addRecentProject, updateProjectClosedTime } from './components/WelcomeModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
+import { UpdatesDrawer } from './components/UpdatesDrawer';
+import { MajorUpdateModal } from './components/MajorUpdateModal';
+import { UpdatesStateManager } from './updates/updatesManager';
 import { UserGuideModal } from './components/UserGuideModal';
 import { TextStatsModal } from './components/TextStatsModal';
 import { ImportTemplateModal } from './components/ImportTemplateModal';
@@ -106,6 +110,8 @@ export class TypesetOkApp {
   private welcomeModalInstance?: WelcomeModal;
   private settingsModalInstance?: SettingsModal;
   private aboutModalInstance?: AboutModal;
+  private updatesDrawerInstance?: UpdatesDrawer;
+  private majorUpdateModalInstance?: MajorUpdateModal;
   private exportDialogInstance?: ExportDialog;
   private userGuideModalInstance?: UserGuideModal;
   private textStatsModalInstance?: TextStatsModal;
@@ -235,6 +241,7 @@ export class TypesetOkApp {
       onOpenProjects: () => this.welcomeModal.show(),
       onOpenSettings: () => this.settingsModal.show(),
       onOpenAbout: () => this.aboutModal.show(),
+      onOpenWhatsNew: () => this.openWhatsNew(),
       onUndo: () => this.runEditCommand('undo'),
       onRedo: () => this.runEditCommand('redo'),
       onRenameDocument: (newTitle) => this.renameDocument(newTitle)
@@ -499,6 +506,11 @@ export class TypesetOkApp {
     // in the main process and must not compete with the initial paint.
     runWhenIdle(() => {
       this.pluginEngine.loadPlugins().catch(console.error);
+    });
+
+    // 8b. Check for major updates popup on startup
+    runWhenIdle(() => {
+      this.checkStartupUpdatesPrompt();
     });
 
     // 8. Initialize default multi-flow document state
@@ -842,6 +854,7 @@ export class TypesetOkApp {
           if (guide === 'baseline' && current.baseline !== visible) this.canvas.toggleBaselineGuide();
         },
         getZoom: () => this.canvas.getZoom(),
+        onOpenWhatsNew: () => this.openWhatsNew(),
         setZoom: (z) => {
           this.canvas.setZoom(z);
           this.statusBar.updateStats({ zoom: z });
@@ -858,7 +871,8 @@ export class TypesetOkApp {
         onClose: () => {
           if (!this.hasOpenDocument) this.welcomeModal.show();
         },
-        onCheckUpdates: () => this.settingsModal.show('updates')
+        onCheckUpdates: () => this.settingsModal.show('updates'),
+        onOpenWhatsNew: () => this.openWhatsNew()
       });
       this.root.appendChild(this.aboutModalInstance.element);
     }
@@ -1605,6 +1619,49 @@ export class TypesetOkApp {
   public openAbout(): void {
     this.aboutModal.show();
   }
+  public get updatesDrawer(): UpdatesDrawer {
+    if (!this.updatesDrawerInstance) {
+      this.updatesDrawerInstance = new UpdatesDrawer({
+        onClose: () => {},
+        onCheckUpdates: () => this.settingsModal.show('updates'),
+        onOpenSettings: () => this.settingsModal.show('updates')
+      });
+      this.root.appendChild(this.updatesDrawerInstance.element);
+    }
+    return this.updatesDrawerInstance;
+  }
+
+  public get majorUpdateModal(): MajorUpdateModal {
+    if (!this.majorUpdateModalInstance) {
+      this.majorUpdateModalInstance = new MajorUpdateModal({
+        onClose: () => {},
+        onExploreAll: () => this.updatesDrawer.show()
+      });
+      this.root.appendChild(this.majorUpdateModalInstance.element);
+    }
+    return this.majorUpdateModalInstance;
+  }
+
+  public openWhatsNew(version?: string): void {
+    this.updatesDrawer.show(version);
+  }
+
+  public openMajorUpdate(version?: string): void {
+    this.majorUpdateModal.show(version);
+  }
+
+  private checkStartupUpdatesPrompt(): void {
+    const updatesManager = UpdatesStateManager.getInstance();
+    getAppVersion().then((ver: string) => {
+      const version = ver || updatesManager.getLatestEntry()?.version;
+      if (version && updatesManager.shouldPromptMajorUpdate(version)) {
+        this.openMajorUpdate(version);
+      }
+    }).catch((e: any) => {
+      console.warn('[UPDATES] Startup check error:', e);
+    });
+  }
+
 
   /** Built-in palette commands in the current UI language (page & layout modifying only). */
   private buildCommands(): PaletteItem[] {
