@@ -2,12 +2,13 @@ import { app, BrowserWindow, ipcMain, shell, dialog, IpcMainInvokeEvent } from '
 import * as path from 'path';
 import * as fs from 'fs';
 import * as zlib from 'zlib';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { buildApplicationMenu } from './menu';
 import { logger } from './logger';
 import { updater, getAppVersion, isSafeExternalUrl } from './updater';
 import { pluginManager } from './plugin-manager';
+import { parseInstallLanguage, InstallLanguage } from './install-language';
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
@@ -744,6 +745,31 @@ handle('tok:typeset-document', async (_, payload: { document?: unknown; inputPat
 });
 
 // Logger Handlers
+// The language chosen in the Windows installer. The preload asks for it once, on first run, so the app
+// opens in the same language as its installer (synchronous: the renderer needs it before it starts).
+let installLanguageCache: InstallLanguage | null | undefined;
+function readInstallLanguage(): InstallLanguage | null {
+  if (installLanguageCache !== undefined) return installLanguageCache;
+  installLanguageCache = null;
+  if (process.platform === 'win32') {
+    for (const root of ['HKCU', 'HKLM']) {
+      try {
+        const out = execFileSync('reg', ['query', `${root}\\Software\\TypesetOK`], { encoding: 'utf8', timeout: 3000, windowsHide: true });
+        const lang = parseInstallLanguage(out);
+        if (lang) {
+          installLanguageCache = lang;
+          break;
+        }
+      } catch {
+        // key missing (portable run, dev build): keep the default language
+      }
+    }
+  }
+  return installLanguageCache;
+}
+ipcMain.on('tok:get-install-language', (event) => {
+  event.returnValue = isAppUrl(event.senderFrame?.url) ? readInstallLanguage() : null;
+});
 handle('tok:get-recent-logs', () => logger.getRecentLogs(100));
 handle('tok:open-logs-folder', () => logger.openLogsFolder());
 handle('tok:clean-old-logs', (_, days?: number) =>

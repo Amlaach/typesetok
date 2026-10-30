@@ -3637,3 +3637,33 @@ describe('Side panel flows follow the document template (new and opened document
     assert.ok(bodyOf('private loadDocumentRoot(').includes('this.structureBar.setFlows(getFlowsForTemplate('));
   });
 });
+
+describe('Installer language is adopted by the app on first run', () => {
+  const read = (rel) => fs.readFileSync(path.join(rootDir, rel), 'utf-8').replace(/\r\n/g, '\n');
+
+  test('parseInstallLanguage understands Inno Setup and NSIS registry output', async () => {
+    const { parseInstallLanguage } = await loadTs('packages/tok-electron/src/install-language.ts');
+    const inno = (v) => `\r\nHKEY_CURRENT_USER\\Software\\TypesetOK\r\n    ProjectsDir    REG_SZ    C:\\Books\r\n    Language    REG_SZ    ${v}\r\n`;
+    assert.equal(parseInstallLanguage(inno('en')), 'en');
+    assert.equal(parseInstallLanguage(inno('he')), 'he');
+    assert.equal(parseInstallLanguage('    Installer Language    REG_SZ    1033\r\n'), 'en');
+    assert.equal(parseInstallLanguage('    Installer Language    REG_SZ    1037\r\n'), 'he');
+    assert.equal(parseInstallLanguage(inno('fr')), null);
+    assert.equal(parseInstallLanguage(''), null);
+  });
+
+  test('preload applies it only when the user has no saved language; main answers only the app page', () => {
+    const preload = read('packages/tok-electron/src/preload.ts');
+    assert.ok(preload.includes("!localStorage.getItem('tok_lang')"), 'a saved choice must win');
+    assert.ok(preload.includes("sendSync('tok:get-install-language')"));
+    const main = read('packages/tok-electron/src/main.ts');
+    const at = main.indexOf("ipcMain.on('tok:get-install-language'");
+    assert.ok(at > 0, 'main must answer the channel');
+    assert.ok(main.slice(at, at + 220).includes('isAppUrl('), 'sender must be validated');
+  });
+
+  test('the Inno Setup installer still records the chosen language', () => {
+    const iss = read('scripts/installer.iss');
+    assert.ok(iss.includes("'Software\\TypesetOK', 'Language', 'he'") && iss.includes("'Software\\TypesetOK', 'Language', 'en'"));
+  });
+});
