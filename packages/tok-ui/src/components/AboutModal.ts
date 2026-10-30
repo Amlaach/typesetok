@@ -6,6 +6,7 @@ import { fillAppVersion } from '../appInfo';
 export interface AboutModalCallbacks {
   onClose: () => void;
   onCheckUpdates?: () => void;
+  onOpenWhatsNew?: () => void;
 }
 
 const REPO_URL = 'https://github.com/TypesetOK/typesetok';
@@ -220,6 +221,20 @@ export class AboutModal {
         } else {
           // Open settings on updates tab
           (window as any).tokApp?.openSettings();
+        }
+      }
+    }));
+
+    foot.appendChild(button(t('whatsNewTitle'), {
+      className: 'tok-btn',
+      icon: 'sparkle',
+      attrs: { 'data-focus-key': 'whats-new' },
+      onClick: () => {
+        this.hide();
+        if (this.callbacks.onOpenWhatsNew) {
+          this.callbacks.onOpenWhatsNew();
+        } else {
+          (window as any).tokApp?.openWhatsNew?.();
         }
       }
     }));
