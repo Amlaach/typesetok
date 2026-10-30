@@ -2,8 +2,9 @@ import { t, i18n, Language } from '../i18n';
 import { el, icon, iconButton, button } from '../ui';
 import { ModalController } from './ModalController';
 import { UpdatesStateManager } from '../updates/updatesManager';
-import { ChangelogEntry } from '../updates/types';
+import { ChangelogEntry, HighlightCard } from '../updates/types';
 import { createVersionBadge } from '../updates/updatePills';
+import { IconName } from '../icons';
 
 export interface MajorUpdateModalCallbacks {
   onClose: () => void;
@@ -117,10 +118,26 @@ export class MajorUpdateModal {
 
     body.appendChild(heroBanner);
 
-    // Showcase slot (cards populated in next commit)
-    const showcaseSlot = el('div', 'tok-major-showcase-slot');
-    body.appendChild(showcaseSlot);
+    // Showcase Cards Grid
+    const grid = el('div', 'tok-major-showcase-grid');
+    if (this.currentEntry.highlights && this.currentEntry.highlights.length > 0) {
+      for (const cardData of this.currentEntry.highlights) {
+        grid.appendChild(this.createShowcaseCard(cardData, lang));
+      }
+    } else {
+      // Fallback highlights from entry changes
+      for (const change of this.currentEntry.changes.slice(0, 4)) {
+        const fallbackCard: HighlightCard = {
+          id: change.category,
+          title: change.tag || { he: 'עדכון מרכזי', en: 'Highlight' },
+          description: change.text,
+          icon: 'sparkle'
+        };
+        grid.appendChild(this.createShowcaseCard(fallbackCard, lang));
+      }
+    }
 
+    body.appendChild(grid);
     dialog.appendChild(body);
 
     // 3. Dialog Footer
@@ -161,5 +178,30 @@ export class MajorUpdateModal {
     this.element.appendChild(dialog);
 
     this.modal.afterRender(focusKey);
+  }
+
+  private createShowcaseCard(card: HighlightCard, lang: Language): HTMLElement {
+    const cardEl = el('div', 'tok-major-card');
+
+    const cardHead = el('div', 'tok-major-card-head');
+    const iconWrap = el('div', 'tok-major-card-icon');
+    iconWrap.appendChild(icon((card.icon as IconName) || 'sparkle', 20));
+    cardHead.appendChild(iconWrap);
+
+    const titleWrap = el('div', 'tok-major-card-title-wrap');
+    const cardTitle = el('h4', 'tok-major-card-title', undefined, card.title[lang] || card.title.en);
+    titleWrap.appendChild(cardTitle);
+
+    if (card.badge) {
+      const cardBadge = el('span', 'tok-badge tok-badge-card', undefined, card.badge[lang] || card.badge.en);
+      titleWrap.appendChild(cardBadge);
+    }
+    cardHead.appendChild(titleWrap);
+    cardEl.appendChild(cardHead);
+
+    const descPara = el('p', 'tok-major-card-desc', undefined, card.description[lang] || card.description.en);
+    cardEl.appendChild(descPara);
+
+    return cardEl;
   }
 }
