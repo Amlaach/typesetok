@@ -55,6 +55,36 @@ function runWhenIdle(fn: () => void): void {
   });
 }
 
+/** Flow template chosen per imported source file, so re-opening it does not ask again. */
+const IMPORT_TEMPLATE_STORAGE_KEY = 'tok_import_templates';
+const IMPORT_TEMPLATE_IDS: readonly TemplateType[] = ['prose', 'notes', 'gemara', 'mikraot', 'bulletin'];
+
+function readImportTemplates(): Record<string, string> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(IMPORT_TEMPLATE_STORAGE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberImportTemplate(filePath: string | undefined, templateId: TemplateType): void {
+  if (!filePath) return;
+  try {
+    const all = readImportTemplates();
+    all[filePath] = templateId;
+    const keys = Object.keys(all);
+    // Keep the map small: drop the oldest entries beyond 100 files.
+    for (const k of keys.slice(0, Math.max(0, keys.length - 100))) delete all[k];
+    localStorage.setItem(IMPORT_TEMPLATE_STORAGE_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+function recallImportTemplate(filePath: string): TemplateType | null {
+  const id = readImportTemplates()[filePath];
+  return IMPORT_TEMPLATE_IDS.includes(id as TemplateType) ? (id as TemplateType) : null;
+}
+
 /** i18n keys for the display names of the multi-flow ids used by the structure bar. */
 const FLOW_NAME_KEYS: Record<string, string> = {
   gemara: 'inspFlowGemara',
@@ -118,6 +148,7 @@ export class TypesetOkApp {
   private importTemplateModalInstance?: ImportTemplateModal;
   private textCleanupModalInstance?: TextCleanupModal;
   private pendingImportResult: { result: ImportResult; filePath?: string } | null = null;
+  private isChangingActiveDocumentTemplate = false;
   private pluginEngine!: PluginEngine;
 
   private hasOpenDocument = false;
@@ -287,6 +318,7 @@ export class TypesetOkApp {
       onLockLayer: (layerId, locked) => {
         this.canvas?.setLayerLocked(layerId, locked);
       },
+      onChangeTemplate: () => this.promptChangeDocumentTemplate(),
       onOpenSettings: () => this.settingsModal.show(),
       onOpenAbout: () => this.aboutModal.show(),
       onActiveTabChange: () => this.updateStoryToolbar(),
@@ -905,12 +937,19 @@ export class TypesetOkApp {
     if (!this.importTemplateModalInstance) {
       this.importTemplateModalInstance = new ImportTemplateModal({
         onSelect: (templateId) => {
+          if (this.isChangingActiveDocumentTemplate) {
+            this.isChangingActiveDocumentTemplate = false;
+            this.changeDocumentTemplate(templateId);
+            return;
+          }
           if (this.pendingImportResult) {
+            rememberImportTemplate(this.pendingImportResult.filePath, templateId);
             this.applyImportedDocument(this.pendingImportResult.result, this.pendingImportResult.filePath, templateId);
             this.pendingImportResult = null;
           }
         },
         onCancel: () => {
+          this.isChangingActiveDocumentTemplate = false;
           this.pendingImportResult = null;
           if (!this.hasOpenDocument) {
             this.welcomeModal.show();
@@ -1736,6 +1775,14 @@ export class TypesetOkApp {
         action: () => this.handleSystemAction('import-document')
       },
       {
+        id: 'cmd-change-template',
+        icon: 'templateBook',
+        category: t('cmdCatPages'),
+        title: t('structureChangeTemplate'),
+        subtitle: 'החלפת פריסת העמודים ותזרימי הספר',
+        action: () => this.promptChangeDocumentTemplate()
+      },
+      {
         id: 'cmd-close-document',
         icon: 'close',
         category: t('cmdCatProjects'),
@@ -2109,13 +2156,15 @@ export class TypesetOkApp {
 
     this.activeFlowId = 'gemara';
     this.storyEditor.loadStory(this.documentState.flows.gemara);
+    // The side panel must list the flows of this template, not whatever was loaded before.
+    this.structureBar.setFlows(getFlowsForTemplate(this.documentState.templateType));
     this.activePageIndex = 0;
     this.structureBar.setActivePage(0);
     this.repaginateAndSync(true);
 
     this.hasOpenDocument = true;
     this.setDirty(false);
-    this.topBar.setDocumentTitle(name, false);
+    this.showDocumentTitle(name, false);
     addRecentProject({ name, pages: this.pages.length, lastSavedAt: new Date().toISOString() });
     this.welcomeModal.setHasOpenDocument(true);
     this.welcomeModal.hide();
@@ -2150,7 +2199,7 @@ export class TypesetOkApp {
           this.currentFilePath = targetPath;
           this.documentTitle = baseName.replace(/\.tok$/i, '');
           this.setDirty(false);
-          this.topBar.setDocumentTitle(this.documentTitle, false);
+          this.showDocumentTitle(this.documentTitle, false);
           addRecentProject({
             name: baseName,
             path: targetPath,
@@ -2181,7 +2230,7 @@ export class TypesetOkApp {
           this.currentFilePath = targetPath;
           this.documentTitle = baseName.replace(/\.tok$/i, '');
           this.setDirty(false);
-          this.topBar.setDocumentTitle(this.documentTitle, false);
+          this.showDocumentTitle(this.documentTitle, false);
           addRecentProject({
             name: baseName,
             path: targetPath,
@@ -2211,10 +2260,10 @@ export class TypesetOkApp {
     const displayTitle = title || docRoot.metadata?.title || baseName;
     this.documentTitle = displayTitle;
     this.setDirty(false);
-    this.topBar.setDocumentTitle(displayTitle, false);
+    this.showDocumentTitle(displayTitle, false);
 
     if (newState.settings) {
-      this.inspector.setDocumentSettings(newState.settings);
+      this.inspector.setDocumentSettings({ ...newState.settings, title: displayTitle });
     }
 
     const flowKeys = Object.keys(newState.flows);
@@ -2222,6 +2271,8 @@ export class TypesetOkApp {
       ? this.activeFlowId
       : (flowKeys[0] || 'gemara');
     this.activeFlowId = activeKey;
+    this.structureBar.setFlows(getFlowsForTemplate(newState.templateType));
+    this.structureBar.setActiveFlow(activeKey);
     const activeStory = newState.flows[activeKey] || [];
     this.storyEditor.loadStory(activeStory);
 
@@ -2247,7 +2298,8 @@ export class TypesetOkApp {
 
   public openAnyFile(filePath: string): void {
     const ext = filePath.split('.').pop()?.toLowerCase();
-    this.welcomeModal.setHasOpenDocument(true);
+    // The "document open" flag is set only once loading succeeds (loadDocumentRoot / applyImportedDocument),
+    // otherwise a failed or cancelled open leaves the welcome screen's close button stuck on "return to document".
     this.welcomeModal.hide();
     if (ext === 'docx' || ext === 'md' || ext === 'txt' || ext === 'markdown') {
       this.promptAndImportDocument(filePath);
@@ -2278,13 +2330,14 @@ export class TypesetOkApp {
             ? 'הקובץ אינו חבילת פרויקט (.tok) תקינה. אם זהו מסמך Word או Markdown, השתמש ב"ייבוא מסמך".'
             : (err?.userMessage || rawMsg);
           this.showToast(tf('toastOpenError', { error: errorMsg }), true);
+          if (!this.hasOpenDocument) this.welcomeModal.show();
         });
       return;
     }
 
     this.documentTitle = baseName;
     this.setDirty(false);
-    this.topBar.setDocumentTitle(baseName, false);
+    this.showDocumentTitle(baseName, false);
     this.currentFilePath = filePath;
     if (this.pages.length === 0) {
       this.pages = [{
@@ -2351,11 +2404,19 @@ export class TypesetOkApp {
         throw new Error('IPC reader not available');
       }
 
+      // Re-opening a known file (recent projects, OS file association) reuses the flow chosen the first
+      // time; the picker still appears for a first import and for an explicit "Import document".
+      const remembered = explicitPath ? recallImportTemplate(targetPath) : null;
+      if (remembered) {
+        this.applyImportedDocument(result, targetPath, remembered);
+        return;
+      }
       this.pendingImportResult = { result, filePath: targetPath };
       this.importTemplateModal.show(result);
     } catch (err: any) {
       console.error('[TOK] Import error:', err);
       this.showToast(tf('toastImportError', { error: err?.userMessage || err?.message || String(err) }), true);
+      if (!this.hasOpenDocument) this.welcomeModal.show();
     }
   }
 
@@ -2400,7 +2461,7 @@ export class TypesetOkApp {
     this.resetDocumentSession();
     this.documentTitle = result.title;
     this.currentFilePath = filePath || '';
-    this.topBar.setDocumentTitle(this.documentTitle, true);
+    this.showDocumentTitle(this.documentTitle, true);
     this.setDirty(true);
     this.hasOpenDocument = true;
     this.welcomeModal.setHasOpenDocument(true);
@@ -2422,6 +2483,73 @@ export class TypesetOkApp {
     });
 
     this.showToast(tf('toastImportSuccess', { title: result.title, count: result.paragraphs.length }));
+  }
+
+  /**
+   * Opens the template chooser dialog for the currently active document,
+   * allowing the user to seamlessly switch between book layouts (prose, talmud, notes, etc.)
+   * without losing any content.
+   */
+  public promptChangeDocumentTemplate(): void {
+    if (!this.hasOpenDocument) {
+      this.welcomeModal.show();
+      return;
+    }
+    this.isChangingActiveDocumentTemplate = true;
+    const currentStory = this.storyEditor?.getStory() || [];
+    const totalParas = Object.values(this.documentState.flows).reduce((acc, f) => acc + (f?.length || 0), 0);
+    const mockResult: ImportResult = {
+      title: this.documentTitle || 'מסמך פעיל',
+      paragraphs: currentStory,
+      paragraphCount: totalParas || currentStory.length || 1,
+      wordCount: 0,
+      format: 'txt',
+      detectedDirection: i18n.getDirection(),
+      detectedLanguage: 'he'
+    };
+    this.importTemplateModal.show(mockResult);
+  }
+
+  /**
+   * Applies a new template layout to the active document while preserving all existing texts.
+   */
+  public changeDocumentTemplate(newTemplate: TemplateType): void {
+    if (!this.documentState) return;
+    this.documentState.templateType = newTemplate;
+    // Ensure all standard flows for the new template exist in documentState
+    const templateFlows = getFlowsForTemplate(newTemplate);
+    for (const f of templateFlows) {
+      if (!this.documentState.flows[f.id]) {
+        this.documentState.flows[f.id] = [];
+      }
+    }
+    // Update structure bar and ensure active flow is valid
+    this.structureBar.setFlows(templateFlows);
+    if (!this.activeFlowId || !templateFlows.some((f) => f.id === this.activeFlowId)) {
+      this.activeFlowId = templateFlows[0]?.id || 'gemara';
+    }
+    const targetFlow = this.activeFlowId;
+    this.structureBar.setActiveFlow(targetFlow);
+    this.storyEditor.loadStory(this.documentState.flows[targetFlow] || []);
+
+    // If there is an associated import path, remember the new choice
+    if (this.currentFilePath) {
+      rememberImportTemplate(this.currentFilePath, newTemplate);
+    }
+
+    this.setDirty(true);
+    this.repaginateAndSync(true);
+
+    const templateNames: Record<string, string> = {
+      gemara: t('templateGemara'),
+      prose: t('templateProse'),
+      notes: t('templateNotes'),
+      mikraot: t('templateMikraot'),
+      bulletin: t('templateBulletin'),
+      blank: t('templateBlank')
+    };
+    const name = templateNames[newTemplate] || newTemplate;
+    this.showToast(tf('toastTemplateSwitched', { name }));
   }
 
   public setViewMode(mode: ViewMode): void {
@@ -2723,12 +2851,18 @@ export class TypesetOkApp {
     }, 3200);
   }
 
+  /** Shows the document title in the top bar and in the inspector header, so both always agree. */
+  private showDocumentTitle(title: string, isDirty: boolean): void {
+    this.topBar.setDocumentTitle(title, isDirty);
+    this.inspector?.setDocumentSettings({ title });
+  }
+
   public renameDocument(newTitle: string): void {
     const trimmed = newTitle.trim();
     if (!trimmed || trimmed === this.documentTitle) return;
     this.documentTitle = trimmed;
     this.documentState.title = trimmed;
-    this.topBar.setDocumentTitle(trimmed, true);
+    this.showDocumentTitle(trimmed, true);
     this.setDirty(true);
     this.showToast(tf('toastTitleRenamed', { title: trimmed }));
   }

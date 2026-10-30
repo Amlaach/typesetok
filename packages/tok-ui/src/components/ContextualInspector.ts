@@ -146,6 +146,15 @@ export class ContextualInspector {
     }
   }
 
+  public setDocumentTitle(title: string): void {
+    const trimmed = title.trim();
+    if (!trimmed || this.documentSettings.title === trimmed) return;
+    this.documentSettings.title = trimmed;
+    if (this.mode === 'zero') {
+      this.render();
+    }
+  }
+
   private flowName(flowId: string): string {
     const keys: Record<string, string> = { gemara: 'inspFlowGemara', rashi: 'inspFlowRashi', tosafot: 'inspFlowTosafot', notes: 'inspFlowNotes' };
     return keys[flowId] ? t(keys[flowId]) : flowId;

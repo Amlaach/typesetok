@@ -1,5 +1,6 @@
 import { t, tf, i18n } from '../i18n';
 import { el, icon, iconButton, button } from '../ui';
+import { confirmDialog } from './ConfirmDialog';
 import { ModalController } from './ModalController';
 import { fillAppVersion } from '../appInfo';
 
@@ -469,8 +470,15 @@ export class WelcomeModal {
         actions.appendChild(renameBtn);
 
         // Delete button
-        const delBtn = iconButton('close', isEn ? 'Remove from history' : 'מחיקה מההיסטוריה', () => {
-          const confirmed = window.confirm(isEn ? `Remove "${rec.name}" from recent projects?` : `להסיר את "${rec.name}" מרשימת הפרויקטים?`);
+        const delBtn = iconButton('close', isEn ? 'Remove from history' : 'מחיקה מההיסטוריה', async () => {
+          const confirmed = await confirmDialog({
+            title: isEn ? 'Remove from history' : 'מחיקה מההיסטוריה',
+            message: isEn ? `Remove "${rec.name}" from recent projects?` : `להסיר את "${rec.name}" מרשימת הפרויקטים?`,
+            detail: isEn ? 'Only the list entry is removed. The file itself is not deleted.' : 'רק הרשומה מהרשימה תוסר. הקובץ עצמו לא יימחק.',
+            confirmLabel: isEn ? 'Remove' : 'הסרה',
+            cancelLabel: isEn ? 'Cancel' : 'ביטול',
+            danger: true
+          });
           if (confirmed) {
             removeRecentProject(rec.name);
             this.render();

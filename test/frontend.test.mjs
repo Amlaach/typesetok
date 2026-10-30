@@ -3600,3 +3600,103 @@ describe('Milestone 3 & 4 Regression: Frame Alignment, Canonical Hebrew Combinin
   });
 });
 
+describe('Welcome screen exit: a failed or cancelled open must not leave the close button on "return to document"', () => {
+  // Normalize line endings: Windows checkouts use CRLF, which would break the slicing below.
+  const appTs = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/app.ts'), 'utf-8').replace(/\r\n/g, '\n');
+
+  test('openAnyFile does not mark a document as open before it has loaded', () => {
+    const start = appTs.indexOf('public openAnyFile(');
+    assert.ok(start > 0, 'openAnyFile must exist');
+    const body = appTs.slice(start, appTs.indexOf('\n  }\n', start));
+    assert.ok(!body.includes('setHasOpenDocument(true)'), 'flag must only be set after a successful load');
+  });
+
+  test('failed open and failed import bring the welcome screen back when no document is open', () => {
+    const openErr = appTs.indexOf("tf('toastOpenError', { error: errorMsg })");
+    const importErr = appTs.indexOf("tf('toastImportError', { error: err?.userMessage");
+    for (const idx of [openErr, importErr]) {
+      assert.ok(idx > 0, 'error path must exist');
+      assert.ok(appTs.slice(idx, idx + 260).includes('this.welcomeModal.show()'), 'welcome screen must be restored');
+    }
+  });
+});
+
+describe('Side panel flows follow the document template (new and opened documents)', () => {
+  const appTs = fs.readFileSync(path.join(rootDir, 'packages/tok-ui/src/app.ts'), 'utf-8').replace(/\r\n/g, '\n');
+  const bodyOf = (signature) => {
+    const start = appTs.indexOf(signature);
+    assert.ok(start > 0, `${signature} must exist`);
+    return appTs.slice(start, appTs.indexOf('\n  }\n', start));
+  };
+
+  test('creating a document from a template refreshes the structure bar flows', () => {
+    assert.ok(bodyOf('private handleTemplateSelect(').includes('this.structureBar.setFlows(getFlowsForTemplate('));
+  });
+
+  test('opening a saved document refreshes the structure bar flows', () => {
+    assert.ok(bodyOf('private loadDocumentRoot(').includes('this.structureBar.setFlows(getFlowsForTemplate('));
+  });
+});
+
+describe('Installer language is adopted by the app on first run', () => {
+  const read = (rel) => fs.readFileSync(path.join(rootDir, rel), 'utf-8').replace(/\r\n/g, '\n');
+
+  test('parseInstallLanguage understands Inno Setup and NSIS registry output', async () => {
+    const { parseInstallLanguage } = await loadTs('packages/tok-electron/src/install-language.ts');
+    const inno = (v) => `\r\nHKEY_CURRENT_USER\\Software\\TypesetOK\r\n    ProjectsDir    REG_SZ    C:\\Books\r\n    Language    REG_SZ    ${v}\r\n`;
+    assert.equal(parseInstallLanguage(inno('en')), 'en');
+    assert.equal(parseInstallLanguage(inno('he')), 'he');
+    assert.equal(parseInstallLanguage('    Installer Language    REG_SZ    1033\r\n'), 'en');
+    assert.equal(parseInstallLanguage('    Installer Language    REG_SZ    1037\r\n'), 'he');
+    assert.equal(parseInstallLanguage(inno('fr')), null);
+    assert.equal(parseInstallLanguage(''), null);
+  });
+
+  test('preload applies it only when the user has no saved language; main answers only the app page', () => {
+    const preload = read('packages/tok-electron/src/preload.ts');
+    assert.ok(preload.includes("!localStorage.getItem('tok_lang')"), 'a saved choice must win');
+    assert.ok(preload.includes("sendSync('tok:get-install-language')"));
+    const main = read('packages/tok-electron/src/main.ts');
+    const at = main.indexOf("ipcMain.on('tok:get-install-language'");
+    assert.ok(at > 0, 'main must answer the channel');
+    assert.ok(main.slice(at, at + 220).includes('isAppUrl('), 'sender must be validated');
+  });
+
+  test('parseInstallProjectsDir reads the installer projects folder, including spaces', async () => {
+    const { parseInstallProjectsDir } = await loadTs('packages/tok-electron/src/install-language.ts');
+    const out = '\r\n    ProjectsDir    REG_SZ    C:\\Users\\Dan Cohen\\TypesetOK Projects\r\n    Language    REG_SZ    en\r\n';
+    assert.equal(parseInstallProjectsDir(out), 'C:\\Users\\Dan Cohen\\TypesetOK Projects');
+    assert.equal(parseInstallProjectsDir('    Language    REG_SZ    he\r\n'), null);
+    assert.equal(parseInstallProjectsDir(''), null);
+  });
+
+  test('save and open dialogs start in the installer projects folder', () => {
+    const main = read('packages/tok-electron/src/main.ts');
+    assert.ok(main.includes('defaultPath: withProjectsDir(options?.defaultPath)'), 'save dialog');
+    const open = main.indexOf("handle('tok:show-open-dialog'");
+    assert.ok(open > 0 && main.slice(open, open + 300).includes('defaultPath: getProjectsDir()'), 'open dialog');
+  });
+
+  test('the Inno Setup installer still records the chosen language', () => {
+    const iss = read('scripts/installer.iss');
+    assert.ok(iss.includes("'Software\\TypesetOK', 'Language', 'he'") && iss.includes("'Software\\TypesetOK', 'Language', 'en'"));
+  });
+});
+
+describe('Switching book layout template on an open document (without re-importing)', () => {
+  const read = (rel) => fs.readFileSync(path.join(rootDir, rel), 'utf-8').replace(/\r\n/g, '\n');
+
+  test('StructureBar declares onChangeTemplate callback and renders change template button', () => {
+    const bar = read('packages/tok-ui/src/components/StructureBar.ts');
+    assert.ok(bar.includes('onChangeTemplate?: () => void;'), 'StructureBarCallbacks must declare onChangeTemplate');
+    assert.ok(bar.includes("t('structureChangeTemplate')"), 'renders change template button in flows panel');
+  });
+
+  test('app.ts implements changeDocumentTemplate preserving existing flows and re-syncing', () => {
+    const app = read('packages/tok-ui/src/app.ts');
+    assert.ok(app.includes('public changeDocumentTemplate(newTemplate: TemplateType): void'), 'changeDocumentTemplate must exist');
+    assert.ok(app.includes('this.promptChangeDocumentTemplate()'), 'promptChangeDocumentTemplate must exist');
+    assert.ok(app.includes('cmd-change-template'), 'Command palette must offer change template action');
+  });
+});
+
