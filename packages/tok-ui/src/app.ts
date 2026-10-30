@@ -1610,6 +1610,14 @@ export class TypesetOkApp {
   private buildCommands(): PaletteItem[] {
     return [
       {
+        id: 'cmd-whats-new',
+        icon: 'sparkle',
+        category: t('sidebarAbout'),
+        title: t('commandPaletteWhatsNew'),
+        subtitle: t('whatsNewSubtitle'),
+        action: () => this.handleSystemAction('open-whats-new')
+      },
+      {
         id: 'cmd-full-justify',
         icon: 'alignJustify',
         category: t('cmdCatTypography'),

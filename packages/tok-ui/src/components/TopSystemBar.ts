@@ -38,6 +38,7 @@ const MENU_ITEMS: MenuItem[] = [
   { labelKey: 'menuExportPdf', shortcut: 'Ctrl+E', action: 'export-pdf' },
   { type: 'separator' },
   { labelKey: 'sidebarSettings', shortcut: 'Ctrl+,', action: 'open-settings' },
+  { labelKey: 'menuWhatsNew', action: 'open-whats-new' },
   { labelKey: 'sidebarAbout', action: 'open-about' },
   { type: 'separator' },
   { labelKey: 'menuExit', shortcut: 'Ctrl+Q', action: 'quit-app' }
