@@ -3682,3 +3682,21 @@ describe('Installer language is adopted by the app on first run', () => {
     assert.ok(iss.includes("'Software\\TypesetOK', 'Language', 'he'") && iss.includes("'Software\\TypesetOK', 'Language', 'en'"));
   });
 });
+
+describe('Switching book layout template on an open document (without re-importing)', () => {
+  const read = (rel) => fs.readFileSync(path.join(rootDir, rel), 'utf-8').replace(/\r\n/g, '\n');
+
+  test('StructureBar declares onChangeTemplate callback and renders change template button', () => {
+    const bar = read('packages/tok-ui/src/components/StructureBar.ts');
+    assert.ok(bar.includes('onChangeTemplate?: () => void;'), 'StructureBarCallbacks must declare onChangeTemplate');
+    assert.ok(bar.includes("t('structureChangeTemplate')"), 'renders change template button in flows panel');
+  });
+
+  test('app.ts implements changeDocumentTemplate preserving existing flows and re-syncing', () => {
+    const app = read('packages/tok-ui/src/app.ts');
+    assert.ok(app.includes('public changeDocumentTemplate(newTemplate: TemplateType): void'), 'changeDocumentTemplate must exist');
+    assert.ok(app.includes('this.promptChangeDocumentTemplate()'), 'promptChangeDocumentTemplate must exist');
+    assert.ok(app.includes('cmd-change-template'), 'Command palette must offer change template action');
+  });
+});
+

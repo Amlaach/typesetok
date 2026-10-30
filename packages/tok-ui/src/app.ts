@@ -142,6 +142,7 @@ export class TypesetOkApp {
   private importTemplateModalInstance?: ImportTemplateModal;
   private textCleanupModalInstance?: TextCleanupModal;
   private pendingImportResult: { result: ImportResult; filePath?: string } | null = null;
+  private isChangingActiveDocumentTemplate = false;
   private pluginEngine!: PluginEngine;
 
   private hasOpenDocument = false;
@@ -310,6 +311,7 @@ export class TypesetOkApp {
       onLockLayer: (layerId, locked) => {
         this.canvas?.setLayerLocked(layerId, locked);
       },
+      onChangeTemplate: () => this.promptChangeDocumentTemplate(),
       onOpenSettings: () => this.settingsModal.show(),
       onOpenAbout: () => this.aboutModal.show(),
       onActiveTabChange: () => this.updateStoryToolbar(),
@@ -921,6 +923,11 @@ export class TypesetOkApp {
     if (!this.importTemplateModalInstance) {
       this.importTemplateModalInstance = new ImportTemplateModal({
         onSelect: (templateId) => {
+          if (this.isChangingActiveDocumentTemplate) {
+            this.isChangingActiveDocumentTemplate = false;
+            this.changeDocumentTemplate(templateId);
+            return;
+          }
           if (this.pendingImportResult) {
             rememberImportTemplate(this.pendingImportResult.filePath, templateId);
             this.applyImportedDocument(this.pendingImportResult.result, this.pendingImportResult.filePath, templateId);
@@ -928,6 +935,7 @@ export class TypesetOkApp {
           }
         },
         onCancel: () => {
+          this.isChangingActiveDocumentTemplate = false;
           this.pendingImportResult = null;
           if (!this.hasOpenDocument) {
             this.welcomeModal.show();
@@ -1702,6 +1710,14 @@ export class TypesetOkApp {
         action: () => this.handleSystemAction('import-document')
       },
       {
+        id: 'cmd-change-template',
+        icon: 'templateBook',
+        category: t('cmdCatPages'),
+        title: t('structureChangeTemplate'),
+        subtitle: 'החלפת פריסת העמודים ותזרימי הספר',
+        action: () => this.promptChangeDocumentTemplate()
+      },
+      {
         id: 'cmd-close-document',
         icon: 'close',
         category: t('cmdCatProjects'),
@@ -2402,6 +2418,73 @@ export class TypesetOkApp {
     });
 
     this.showToast(tf('toastImportSuccess', { title: result.title, count: result.paragraphs.length }));
+  }
+
+  /**
+   * Opens the template chooser dialog for the currently active document,
+   * allowing the user to seamlessly switch between book layouts (prose, talmud, notes, etc.)
+   * without losing any content.
+   */
+  public promptChangeDocumentTemplate(): void {
+    if (!this.hasOpenDocument) {
+      this.welcomeModal.show();
+      return;
+    }
+    this.isChangingActiveDocumentTemplate = true;
+    const currentStory = this.storyEditor?.getStory() || [];
+    const totalParas = Object.values(this.documentState.flows).reduce((acc, f) => acc + (f?.length || 0), 0);
+    const mockResult: ImportResult = {
+      title: this.documentTitle || 'מסמך פעיל',
+      paragraphs: currentStory,
+      paragraphCount: totalParas || currentStory.length || 1,
+      wordCount: 0,
+      format: 'txt',
+      detectedDirection: i18n.getDirection(),
+      detectedLanguage: 'he'
+    };
+    this.importTemplateModal.show(mockResult);
+  }
+
+  /**
+   * Applies a new template layout to the active document while preserving all existing texts.
+   */
+  public changeDocumentTemplate(newTemplate: TemplateType): void {
+    if (!this.documentState) return;
+    this.documentState.templateType = newTemplate;
+    // Ensure all standard flows for the new template exist in documentState
+    const templateFlows = getFlowsForTemplate(newTemplate);
+    for (const f of templateFlows) {
+      if (!this.documentState.flows[f.id]) {
+        this.documentState.flows[f.id] = [];
+      }
+    }
+    // Update structure bar and ensure active flow is valid
+    this.structureBar.setFlows(templateFlows);
+    if (!this.activeFlowId || !templateFlows.some((f) => f.id === this.activeFlowId)) {
+      this.activeFlowId = templateFlows[0]?.id || 'gemara';
+    }
+    const targetFlow = this.activeFlowId;
+    this.structureBar.setActiveFlow(targetFlow);
+    this.storyEditor.loadStory(this.documentState.flows[targetFlow] || []);
+
+    // If there is an associated import path, remember the new choice
+    if (this.currentFilePath) {
+      rememberImportTemplate(this.currentFilePath, newTemplate);
+    }
+
+    this.setDirty(true);
+    this.repaginateAndSync(true);
+
+    const templateNames: Record<string, string> = {
+      gemara: t('templateGemara'),
+      prose: t('templateProse'),
+      notes: t('templateNotes'),
+      mikraot: t('templateMikraot'),
+      bulletin: t('templateBulletin'),
+      blank: t('templateBlank')
+    };
+    const name = templateNames[newTemplate] || newTemplate;
+    this.showToast(tf('toastTemplateSwitched', { name }));
   }
 
   public setViewMode(mode: ViewMode): void {

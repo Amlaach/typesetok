@@ -12,6 +12,7 @@ export interface StructureBarCallbacks {
   onSelectStyle: (styleId: string) => void;
   onToggleLayer: (layerId: string, visible: boolean) => void;
   onLockLayer?: (layerId: string, locked: boolean) => void;
+  onChangeTemplate?: () => void;
   onOpenSettings?: () => void;
   onOpenAbout?: () => void;
   /** The side panel was opened or closed from the rail. */
@@ -268,7 +269,13 @@ export class StructureBar {
       this.panel.appendChild(this.panelHeader(titles.pages, this.pages.length, add));
       this.renderPagesView(body);
     } else if (this.activeTab === 'flows') {
-      this.panel.appendChild(this.panelHeader(titles.flows, this.flows.length));
+      const changeBtn = this.callbacks.onChangeTemplate
+        ? iconButton('templateBook', t('structureChangeTemplate'), () => this.callbacks.onChangeTemplate?.(), {
+            size: 16,
+            attrs: { style: 'width:28px;height:28px' }
+          })
+        : undefined;
+      this.panel.appendChild(this.panelHeader(titles.flows, this.flows.length, changeBtn));
       this.renderFlowsView(body);
     } else if (this.activeTab === 'styles') {
       this.panel.appendChild(this.panelHeader(titles.styles, this.styles.length));
