@@ -5,6 +5,29 @@
 
 ---
 
+## [0.33.0] - 2026-10-31
+- **Importance**: major
+- **Badge**: עברית: גרסה נוכחית | en: Current Version
+- **Title**: עברית: מהפכת "צורת הדף" חיה, עגינה רב-תזרימית והקשחת דטרמיניזם | en: Living Tzurat HaDaf, Dynamic Multi-Flow Anchoring & Pre-Press Hardening
+- **Summary**: עברית: שחרור רשמי של גרסה 0.33.0 הכוללת עימוד רב-תזרימי חי לש"ס ומקראות גדולות עם עגינה דו-כיוונית, גלישת עמודים מסונכרנת בזמן אמת, איזון גבהי טורים משותף, הקשחת מנוע הדטרמיניזם ואוטומציית שחרור גרסאות מלאה. | en: Official release 0.33.0 introducing Living Tzurat HaDaf with bi-directional multi-flow anchoring, real-time synchronized pagination cascading, shared column height balancing, determinism engine hardening, and automated CI/CD release workflow.
+
+### Highlights
+- [living-tzurat-hadaf] icon: layers | badge: עברית: צורת הדף חיה, en: Living Tzurat HaDaf
+  - Title: עברית: מנוע עגינה רב-תזרימי דו-כיווני | en: Bi-Directional Multi-Flow Anchor Cascade Engine
+  - Description: עברית: קישור לוגי אוטומטי בין פסקאות הטקסט הראשי למפרשים (רש"י ותוספות), המאפשר גלישה והתרחבות דינמית בזמן אמת. | en: Strict logical binding between primary text segments and commentaries with dynamic cascading and absorption.
+- [determinism-hardening] icon: sparkle | badge: עברית: דטרמיניזם מלא, en: Full Determinism
+  - Title: עברית: הקשחת דטרמיניזם מוחלט בכל שלבי העימוד והייצוא | en: Absolute Pre-Press Output Determinism
+  - Description: עברית: הבטחת שחזור ביט-אחר-ביט בייצוא PDF/X-1a ו-HTML בכל פלטפורמה, ללא תלות בסידורי גיבוב או מצבי זיכרון. | en: Guarantees bit-for-bit reproducible PDF/X-1a and HTML output across all platforms and execution environments.
+
+### Changes
+- [features] עברית: עגינה דו-כיוונית קנונית עם זיהוי דיבור המתחיל אוטומטי (ד"ה) עבור דפי גמרא ומקראות גדולות | en: Canonical bi-directional anchoring with automated Dibur HaMatchil (DH) cue recognition
+- [features] עברית: גלישה מסונכרנת במעבר עמודים המונעת הופעת פירוש לפני העוגן המרכזי שלו (No Commentary Lead Invariant) | en: Synchronized multi-stream pagination strictly enforcing the no-commentary-lead invariant
+- [typography] עברית: איזון גובה תחתון פעיל בעמודי תלמוד ומקראות גדולות (Shared Column Height Balancing) | en: Active shared column height balancing aligning column bottom baselines
+- [typography] עברית: בקרת יתומים ואלמנות (Orphan/Widow Control) בחלוקת פירושים ארוכים במיוחד על פני עמודים | en: Strict orphan and widow control for oversized commentary paragraphs spanning page boundaries
+- [improvements] עברית: שיפור מנגנון ה-CI ואיחוד בדיקות הדטרמיניזם להבטחת שחרור אוטומטי חלק | en: Streamlined CI determinism verification and automated release pipeline trigger
+
+---
+
 ## [0.31.0] - 2026-10-31
 - **Importance**: major
 - **Badge**: עברית: עדכון גדול | en: Major Release

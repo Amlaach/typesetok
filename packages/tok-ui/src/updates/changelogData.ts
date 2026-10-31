@@ -6,6 +6,94 @@ import { ChangelogEntry } from './types';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    "version": "0.33.0",
+    "releaseDate": "2026-10-31",
+    "importance": "major",
+    "title": {
+      "he": "מהפכת \"צורת הדף\" חיה, עגינה רב-תזרימית והקשחת דטרמיניזם",
+      "en": "Living Tzurat HaDaf, Dynamic Multi-Flow Anchoring & Pre-Press Hardening"
+    },
+    "summary": {
+      "he": "שחרור רשמי של גרסה 0.33.0 הכוללת עימוד רב-תזרימי חי לש\"ס ומקראות גדולות עם עגינה דו-כיוונית, גלישת עמודים מסונכרנת בזמן אמת, איזון גבהי טורים משותף, הקשחת מנוע הדטרמיניזם ואוטומציית שחרור גרסאות מלאה.",
+      "en": "Official release 0.33.0 introducing Living Tzurat HaDaf with bi-directional multi-flow anchoring, real-time synchronized pagination cascading, shared column height balancing, determinism engine hardening, and automated CI/CD release workflow."
+    },
+    "changes": [
+      {
+        "category": "features",
+        "text": {
+          "he": "עגינה דו-כיוונית קנונית עם זיהוי דיבור המתחיל אוטומטי (ד\"ה) עבור דפי גמרא ומקראות גדולות",
+          "en": "Canonical bi-directional anchoring with automated Dibur HaMatchil (DH) cue recognition"
+        }
+      },
+      {
+        "category": "features",
+        "text": {
+          "he": "גלישה מסונכרנת במעבר עמודים המונעת הופעת פירוש לפני העוגן המרכזי שלו (No Commentary Lead Invariant)",
+          "en": "Synchronized multi-stream pagination strictly enforcing the no-commentary-lead invariant"
+        }
+      },
+      {
+        "category": "typography",
+        "text": {
+          "he": "איזון גובה תחתון פעיל בעמודי תלמוד ומקראות גדולות (Shared Column Height Balancing)",
+          "en": "Active shared column height balancing aligning column bottom baselines"
+        }
+      },
+      {
+        "category": "typography",
+        "text": {
+          "he": "בקרת יתומים ואלמנות (Orphan/Widow Control) בחלוקת פירושים ארוכים במיוחד על פני עמודים",
+          "en": "Strict orphan and widow control for oversized commentary paragraphs spanning page boundaries"
+        }
+      },
+      {
+        "category": "improvements",
+        "text": {
+          "he": "שיפור מנגנון ה-CI ואיחוד בדיקות הדטרמיניזם להבטחת שחרור אוטומטי חלק",
+          "en": "Streamlined CI determinism verification and automated release pipeline trigger"
+        }
+      }
+    ],
+    "highlights": [
+      {
+        "id": "living-tzurat-hadaf",
+        "icon": "layers",
+        "title": {
+          "he": "מנוע עגינה רב-תזרימי דו-כיווני",
+          "en": "Bi-Directional Multi-Flow Anchor Cascade Engine"
+        },
+        "description": {
+          "he": "קישור לוגי אוטומטי בין פסקאות הטקסט הראשי למפרשים (רש\"י ותוספות), המאפשר גלישה והתרחבות דינמית בזמן אמת.",
+          "en": "Strict logical binding between primary text segments and commentaries with dynamic cascading and absorption."
+        },
+        "badge": {
+          "he": "צורת הדף חיה",
+          "en": "Living Tzurat HaDaf"
+        }
+      },
+      {
+        "id": "determinism-hardening",
+        "icon": "sparkle",
+        "title": {
+          "he": "הקשחת דטרמיניזם מוחלט בכל שלבי העימוד והייצוא",
+          "en": "Absolute Pre-Press Output Determinism"
+        },
+        "description": {
+          "he": "הבטחת שחזור ביט-אחר-ביט בייצוא PDF/X-1a ו-HTML בכל פלטפורמה, ללא תלות בסידורי גיבוב או מצבי זיכרון.",
+          "en": "Guarantees bit-for-bit reproducible PDF/X-1a and HTML output across all platforms and execution environments."
+        },
+        "badge": {
+          "he": "דטרמיניזם מלא",
+          "en": "Full Determinism"
+        }
+      }
+    ],
+    "badge": {
+      "he": "גרסה נוכחית",
+      "en": "Current Version"
+    }
+  },
+  {
     "version": "0.31.0",
     "releaseDate": "2026-10-31",
     "importance": "major",

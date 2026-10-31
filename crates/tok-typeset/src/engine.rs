@@ -1409,7 +1409,8 @@ impl TypesettingEngine {
         // Layout lines for each flow
         let mut flow_lines_map: std::collections::BTreeMap<String, Vec<LineBox>> =
             std::collections::BTreeMap::new();
-        let mut sessions: HashMap<String, ShapingSession<'_>> = HashMap::new();
+        let mut sessions: std::collections::BTreeMap<String, ShapingSession<'_>> =
+            std::collections::BTreeMap::new();
 
         for flow in &first_sec.flows {
             let flow_width = nominal_allocations
@@ -1518,9 +1519,9 @@ impl TypesettingEngine {
             tok_core::multi_flow_anchor::MultiFlowAnchorMap::default()
         };
 
-        let mut cumulative_placed_primary_paragraphs: std::collections::HashSet<
+        let mut cumulative_placed_primary_paragraphs: std::collections::BTreeSet<
             tok_core::id::NodeId,
-        > = std::collections::HashSet::new();
+        > = std::collections::BTreeSet::new();
 
         let mut pages = Vec::new();
         let mut current_page_num = 1;

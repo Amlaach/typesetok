@@ -4,7 +4,7 @@
 //! in the document, generating the required Type 0 / CIDFont Type 2 structures,
 //! FontDescriptor, FontFile2 stream, and /ToUnicode mapping table.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct SubsetFontResult {
@@ -19,7 +19,7 @@ pub struct SubsetFontResult {
     pub italic_angle: f32,
     pub cid_widths_1000: Vec<f32>,
     pub to_unicode_map: BTreeMap<u16, char>,
-    pub gid_to_cid: HashMap<u16, u16>,
+    pub gid_to_cid: BTreeMap<u16, u16>,
 }
 
 /// 64-bit FNV-1a, used for deterministic subset tags.
@@ -84,7 +84,7 @@ impl FontSubsetter {
             .map_err(|e| format!("Font subsetting failed: {}", e))?;
 
         let total_cids = remapper.num_gids() as usize;
-        let mut gid_to_cid = HashMap::with_capacity(total_cids);
+        let mut gid_to_cid = BTreeMap::new();
         let mut cid_widths_1000 = Vec::with_capacity(total_cids);
 
         let base_name = postscript_name(&face);

@@ -13,7 +13,7 @@ use crate::font_subsetter::{fnv1a, FontSubsetter, SubsetFontResult, FNV_OFFSET};
 use crate::tounicode::ToUnicodeCMap;
 use pdf_writer::types::{CidFontType, FontFlags, OutputIntentSubtype, SystemInfo, TrappingStatus};
 use pdf_writer::{Content, Date, Filter, Finish, Name, Pdf, Rect, Ref, Str, TextStr};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::OnceLock;
 use thiserror::Error;
 use tok_typeset::font::{FontManager, EMBEDDED_NOTO_SERIF_HEBREW};
@@ -113,7 +113,7 @@ struct FontRegistry<'a> {
     fonts: &'a FontManager,
     legacy_data: &'a [u8],
     slots: Vec<FontSlot<'a>>,
-    by_family: HashMap<&'a str, usize>,
+    by_family: BTreeMap<&'a str, usize>,
     legacy: Option<usize>,
 }
 
@@ -367,7 +367,7 @@ impl PdfPrePressEngine {
             fonts,
             legacy_data,
             slots: Vec::new(),
-            by_family: HashMap::new(),
+            by_family: BTreeMap::new(),
             legacy: None,
         };
         for line in iter_pages

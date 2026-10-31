@@ -643,10 +643,10 @@ fn handle_verify_determinism() -> Result<(), Box<dyn std::error::Error>> {
     let talmud_html_hash2 = format_hex(t_hasher2_h.finalize());
 
     if talmud_pdf_hash1 != talmud_pdf_hash2 {
-        return Err("Multi-flow PDF outputs must be bit-for-bit identical".into());
+        return Err(format!("Multi-flow PDF outputs must be bit-for-bit identical: {talmud_pdf_hash1} vs {talmud_pdf_hash2}").into());
     }
     if talmud_html_hash1 != talmud_html_hash2 {
-        return Err("Multi-flow HTML outputs must be bit-for-bit identical".into());
+        return Err(format!("Multi-flow HTML outputs must be bit-for-bit identical: {talmud_html_hash1} vs {talmud_html_hash2}").into());
     }
     if talmud_pages1 != talmud_pages2 {
         return Err("Multi-flow Layouts must be identical".into());
