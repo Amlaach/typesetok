@@ -1,0 +1,49 @@
+{
+  "title": "Avodah Zarah 2a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_avodah_zarah_2a_gemara_1",
+        "text": "<b>לפני אידיהן של עובדי כוכבים</b> — משנה ראשונה במסכת Avodah Zarah 2a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_avodah_zarah_2a_rashi_1",
+          "text": "<b>שלשה ימים</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_avodah_zarah_2a_tosafot_1",
+          "text": "<b>לפני אידיהן</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_avodah_zarah_2a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_avodah_zarah_2a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_avodah_zarah_2a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_avodah_zarah_2a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}
