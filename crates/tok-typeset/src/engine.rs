@@ -1518,8 +1518,9 @@ impl TypesettingEngine {
             tok_core::multi_flow_anchor::MultiFlowAnchorMap::default()
         };
 
-        let mut cumulative_placed_primary_paragraphs: std::collections::HashSet<tok_core::id::NodeId> =
-            std::collections::HashSet::new();
+        let mut cumulative_placed_primary_paragraphs: std::collections::HashSet<
+            tok_core::id::NodeId,
+        > = std::collections::HashSet::new();
 
         let mut pages = Vec::new();
         let mut current_page_num = 1;
@@ -1694,8 +1695,11 @@ impl TypesettingEngine {
                         // Invariant 1 (Living Tzurat HaDaf): Commentary paragraph cannot appear before its primary anchor paragraph
                         if !is_primary_flow {
                             if let Some(pid) = l.paragraph_id {
-                                if let Some(anchor_def) = anchor_map.get_anchor_for_commentary(pid) {
-                                    if !cumulative_placed_primary_paragraphs.contains(&anchor_def.primary_node_id) {
+                                if let Some(anchor_def) = anchor_map.get_anchor_for_commentary(pid)
+                                {
+                                    if !cumulative_placed_primary_paragraphs
+                                        .contains(&anchor_def.primary_node_id)
+                                    {
                                         break;
                                     }
                                 }

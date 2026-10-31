@@ -14,13 +14,14 @@ use tok_core::multi_flow_anchor::{AnchorDefinition, AnchorId, CommentaryLink, Mu
 use tok_typeset::{TypesettingEngine, TypesettingEngineConfig};
 
 fn create_engine() -> TypesettingEngine {
-    let mut config = TypesettingEngineConfig::default();
-    config.page_width_pt = 595.0; // A4
-    config.page_height_pt = 842.0;
-    config.margin_top_pt = 40.0;
-    config.margin_bottom_pt = 40.0;
-    config.margin_inner_pt = 35.0;
-    config.margin_outer_pt = 35.0;
+    let config = TypesettingEngineConfig {
+        page_width_pt: 595.0, // A4
+        page_height_pt: 842.0,
+        margin_top_pt: 40.0,
+        margin_bottom_pt: 40.0,
+        margin_inner_pt: 35.0,
+        margin_outer_pt: 35.0,
+    };
     TypesettingEngine::new(config)
 }
 
@@ -71,11 +72,7 @@ fn test_talmud_live_anchor_cascading_on_primary_text_growth() {
         r1_id,
         a1.clone(),
     ));
-    anchor_map.link_commentary(CommentaryLink::new(
-        tosafot_flow_id.clone(),
-        t1_id,
-        a1,
-    ));
+    anchor_map.link_commentary(CommentaryLink::new(tosafot_flow_id.clone(), t1_id, a1));
 
     // Link P2: R2 and T2
     anchor_map.link_commentary(CommentaryLink::new(
@@ -83,11 +80,7 @@ fn test_talmud_live_anchor_cascading_on_primary_text_growth() {
         r2_id,
         a2_id.clone(),
     ));
-    anchor_map.link_commentary(CommentaryLink::new(
-        tosafot_flow_id.clone(),
-        t2_id,
-        a2_id,
-    ));
+    anchor_map.link_commentary(CommentaryLink::new(tosafot_flow_id.clone(), t2_id, a2_id));
 
     // Initial state: P1 and P2 fit together on Page 1
     let mut doc = DocumentRoot::new("תלמוד בבלי ברכות ב ע\"א");
@@ -249,8 +242,14 @@ fn test_talmud_live_anchor_cascading_on_primary_text_growth() {
         .iter()
         .flat_map(|f| f.lines.iter().filter_map(|l| l.paragraph_id))
         .collect();
-    assert!(p0_paras.contains(&r1_id), "R1 must remain on Page 0 with P1");
-    assert!(p0_paras.contains(&t1_id), "T1 must remain on Page 0 with P1");
+    assert!(
+        p0_paras.contains(&r1_id),
+        "R1 must remain on Page 0 with P1"
+    );
+    assert!(
+        p0_paras.contains(&t1_id),
+        "T1 must remain on Page 0 with P1"
+    );
 }
 
 #[test]
@@ -474,11 +473,7 @@ fn test_oversized_commentary_clean_break_and_carryover_with_orphan_widow_control
         p1_id,
         TextAnchor::start_of(p1_id),
     ));
-    anchor_map.link_commentary(CommentaryLink::new(
-        tosafot_flow_id.clone(),
-        t_huge_id,
-        a1,
-    ));
+    anchor_map.link_commentary(CommentaryLink::new(tosafot_flow_id.clone(), t_huge_id, a1));
 
     let mut doc = DocumentRoot::new("תוספות ענק");
     doc.multi_flow_anchors = Some(anchor_map);
@@ -560,7 +555,12 @@ fn test_auto_synthesized_anchors_from_dibur_hamatchil() {
     let mut gemara_flow = Flow::new(FlowId::new("gemara"), FlowType::Main);
     // P1: Long Gemara that fills page 1
     let p1_text = (0..35)
-        .map(|i| format!("מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית משעה שהכהנים נכנסים לאכול בתרומתן קטע {}", i))
+        .map(|i| {
+            format!(
+                "מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית משעה שהכהנים נכנסים לאכול בתרומתן קטע {}",
+                i
+            )
+        })
         .collect::<Vec<_>>()
         .join(" ");
     gemara_flow.paragraphs.push(ParagraphNode::new(
@@ -601,9 +601,9 @@ fn test_auto_synthesized_anchors_from_dibur_hamatchil() {
     let p2_page_idx = pages
         .iter()
         .position(|p| {
-            p.frames.iter().any(|f| {
-                f.lines.iter().any(|l| l.paragraph_id == Some(p2_id))
-            })
+            p.frames
+                .iter()
+                .any(|f| f.lines.iter().any(|l| l.paragraph_id == Some(p2_id)))
         })
         .expect("P2 must be placed on some page");
 
@@ -612,10 +612,11 @@ fn test_auto_synthesized_anchors_from_dibur_hamatchil() {
         "P2 must be pushed beyond Page 0 due to 35-line P1"
     );
 
-    for idx in 0..p2_page_idx {
-        let page_has_r2 = pages[idx].frames.iter().any(|f| {
-            f.lines.iter().any(|l| l.paragraph_id == Some(r2_id))
-        });
+    for (idx, page) in pages.iter().enumerate().take(p2_page_idx) {
+        let page_has_r2 = page
+            .frames
+            .iter()
+            .any(|f| f.lines.iter().any(|l| l.paragraph_id == Some(r2_id)));
         assert!(
             !page_has_r2,
             "Auto-synthesized DH anchoring must prevent R2 from appearing on Page {} before P2 (on Page {})",
@@ -623,9 +624,10 @@ fn test_auto_synthesized_anchors_from_dibur_hamatchil() {
         );
     }
 
-    let p2_page_has_r2 = pages[p2_page_idx].frames.iter().any(|f| {
-        f.lines.iter().any(|l| l.paragraph_id == Some(r2_id))
-    });
+    let p2_page_has_r2 = pages[p2_page_idx]
+        .frames
+        .iter()
+        .any(|f| f.lines.iter().any(|l| l.paragraph_id == Some(r2_id)));
     assert!(
         p2_page_has_r2,
         "R2 must appear on Page {} alongside its auto-anchored primary paragraph P2",

@@ -361,17 +361,16 @@ impl MultiFlowAnchorMap {
                     let cue_words: Vec<&str> = cue.split_whitespace().collect();
                     for (p_id, p_words) in &primary_cleaned {
                         let p_strs: Vec<&str> = p_words.iter().map(|s| s.as_str()).collect();
-                        if p_strs.windows(cue_words.len()).any(|w| w == cue_words.as_slice()) {
-                            matched_primary_id = Some(*p_id);
-                            break;
-                        } else if cue_words.len() > 1
-                            && p_strs
-                                .windows(cue_words.len() - 1)
-                                .any(|w| w == &cue_words[..cue_words.len() - 1])
-                        {
-                            matched_primary_id = Some(*p_id);
-                            break;
-                        } else if !cue_words.is_empty() && p_strs.iter().any(|w| *w == cue_words[0]) {
+                        let is_match = p_strs
+                            .windows(cue_words.len())
+                            .any(|w| w == cue_words.as_slice())
+                            || (cue_words.len() > 1
+                                && p_strs
+                                    .windows(cue_words.len() - 1)
+                                    .any(|w| w == &cue_words[..cue_words.len() - 1]))
+                            || (!cue_words.is_empty() && p_strs.iter().any(|w| *w == cue_words[0]));
+
+                        if is_match {
                             matched_primary_id = Some(*p_id);
                             break;
                         }
@@ -638,7 +637,13 @@ mod tests {
 
         let synthesized = MultiFlowAnchorMap::synthesize_or_default(&primary_flow, &[&rashi_flow]);
 
-        assert_eq!(synthesized.get_primary_node_for_commentary(r1_id), Some(p1_id));
-        assert_eq!(synthesized.get_primary_node_for_commentary(r2_id), Some(p2_id));
+        assert_eq!(
+            synthesized.get_primary_node_for_commentary(r1_id),
+            Some(p1_id)
+        );
+        assert_eq!(
+            synthesized.get_primary_node_for_commentary(r2_id),
+            Some(p2_id)
+        );
     }
 }
