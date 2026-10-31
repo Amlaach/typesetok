@@ -1,0 +1,49 @@
+{
+  "title": "Shekalim 2a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_shekalim_2a_gemara_1",
+        "text": "<b>באחד באדר משמיעין על השקלים</b> — משנה ראשונה במסכת Shekalim 2a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_shekalim_2a_rashi_1",
+          "text": "<b>ועל הכלאים</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_shekalim_2a_tosafot_1",
+          "text": "<b>באחד באדר</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_shekalim_2a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_shekalim_2a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_shekalim_2a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_shekalim_2a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}
