@@ -6,6 +6,87 @@ import { ChangelogEntry } from './types';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    "version": "0.31.0",
+    "releaseDate": "2026-10-31",
+    "importance": "major",
+    "title": {
+      "he": "עימוד רב-תזרימי חי (\"צורת הדף\" דינמית) וסנכרון עוגנים דו-כיווני",
+      "en": "Dynamic Multi-Flow Anchoring (\"Living Tzurat HaDaf\") & Synchronized Pagination"
+    },
+    "summary": {
+      "he": "מימוש מלא של עימוד רב-תזרימי חי לתלמוד ומקראות גדולות: עגינה דו-כיוונית בין טקסט מרכזי לפירושים, גלישת עמודים מסונכרנת בזמן אמת, ואיזון גובה תחתון דינמי בכל הטורים.",
+      "en": "Full end-to-end implementation of Living Tzurat HaDaf: bi-directional anchor linking between primary text and commentaries, real-time synchronized pagination across page boundaries, and dynamic shared column height balancing."
+    },
+    "changes": [
+      {
+        "category": "features",
+        "text": {
+          "he": "עגינה דו-כיוונית קנונית עם זיהוי דיבור המתחיל אוטומטי (ד\"ה) עבור דפי גמרא ומקראות גדולות",
+          "en": "Canonical bi-directional anchoring with automated Dibur HaMatchil (DH) cue recognition"
+        }
+      },
+      {
+        "category": "features",
+        "text": {
+          "he": "גלישה מסונכרנת במעבר עמודים המונעת הופעת פירוש לפני העוגן המרכזי שלו (No Commentary Lead Invariant)",
+          "en": "Synchronized multi-stream pagination strictly enforcing the no-commentary-lead invariant"
+        }
+      },
+      {
+        "category": "typography",
+        "text": {
+          "he": "איזון גובה תחתון פעיל בעמודי תלמוד ומקראות גדולות (Shared Column Height Balancing)",
+          "en": "Active shared column height balancing aligning column bottom baselines"
+        }
+      },
+      {
+        "category": "typography",
+        "text": {
+          "he": "בקרת יתומים ואלמנות (Orphan/Widow Control) בחלוקת פירושים ארוכים במיוחד על פני עמודים",
+          "en": "Strict orphan and widow control for oversized commentary paragraphs spanning page boundaries"
+        }
+      }
+    ],
+    "highlights": [
+      {
+        "id": "multi-flow-anchoring",
+        "icon": "layers",
+        "title": {
+          "he": "מנגנון עגינה דו-כיווני וסנכרון עמודים חי",
+          "en": "Bi-Directional Multi-Flow Anchoring"
+        },
+        "description": {
+          "he": "קישור לוגי הדוק בין פסקאות הגמרא/המקרא לפירושי רש\"י ותוספות, המבטיח גלישה אוטומטית של פירושים לעמוד הבא כאשר הטקסט המרכזי גולש.",
+          "en": "Strict logical binding between primary text segments and commentaries ensuring automatic cascading of commentaries when primary text reflows."
+        },
+        "badge": {
+          "he": "צורת הדף חיה",
+          "en": "Living Tzurat HaDaf"
+        }
+      },
+      {
+        "id": "height-balancing",
+        "icon": "align",
+        "title": {
+          "he": "איזון גובה תחתון משותף בעמודים",
+          "en": "Shared Multi-Column Height Balancing"
+        },
+        "description": {
+          "he": "יישור קו בסיס תחתון משותף לכל הטורים בעמוד באמצעות קפיצים אנכיים אלסטיים המפוזרים במרווחי שורות ופסקאות.",
+          "en": "Harmonious bottom baseline alignment across parallel streams via distributed vertical springs across inter-line and inter-paragraph gaps."
+        },
+        "badge": {
+          "he": "איזון טיפוגרפי",
+          "en": "Typographic Balance"
+        }
+      }
+    ],
+    "badge": {
+      "he": "עדכון גדול",
+      "en": "Major Release"
+    }
+  },
+  {
     "version": "0.30.4",
     "releaseDate": "2026-10-30",
     "importance": "minor",
