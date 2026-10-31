@@ -18,7 +18,7 @@ import { StoryParagraph } from 'tok-story-editor';
 import { PageDescriptor } from 'tok-viewer';
 import { toHebrewGematria } from '../gematria.js';
 import { isRectoPage, isRightHandPage } from '../components/SpreadCanvas.js';
-import { DocumentSettings, MultiFlowItem } from '../types.js';
+import { DocumentSettings, MultiFlowAnchorLink, MultiFlowItem } from '../types.js';
 
 export type TemplateType = 'gemara' | 'mikraot' | 'prose' | 'notes' | 'bulletin' | 'blank';
 
@@ -36,6 +36,7 @@ export interface MultiFlowDocumentState {
   styles?: Record<string, any>;
   isDirty?: boolean;
   filePath?: string | null;
+  multiFlowAnchors?: MultiFlowAnchorLink[];
 }
 
 /** Pre-defined authentic sacred texts for initial templates */

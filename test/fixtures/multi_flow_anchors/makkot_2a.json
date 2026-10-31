@@ -1,0 +1,49 @@
+{
+  "title": "Makkot 2a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_makkot_2a_gemara_1",
+        "text": "<b>כיצד העדים נעשים זוממין</b> — משנה ראשונה במסכת Makkot 2a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_makkot_2a_rashi_1",
+          "text": "<b>מעידין אנו באיש פלוני</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_makkot_2a_tosafot_1",
+          "text": "<b>כיצד העדים נעשים</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_makkot_2a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_makkot_2a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_makkot_2a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_makkot_2a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}

@@ -22,7 +22,7 @@ use crate::solver::{GeometricConstraintSolver, PageConstraintModel, PageGeometry
 use crate::template_synthesizer::TemplateSynthesizer;
 use rayon::prelude::*;
 use std::collections::HashMap;
-use tok_core::model::{DocumentRoot, FlowType, ParagraphNode};
+use tok_core::model::{DocumentRoot, Flow, FlowType, ParagraphNode};
 use tok_core::FlowId;
 use unicode_bidi::BidiInfo;
 
@@ -1480,6 +1480,48 @@ impl TypesettingEngine {
             .iter()
             .any(|s| s.role == FlowPlacementRole::BottomBand);
 
+        let primary_spec_opt = flow_specs
+            .iter()
+            .find(|s| s.role == FlowPlacementRole::Primary);
+        let primary_flow_id: FlowId = primary_spec_opt
+            .map(|s| s.flow_id.clone())
+            .or_else(|| {
+                first_sec
+                    .flows
+                    .iter()
+                    .find(|f| f.flow_type == FlowType::Main)
+                    .map(|f| f.id.clone())
+            })
+            .unwrap_or_else(|| FlowId::new("gemara"));
+
+        let anchor_map = if let Some(ref map) = doc.multi_flow_anchors {
+            if !map.anchors.is_empty() {
+                map.clone()
+            } else if let Some(pf) = first_sec.flows.iter().find(|f| f.id == primary_flow_id) {
+                let comms: Vec<&Flow> = first_sec
+                    .flows
+                    .iter()
+                    .filter(|f| f.id != primary_flow_id)
+                    .collect();
+                tok_core::multi_flow_anchor::MultiFlowAnchorMap::synthesize_or_default(pf, &comms)
+            } else {
+                map.clone()
+            }
+        } else if let Some(pf) = first_sec.flows.iter().find(|f| f.id == primary_flow_id) {
+            let comms: Vec<&Flow> = first_sec
+                .flows
+                .iter()
+                .filter(|f| f.id != primary_flow_id)
+                .collect();
+            tok_core::multi_flow_anchor::MultiFlowAnchorMap::synthesize_or_default(pf, &comms)
+        } else {
+            tok_core::multi_flow_anchor::MultiFlowAnchorMap::default()
+        };
+
+        let mut cumulative_placed_primary_paragraphs: std::collections::HashSet<
+            tok_core::id::NodeId,
+        > = std::collections::HashSet::new();
+
         let mut pages = Vec::new();
         let mut current_page_num = 1;
 
@@ -1614,8 +1656,24 @@ impl TypesettingEngine {
             let mut page_frames = Vec::new();
             let mut any_lines_placed = false;
 
-            // Place commentary & main columns
-            for alloc in &dynamic_result.allocations {
+            // Place primary column first, then primary expansion, then commentary columns, then commentary expansions
+            let mut sorted_allocations = dynamic_result.allocations.clone();
+            sorted_allocations.sort_by_key(|alloc| {
+                let is_exp = alloc.flow_id.0.ends_with("_expansion");
+                let is_primary = alloc.flow_id == primary_flow_id
+                    || alloc.flow_id.0 == format!("{}_expansion", primary_flow_id.0);
+                if is_primary && !is_exp {
+                    0
+                } else if is_primary && is_exp {
+                    1
+                } else if !is_exp {
+                    2
+                } else {
+                    3
+                }
+            });
+
+            for alloc in &sorted_allocations {
                 let (is_expansion, source_id) =
                     if let Some(base) = alloc.flow_id.0.strip_suffix("_expansion") {
                         (true, base)
@@ -1623,20 +1681,76 @@ impl TypesettingEngine {
                         (false, alloc.flow_id.0.as_str())
                     };
 
+                let is_primary_flow = source_id == primary_flow_id.0.as_str();
                 let cursor = flow_cursors.get(source_id).copied().unwrap_or(0);
 
-                let mut frame_lines = Vec::new();
+                let mut frame_lines: Vec<LineBox> = Vec::new();
                 let mut current_h = 0.0;
 
                 if let Some(pool) = flow_lines_map.get(source_id) {
                     let mut idx = cursor;
                     while idx < pool.len() {
                         let l = &pool[idx];
+
+                        // Invariant 1 (Living Tzurat HaDaf): Commentary paragraph cannot appear before its primary anchor paragraph
+                        if !is_primary_flow {
+                            if let Some(pid) = l.paragraph_id {
+                                if let Some(anchor_def) = anchor_map.get_anchor_for_commentary(pid)
+                                {
+                                    if !cumulative_placed_primary_paragraphs
+                                        .contains(&anchor_def.primary_node_id)
+                                    {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Capacity check and widow protection
                         if current_h + l.height > alloc.allocated_height_pt
                             && !frame_lines.is_empty()
                         {
+                            if let Some(pid) = l.paragraph_id {
+                                let para_lines_rem = pool[idx..]
+                                    .iter()
+                                    .take_while(|line| line.paragraph_id == Some(pid))
+                                    .count();
+                                if para_lines_rem == 1 && frame_lines.len() >= 2 {
+                                    let _ = frame_lines.pop().unwrap();
+                                    idx -= 1;
+                                }
+                            }
                             break;
                         }
+
+                        // Orphan protection at paragraph start
+                        if let Some(pid) = l.paragraph_id {
+                            let prev_pid = if idx > cursor {
+                                pool[idx - 1].paragraph_id
+                            } else {
+                                None
+                            };
+                            let is_para_start = prev_pid != Some(pid);
+                            if is_para_start && !frame_lines.is_empty() {
+                                let avail_h = alloc.allocated_height_pt - current_h;
+                                let para_total = pool[idx..]
+                                    .iter()
+                                    .take_while(|line| line.paragraph_id == Some(pid))
+                                    .count();
+                                let fit_count = pool[idx..idx + para_total]
+                                    .iter()
+                                    .scan(0.0_f32, |acc, line| {
+                                        *acc += line.height;
+                                        Some(*acc)
+                                    })
+                                    .take_while(|&h| h <= avail_h)
+                                    .count();
+                                if para_total >= 2 && fit_count < 2 {
+                                    break;
+                                }
+                            }
+                        }
+
                         let mut positioned_line = l.clone();
                         // In expansion frames, if the allocated width is wider than the original line width,
                         // re-justify the line to fill the wider expansion measure.
@@ -1696,6 +1810,13 @@ impl TypesettingEngine {
                         positioned_line.baseline_y = current_h + positioned_line.height;
                         positioned_line.line_index = frame_lines.len();
                         current_h += positioned_line.height;
+
+                        if is_primary_flow {
+                            if let Some(pid) = positioned_line.paragraph_id {
+                                cumulative_placed_primary_paragraphs.insert(pid);
+                            }
+                        }
+
                         frame_lines.push(positioned_line);
                         idx += 1;
                     }
@@ -1739,7 +1860,7 @@ impl TypesettingEngine {
 
                 let lines_pool = flow_lines_map.get(&notes_id);
                 let cursor = flow_cursors.get(&notes_id).copied().unwrap_or(0);
-                let mut frame_lines = Vec::new();
+                let mut frame_lines: Vec<LineBox> = Vec::new();
 
                 if let Some(pool) = lines_pool {
                     let remaining = &pool[cursor..];
@@ -1767,6 +1888,51 @@ impl TypesettingEngine {
                     lines: frame_lines,
                 });
             }
+
+            // Restore canonical allocation ordering
+            let orig_order: Vec<String> = dynamic_result
+                .allocations
+                .iter()
+                .map(|a| a.flow_id.0.clone())
+                .collect();
+            page_frames.sort_by_key(|f| {
+                orig_order
+                    .iter()
+                    .position(|id| id == &f.flow_id)
+                    .unwrap_or(999)
+            });
+
+            // Apply Shared Column Height Balancing across parallel column frames
+            let height_balance_config = crate::co_pagination::HeightBalanceConfig {
+                max_line_expansion_pt: 3.5,
+                max_paragraph_expansion_pt: 16.0,
+                min_lines_for_balance: 3,
+                target_mode: crate::co_pagination::BalanceTargetMode::TallestColumn,
+            };
+            let mut bal_frames: Vec<TextFrameBox> = std::mem::take(&mut page_frames);
+            let col_indices: Vec<usize> = bal_frames
+                .iter()
+                .enumerate()
+                .filter(|(_, f)| {
+                    !f.flow_id.contains("note")
+                        && !f.flow_id.contains("expansion")
+                        && f.lines.len() >= height_balance_config.min_lines_for_balance
+                })
+                .map(|(i, _)| i)
+                .collect();
+
+            if col_indices.len() >= 2 {
+                let mut cols_subset: Vec<TextFrameBox> =
+                    col_indices.iter().map(|&i| bal_frames[i].clone()).collect();
+                crate::co_pagination::SharedColumnHeightBalancer::balance_page_frames(
+                    &mut cols_subset,
+                    &height_balance_config,
+                );
+                for (subset_idx, &orig_idx) in col_indices.iter().enumerate() {
+                    bal_frames[orig_idx] = cols_subset[subset_idx].clone();
+                }
+            }
+            page_frames = bal_frames;
 
             let all_exhausted = flow_cursors.iter().all(|(fid, &idx)| {
                 let total = flow_lines_map.get(fid).map_or(0, |v| v.len());

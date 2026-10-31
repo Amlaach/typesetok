@@ -281,6 +281,123 @@ impl MultiFlowAnchorMap {
         }
         self.commentary_to_anchor = new_comm_map;
     }
+
+    /// Automatically synthesizes bidirectional anchor dependencies between a primary flow
+    /// and commentary flows by extracting Dibur HaMatchil (DH) textual cues or sequential links.
+    pub fn synthesize_or_default(
+        primary_flow: &crate::model::Flow,
+        commentary_flows: &[&crate::model::Flow],
+    ) -> Self {
+        let mut map = Self::new();
+        if primary_flow.paragraphs.is_empty() {
+            return map;
+        }
+
+        fn extract_hebrew_words(s: &str) -> Vec<String> {
+            s.chars()
+                .filter(|c| {
+                    let u = *c as u32;
+                    (0x05D0..=0x05EA).contains(&u) || c.is_whitespace()
+                })
+                .collect::<String>()
+                .split_whitespace()
+                .map(|w| w.to_string())
+                .collect()
+        }
+
+        fn extract_cue(text: &str) -> Option<String> {
+            // Check for <b>...</b> or <strong>...</strong>
+            if let Some(start) = text.find("<b>") {
+                if let Some(end) = text[start + 3..].find("</b>") {
+                    let inside = &text[start + 3..start + 3 + end];
+                    let words = extract_hebrew_words(inside);
+                    if !words.is_empty() {
+                        return Some(words.join(" "));
+                    }
+                }
+            }
+            if let Some(start) = text.find("<strong>") {
+                if let Some(end) = text[start + 8..].find("</strong>") {
+                    let inside = &text[start + 8..start + 8 + end];
+                    let words = extract_hebrew_words(inside);
+                    if !words.is_empty() {
+                        return Some(words.join(" "));
+                    }
+                }
+            }
+            // Check before colon, dash, em-dash, or period
+            for delim in [':', '-', '—', '.'] {
+                if let Some(pos) = text.find(delim) {
+                    let prefix = &text[..pos];
+                    let words = extract_hebrew_words(prefix);
+                    if !words.is_empty() && words.len() <= 6 {
+                        return Some(words.join(" "));
+                    }
+                }
+            }
+            // Fallback to first 3 words
+            let words = extract_hebrew_words(text);
+            if words.len() >= 2 {
+                Some(words[..words.len().min(3)].join(" "))
+            } else if !words.is_empty() {
+                Some(words[0].clone())
+            } else {
+                None
+            }
+        }
+
+        let primary_cleaned: Vec<(NodeId, Vec<String>)> = primary_flow
+            .paragraphs
+            .iter()
+            .map(|p| (p.id, extract_hebrew_words(&p.text)))
+            .collect();
+
+        for comm_flow in commentary_flows {
+            for (c_idx, c_para) in comm_flow.paragraphs.iter().enumerate() {
+                let cue_opt = extract_cue(&c_para.text);
+                let mut matched_primary_id = None;
+
+                if let Some(ref cue) = cue_opt {
+                    let cue_words: Vec<&str> = cue.split_whitespace().collect();
+                    for (p_id, p_words) in &primary_cleaned {
+                        let p_strs: Vec<&str> = p_words.iter().map(|s| s.as_str()).collect();
+                        let is_match = p_strs
+                            .windows(cue_words.len())
+                            .any(|w| w == cue_words.as_slice())
+                            || (cue_words.len() > 1
+                                && p_strs
+                                    .windows(cue_words.len() - 1)
+                                    .any(|w| w == &cue_words[..cue_words.len() - 1]))
+                            || (!cue_words.is_empty() && p_strs.iter().any(|w| *w == cue_words[0]));
+
+                        if is_match {
+                            matched_primary_id = Some(*p_id);
+                            break;
+                        }
+                    }
+                }
+
+                if let Some(target_primary_id) = matched_primary_id {
+                    let anchor_id = AnchorId::new(format!("anc_{}_{}", comm_flow.id.0, c_para.id));
+                    let anchor_def = AnchorDefinition::new(
+                        anchor_id.clone(),
+                        primary_flow.id.clone(),
+                        target_primary_id,
+                        TextAnchor::start_of(target_primary_id),
+                    )
+                    .with_label(cue_opt.unwrap_or_else(|| format!("anchor_{}", c_idx)));
+
+                    map.register_anchor(anchor_def);
+                    map.link_commentary(
+                        CommentaryLink::new(comm_flow.id.clone(), c_para.id, anchor_id)
+                            .with_priority(c_idx as u32),
+                    );
+                }
+            }
+        }
+
+        map
+    }
 }
 
 #[cfg(test)]
@@ -480,5 +597,53 @@ mod tests {
 
         assert_eq!(doc.sections[0].anchors, deserialized.sections[0].anchors);
         assert_eq!(doc.multi_flow_anchors, deserialized.multi_flow_anchors);
+    }
+
+    #[test]
+    fn test_synthesize_or_default_with_dibur_hamatchil() {
+        use crate::model::{Flow, FlowType, ParagraphNode};
+
+        let mut primary_flow = Flow::new(FlowId::new("gemara"), FlowType::Main);
+        let p1 = ParagraphNode::new(
+            FractionalIndex::initial(),
+            "gemara",
+            "מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בְּעַרְבִית? מִשָּׁעָה שֶׁהַכֹּהֲנִים נִכְנָסִים לֶאֱכֹל בִּתְרוּמָתָן.",
+        );
+        let p2 = ParagraphNode::new(
+            FractionalIndex::new("a1"),
+            "gemara",
+            "תַּנָּא הֵיכָא קָאֵי דְּקָתָנֵי מֵאֵימָתַי? וְתוּ, מַאי שְׁנָא דְּתָנֵי בְּעַרְבִית בְּרֵישָׁא?",
+        );
+        let p1_id = p1.id;
+        let p2_id = p2.id;
+        primary_flow.paragraphs.push(p1);
+        primary_flow.paragraphs.push(p2);
+
+        let mut rashi_flow = Flow::new(FlowId::new("rashi"), FlowType::CommentA);
+        let r1 = ParagraphNode::new(
+            FractionalIndex::initial(),
+            "rashi",
+            "<b>מֵאֵימָתַי קוֹרִין</b> - תַּנָּא אַקְּרָא קָאֵי דִּכְתִיב בְּשָׁכְבְּךָ וּבְקוּמֶךָ.",
+        );
+        let r2 = ParagraphNode::new(
+            FractionalIndex::new("a1"),
+            "rashi",
+            "<b>דְּקָתָנֵי מֵאֵימָתַי</b> - מִכְּלָל דִּפְשִׁיטָא לֵיהּ דְּחוֹבָה הִיא.",
+        );
+        let r1_id = r1.id;
+        let r2_id = r2.id;
+        rashi_flow.paragraphs.push(r1);
+        rashi_flow.paragraphs.push(r2);
+
+        let synthesized = MultiFlowAnchorMap::synthesize_or_default(&primary_flow, &[&rashi_flow]);
+
+        assert_eq!(
+            synthesized.get_primary_node_for_commentary(r1_id),
+            Some(p1_id)
+        );
+        assert_eq!(
+            synthesized.get_primary_node_for_commentary(r2_id),
+            Some(p2_id)
+        );
     }
 }

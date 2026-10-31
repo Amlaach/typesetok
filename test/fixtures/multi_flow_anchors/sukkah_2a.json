@@ -1,0 +1,49 @@
+{
+  "title": "Sukkah 2a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_sukkah_2a_gemara_1",
+        "text": "<b>סוכה שהיא גבוהה</b> — משנה ראשונה במסכת Sukkah 2a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_sukkah_2a_rashi_1",
+          "text": "<b>עשרים אמה</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_sukkah_2a_tosafot_1",
+          "text": "<b>סוכה שהיא גבוהה</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_sukkah_2a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_sukkah_2a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_sukkah_2a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_sukkah_2a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}

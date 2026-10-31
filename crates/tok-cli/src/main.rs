@@ -79,6 +79,10 @@ struct RawMultiFlowState {
     flows: HashMap<String, Vec<RawStoryPara>>,
     #[serde(default)]
     settings: Option<serde_json::Value>,
+    #[serde(default, rename = "multiFlowAnchors")]
+    multi_flow_anchors: Option<tok_core::multi_flow_anchor::MultiFlowAnchorMap>,
+    #[serde(default)]
+    anchors: Option<tok_core::multi_flow_anchor::MultiFlowAnchorMap>,
 }
 
 #[derive(serde::Deserialize)]
@@ -98,6 +102,7 @@ fn convert_multi_flow_state_to_root(raw: RawMultiFlowState) -> DocumentRoot {
     if let Some(settings) = raw.settings {
         root.metadata.document_settings = Some(settings);
     }
+    root.multi_flow_anchors = raw.multi_flow_anchors.or(raw.anchors);
     root.sections.clear();
 
     let is_prose = raw.template_type.as_deref() == Some("prose");

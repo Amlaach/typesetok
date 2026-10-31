@@ -17,7 +17,7 @@ import {
   StoryParagraph,
   TextSpan
 } from 'tok-story-editor';
-import { DocumentSettings } from '../types';
+import { DocumentSettings, MultiFlowAnchorLink } from '../types';
 import type { ImportResult } from './textImporter';
 
 export const CROCKFORD_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -239,12 +239,35 @@ export interface DocumentMetadataJson {
   document_settings?: DocumentSettings;
 }
 
+export interface MultiFlowAnchorMapJson {
+  anchors: Record<string, {
+    id: string;
+    primary_flow_id: string;
+    primary_node_id: string;
+    primary_anchor: {
+      node_id: string;
+      offset: string;
+      bias: 'Before' | 'After';
+    };
+    label?: string;
+  }>;
+  primary_node_to_anchors: Record<string, string[]>;
+  anchor_to_commentaries: Record<string, Array<{
+    commentary_flow_id: string;
+    commentary_node_id: string;
+    anchor_id: string;
+    priority: number;
+  }>>;
+  commentary_to_anchor: Record<string, string>;
+}
+
 export interface DocumentRootJson {
   id: string;
   metadata: DocumentMetadataJson;
   paragraph_styles: ParagraphStyleJson[];
   character_styles: unknown[];
   sections: SectionNodeJson[];
+  multi_flow_anchors?: MultiFlowAnchorMapJson;
 }
 
 /**
@@ -498,6 +521,47 @@ export function documentStateToDocumentRoot(
 
   const docTitle = (state.title || 'מסמך ללא שם').replace(/\.tok$/i, '');
 
+  let multiFlowAnchorsJson: MultiFlowAnchorMapJson | undefined = undefined;
+  if (state.multiFlowAnchors && state.multiFlowAnchors.length > 0) {
+    const map: MultiFlowAnchorMapJson = {
+      anchors: {},
+      primary_node_to_anchors: {},
+      anchor_to_commentaries: {},
+      commentary_to_anchor: {}
+    };
+    for (const link of state.multiFlowAnchors) {
+      const aid = link.anchorId;
+      if (!map.anchors[aid]) {
+        map.anchors[aid] = {
+          id: aid,
+          primary_flow_id: link.primaryFlowId,
+          primary_node_id: link.primaryNodeId,
+          primary_anchor: {
+            node_id: link.primaryNodeId,
+            offset: 'a00000',
+            bias: 'Before'
+          },
+          label: link.label
+        };
+        if (!map.primary_node_to_anchors[link.primaryNodeId]) {
+          map.primary_node_to_anchors[link.primaryNodeId] = [];
+        }
+        map.primary_node_to_anchors[link.primaryNodeId].push(aid);
+      }
+      if (!map.anchor_to_commentaries[aid]) {
+        map.anchor_to_commentaries[aid] = [];
+      }
+      map.anchor_to_commentaries[aid].push({
+        commentary_flow_id: link.commentaryFlowId,
+        commentary_node_id: link.commentaryNodeId,
+        anchor_id: aid,
+        priority: map.anchor_to_commentaries[aid].length
+      });
+      map.commentary_to_anchor[link.commentaryNodeId] = aid;
+    }
+    multiFlowAnchorsJson = map;
+  }
+
   return {
     id: generateCrockfordUlid(),
     metadata: {
@@ -517,7 +581,8 @@ export function documentStateToDocumentRoot(
         page_style: 'chapter-first',
         flows
       }
-    ]
+    ],
+    multi_flow_anchors: multiFlowAnchorsJson
   };
 }
 
@@ -591,12 +656,33 @@ export function documentRootToDocumentState(root: DocumentRootJson): MultiFlowDo
     }
   }
 
+  const multiFlowAnchors: MultiFlowAnchorLink[] = [];
+  if (root.multi_flow_anchors) {
+    for (const [commNodeId, anchorId] of Object.entries(root.multi_flow_anchors.commentary_to_anchor || {})) {
+      const anchorDef = root.multi_flow_anchors.anchors[anchorId];
+      if (anchorDef) {
+        const commLink = (root.multi_flow_anchors.anchor_to_commentaries[anchorId] || []).find(
+          (c) => c.commentary_node_id === commNodeId
+        );
+        multiFlowAnchors.push({
+          anchorId,
+          primaryFlowId: anchorDef.primary_flow_id,
+          primaryNodeId: anchorDef.primary_node_id,
+          commentaryFlowId: commLink?.commentary_flow_id || 'rashi',
+          commentaryNodeId: commNodeId,
+          label: anchorDef.label
+        });
+      }
+    }
+  }
+
   return {
     title,
     templateType,
     flows: flowMap,
     settings: root.metadata?.document_settings,
-    styles: Object.keys(stylesMap).length > 0 ? stylesMap : undefined
+    styles: Object.keys(stylesMap).length > 0 ? stylesMap : undefined,
+    multiFlowAnchors: multiFlowAnchors.length > 0 ? multiFlowAnchors : undefined
   };
 }
 

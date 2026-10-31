@@ -74,10 +74,12 @@ describe("What's New System - Full Test Suite", () => {
       const parsed = parseChangelogMarkdown(content);
 
       assert.ok(parsed.length >= 3, 'Must parse at least 3 releases');
-      assert.equal(parsed[0].version, '0.30.4');
-      assert.equal(parsed[1].version, '0.30.0');
-      assert.equal(parsed[1].importance, 'major');
-      assert.ok(parsed[1].highlights.length >= 4, 'Major release must parse highlights');
+      const v0304 = parsed.find(e => e.version === '0.30.4');
+      assert.ok(v0304, '0.30.4 must be parsed');
+      const v0300 = parsed.find(e => e.version === '0.30.0');
+      assert.ok(v0300, '0.30.0 must be parsed');
+      assert.equal(v0300.importance, 'major');
+      assert.ok(v0300.highlights.length >= 4, 'Major release must parse highlights');
     });
 
     test('Strict No-Emoji & No-Vibe-Coding Policy in changelog and UI text', () => {

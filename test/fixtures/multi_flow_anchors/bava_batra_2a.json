@@ -1,0 +1,49 @@
+{
+  "title": "Bava Batra 2a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_bava_batra_2a_gemara_1",
+        "text": "<b>השותפין שרצו לעשות מחיצה</b> — משנה ראשונה במסכת Bava Batra 2a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_bava_batra_2a_rashi_1",
+          "text": "<b>בונים את הכותל באמצע</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_bava_batra_2a_tosafot_1",
+          "text": "<b>השותפין שרצו</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_bava_batra_2a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_bava_batra_2a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_bava_batra_2a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_bava_batra_2a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}

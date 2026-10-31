@@ -1,0 +1,49 @@
+{
+  "title": "Rosh Hashanah 2a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_rosh_hashanah_2a_gemara_1",
+        "text": "<b>ארבעה ראשי שנים</b> — משנה ראשונה במסכת Rosh Hashanah 2a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_rosh_hashanah_2a_rashi_1",
+          "text": "<b>באחד בניסן</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_rosh_hashanah_2a_tosafot_1",
+          "text": "<b>ארבעה ראשי שנים</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_rosh_hashanah_2a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_rosh_hashanah_2a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_rosh_hashanah_2a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_rosh_hashanah_2a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}

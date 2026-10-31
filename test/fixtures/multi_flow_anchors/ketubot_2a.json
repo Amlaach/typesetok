@@ -1,0 +1,49 @@
+{
+  "title": "Ketubot 2a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_ketubot_2a_gemara_1",
+        "text": "<b>בתולה נשאת ליום הרביעי</b> — משנה ראשונה במסכת Ketubot 2a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_ketubot_2a_rashi_1",
+          "text": "<b>שמא ימצא טענת בתולים</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_ketubot_2a_tosafot_1",
+          "text": "<b>בתולה נשאת</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_ketubot_2a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_ketubot_2a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_ketubot_2a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_ketubot_2a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}

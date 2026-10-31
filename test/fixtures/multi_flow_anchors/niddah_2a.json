@@ -1,0 +1,49 @@
+{
+  "title": "Niddah 2a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_niddah_2a_gemara_1",
+        "text": "<b>כל הנשים דיין שעתן</b> — משנה ראשונה במסכת Niddah 2a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_niddah_2a_rashi_1",
+          "text": "<b>רבי אליעזר אומר</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_niddah_2a_tosafot_1",
+          "text": "<b>כל הנשים דיין שעתן</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_niddah_2a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_niddah_2a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_niddah_2a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_niddah_2a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}
