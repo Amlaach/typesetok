@@ -1,0 +1,49 @@
+{
+  "title": "Pesachim 99b",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_pesachim_99b_gemara_1",
+        "text": "<b>ערב פסחים</b> — משנה ראשונה במסכת Pesachim 99b. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_pesachim_99b_rashi_1",
+          "text": "<b>סמוך למנחה</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_pesachim_99b_tosafot_1",
+          "text": "<b>לא יאכל</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_pesachim_99b_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_pesachim_99b_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_pesachim_99b_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_pesachim_99b_tosafot_1"
+        }
+      ]
+    }
+  ]
+}
