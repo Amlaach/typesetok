@@ -1,0 +1,49 @@
+{
+  "title": "Sanhedrin 90a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_sanhedrin_90a_gemara_1",
+        "text": "<b>כל ישראל יש להם חלק</b> — משנה ראשונה במסכת Sanhedrin 90a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_sanhedrin_90a_rashi_1",
+          "text": "<b>לעולם הבא</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_sanhedrin_90a_tosafot_1",
+          "text": "<b>כל ישראל יש להם חלק</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_sanhedrin_90a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_sanhedrin_90a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_sanhedrin_90a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_sanhedrin_90a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}
