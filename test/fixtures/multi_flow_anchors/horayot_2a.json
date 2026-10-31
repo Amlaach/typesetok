@@ -1,0 +1,49 @@
+{
+  "title": "Horayot 2a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_horayot_2a_gemara_1",
+        "text": "<b>הורו בית דין לעבור</b> — משנה ראשונה במסכת Horayot 2a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_horayot_2a_rashi_1",
+          "text": "<b>על אחת מכל מצות</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_horayot_2a_tosafot_1",
+          "text": "<b>הורו בית דין</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_horayot_2a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_horayot_2a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_horayot_2a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_horayot_2a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}
