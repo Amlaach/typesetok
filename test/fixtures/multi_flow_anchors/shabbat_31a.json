@@ -1,0 +1,49 @@
+{
+  "title": "Shabbat 31a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_shabbat_31a_gemara_1",
+        "text": "<b>שוב מעשה</b> — משנה ראשונה במסכת Shabbat 31a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_shabbat_31a_rashi_1",
+          "text": "<b>דעלך סני</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_shabbat_31a_tosafot_1",
+          "text": "<b>דעלך סני לחברך</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_shabbat_31a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_shabbat_31a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_shabbat_31a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_shabbat_31a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}
