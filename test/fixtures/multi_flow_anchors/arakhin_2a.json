@@ -1,0 +1,49 @@
+{
+  "title": "Arakhin 2a",
+  "primaryFlow": {
+    "id": "gemara",
+    "paragraphs": [
+      {
+        "id": "para_arakhin_2a_gemara_1",
+        "text": "<b>הכל מעריכין ונערכין</b> — משנה ראשונה במסכת Arakhin 2a. טקסט הגמרא המרכזי בעימוד צורת הדף."
+      }
+    ]
+  },
+  "commentaryFlows": [
+    {
+      "id": "rashi",
+      "paragraphs": [
+        {
+          "id": "para_arakhin_2a_rashi_1",
+          "text": "<b>נודרין ונידרין</b> — פירוש רש\"י המעוגן למשנה ולגמרא."
+        }
+      ]
+    },
+    {
+      "id": "tosafot",
+      "paragraphs": [
+        {
+          "id": "para_arakhin_2a_tosafot_1",
+          "text": "<b>הכל מעריכין ונערכין</b> — ביאור התוספות המעוגן לעמודת החוץ."
+        }
+      ]
+    }
+  ],
+  "anchors": [
+    {
+      "id": "anchor_arakhin_2a_1",
+      "primaryFlowId": "gemara",
+      "primaryNodeId": "para_arakhin_2a_gemara_1",
+      "links": [
+        {
+          "commentaryFlowId": "rashi",
+          "commentaryNodeId": "para_arakhin_2a_rashi_1"
+        },
+        {
+          "commentaryFlowId": "tosafot",
+          "commentaryNodeId": "para_arakhin_2a_tosafot_1"
+        }
+      ]
+    }
+  ]
+}
